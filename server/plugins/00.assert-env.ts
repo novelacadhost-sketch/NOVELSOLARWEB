@@ -32,6 +32,7 @@ const DEGRADES: Record<string, string> = {
   CLOUDINARY_API_SECRET: 'product image uploads',
   BLOG_GITHUB_TOKEN: 'blog publishing (/api/admin/blog/* throws 500)',
   BITRIX_APPLICATION_TOKEN: 'inbound Bitrix webhook verification (allows unverified requests)',
+  BITRIX_HANDLER_TOKEN: 'the ?t= check on /api/bitrix/handler (endpoint accepts anonymous POSTs)',
 }
 
 export default defineNitroPlugin(() => {

@@ -1,7 +1,20 @@
+import { timingSafeEqual } from 'node:crypto'
 import { readBody, sendRedirect, setCookie, createError } from 'h3'
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { verifyBitrixApplicationToken } from '../../utils/bitrixWebhookVerify'
 import { logger } from '../../utils/logger'
+
+/** Constant-time compare that tolerates length mismatches without leaking them. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) {
+    // Still burn a comparison so the failure isn't distinguishable by timing.
+    timingSafeEqual(bufA, bufA)
+    return false
+  }
+  return timingSafeEqual(bufA, bufB)
+}
 
 interface BitrixUserCurrentResponse {
   result?: {
@@ -40,10 +53,31 @@ export default defineEventHandler(async (event) => {
   // Defence-in-depth: verify Bitrix application_token before processing.
   // This endpoint is exempt from CSRF and admin guards, so the token is the
   // only proof that the request originated from our Bitrix24 portal.
-  const { bitrixApplicationToken } = useRuntimeConfig()
+  const { bitrixApplicationToken, bitrixHandlerToken } = useRuntimeConfig()
+
+  // Shared secret embedded in the handler URL configured on the Bitrix side
+  // (?t=...). Bitrix's own application_token is only ever delivered in the
+  // request body, never shown in its UI, so this is the practical way to
+  // authenticate the caller. Checked first: when set it is authoritative, and
+  // unlike the application_token check it does not fail open.
+  if (bitrixHandlerToken) {
+    const supplied = String(getQuery(event).t ?? '')
+    if (!timingSafeEqualStr(supplied, String(bitrixHandlerToken))) {
+      logger.warn('Bitrix Webhook', 'Rejected request with missing or invalid handler token')
+      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+    }
+  }
+
   const tokenCheck = verifyBitrixApplicationToken(body ?? {}, bitrixApplicationToken as string)
   if (!tokenCheck.valid) {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden: invalid Bitrix application token' })
+  }
+
+  if (!bitrixHandlerToken && tokenCheck.reason === 'unconfigured') {
+    logger.warn(
+      'Bitrix Webhook',
+      'Endpoint is UNAUTHENTICATED — set BITRIX_HANDLER_TOKEN (and add ?t=<value> to the Bitrix handler URL) or BITRIX_APPLICATION_TOKEN.',
+    )
   }
 
   // Handle product sync webhooks
@@ -52,13 +86,24 @@ export default defineEventHandler(async (event) => {
     const config = useRuntimeConfig()
     const productId = eventName === 'ONCRMPRODUCTADD' ? body?.data?.FIELDS_AFTER?.ID : body?.data?.FIELDS?.ID
 
-    if (productId) {
-      import('../../utils/syncSingleProduct')
-        .then(({ syncSingleProduct }) => syncSingleProduct(String(productId), config))
-        .catch((error) => logger.error('ProductSync', 'Failed to invoke single product sync', { error }))
+    if (!productId) {
+      return { success: true, message: 'Event accepted (no product id)' }
     }
 
-    return { success: true, message: 'Event accepted' }
+    // Awaited: on serverless the instance is frozen once the response is
+    // sent, so a detached promise is killed mid-write. This previously
+    // returned "Event accepted" whether or not the product actually synced,
+    // which is why the mirror only ever caught updates intermittently.
+    try {
+      const { syncSingleProduct } = await import('../../utils/syncSingleProduct')
+      await syncSingleProduct(String(productId), config)
+      return { success: true, message: 'Event accepted', productId: String(productId) }
+    } catch (error) {
+      logger.error('ProductSync', 'Single product sync failed', { error, productId, eventName })
+      // 500 so Bitrix records a delivery failure and retries, rather than
+      // treating a silent no-op as success.
+      throw createError({ statusCode: 500, statusMessage: 'Product sync failed' })
+    }
   }
 
   const member_id = body?.member_id

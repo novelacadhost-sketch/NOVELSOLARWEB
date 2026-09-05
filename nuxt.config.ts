@@ -107,6 +107,7 @@ export default defineNuxtConfig({
     otpSecret: process.env.OTP_SECRET,
     authSessionSecret: process.env.AUTH_SESSION_SECRET,
     bitrixApplicationToken: process.env.BITRIX_APPLICATION_TOKEN,
+    bitrixHandlerToken: process.env.BITRIX_HANDLER_TOKEN,
     smtpHost: process.env.SMTP_HOST,
     smtpPort: process.env.SMTP_PORT,
     smtpUser: process.env.SMTP_USER,
