@@ -1,5 +1,5 @@
-import { runTask } from 'nitropack/runtime'
 import { logger } from '../../utils/logger'
+import { syncAllProducts } from '../../utils/syncAllProducts'
 
 export default defineEventHandler(async (event) => {
   const authHeader = getHeader(event, 'authorization')
@@ -18,13 +18,14 @@ export default defineEventHandler(async (event) => {
     user: event.context.admin?.email || 'cron',
   })
 
-  // Awaited deliberately. This previously fired and forgot, which does not
-  // work on serverless: the instance is frozen once the response is sent, so
-  // the task was killed before it wrote anything and the endpoint reported
-  // success regardless. The task caps its own Bitrix fetch at 30s.
+  // Called directly and awaited, rather than via runTask(). Nitro tasks are
+  // not registered in Vercel's serverless runtime ("Task is not available"),
+  // and firing without awaiting is killed when the instance freezes on
+  // response — which is why this endpoint used to report success while
+  // writing nothing. The sync caps its own Bitrix fetch at 30s.
   try {
-    const result = await runTask('sync:products')
-    return { success: true, ...(result?.result as Record<string, unknown>) }
+    const result = await syncAllProducts()
+    return { success: true, ...result }
   } catch (error) {
     logger.error('ProductSync', 'Task failed from trigger', { error })
     throw createError({
