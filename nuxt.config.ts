@@ -6,15 +6,41 @@
 const BITRIX_FRAME_ANCESTOR = process.env.BITRIX_FRAME_ANCESTOR || 'https://*.bitrix24.com'
 const FRAME_ANCESTORS = `'self' ${BITRIX_FRAME_ANCESTOR}`
 
-const SUPABASE_URL = process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || ''
-const SUPABASE_KEY =
-  process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NUXT_PUBLIC_SUPABASE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_PUBLISHABLE_KEY ||
-  ''
+// One canonical name per value. The previous six-deep fallback chains resolved
+// URL and key independently, so a leftover alias from an old project could pair
+// a new URL with a stale key — a mismatch that surfaces as a generic auth error
+// rather than a config error. If a deprecated alias is set and the canonical
+// name is not, fail here with the rename rather than silently using it.
+const DEPRECATED_SUPABASE_ALIASES: Record<string, string> = {
+  SUPABASE_URL: 'NUXT_PUBLIC_SUPABASE_URL',
+  NUXT_PUBLIC_SUPABASE_KEY: 'NUXT_PUBLIC_SUPABASE_ANON_KEY',
+  NEXT_PUBLIC_SUPABASE_URL: 'NUXT_PUBLIC_SUPABASE_URL',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'NUXT_PUBLIC_SUPABASE_ANON_KEY',
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'NUXT_PUBLIC_SUPABASE_ANON_KEY',
+  SUPABASE_ANON_KEY: 'NUXT_PUBLIC_SUPABASE_ANON_KEY',
+  SUPABASE_PUBLISHABLE_KEY: 'NUXT_PUBLIC_SUPABASE_ANON_KEY',
+  SUPABASE_SECRET_KEY: 'SUPABASE_SERVICE_ROLE_KEY',
+}
+
+const SUPABASE_URL = process.env.NUXT_PUBLIC_SUPABASE_URL || ''
+const SUPABASE_KEY = process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
+for (const [alias, canonical] of Object.entries(DEPRECATED_SUPABASE_ALIASES)) {
+  if (!process.env[alias]) continue
+
+  if (!process.env[canonical]) {
+    throw new Error(
+      `Supabase config: "${alias}" is set but "${canonical}" is not. ` +
+        `This app reads only "${canonical}". Rename it.`,
+    )
+  }
+
+  // Canonical wins, so this is safe — but a leftover alias is how a stale
+  // value from a previous project survives a migration unnoticed.
+  console.warn(
+    `[supabase config] "${alias}" is set and ignored ("${canonical}" takes precedence). Delete the stale alias.`,
+  )
+}
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',

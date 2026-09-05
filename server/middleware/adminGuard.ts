@@ -14,8 +14,6 @@ export default defineEventHandler(async (event) => {
       const authHeader = getHeader(event, 'authorization') || ''
       const isCronRequest = config.cronSecret && authHeader === `Bearer ${config.cronSecret}`
 
-      console.log('adminGuard debug:', { authHeader, cronSecret: config.cronSecret, isCronRequest })
-
       if (isCronRequest) {
         event.context.admin = {
           user_id: 'cron',
