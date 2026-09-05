@@ -36,9 +36,7 @@ export default createConfigForNuxt({
     },
   })
   .append({
-    // Prettier integration — must be last to override formatting rules
     rules: {
-      // Let Prettier handle all formatting
       'no-mixed-spaces-and-tabs': 'off',
     },
   })

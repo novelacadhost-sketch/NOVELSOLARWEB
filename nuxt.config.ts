@@ -129,9 +129,4 @@ export default defineNuxtConfig({
       // Sessions are now stored in Supabase — these drivers are no longer used
     },
   },
-  typescript: {
-    tsConfig: {
-      exclude: ['../server/**/*.test.ts', '../e2e/**'],
-    },
-  },
 })
