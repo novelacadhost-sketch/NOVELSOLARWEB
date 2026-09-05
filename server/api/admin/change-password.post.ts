@@ -27,15 +27,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const supabaseUrl = config.public.supabaseUrl || process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseAnonKey =
-    config.public.supabaseAnonKey ||
-    process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NUXT_PUBLIC_SUPABASE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY
+  const supabaseUrl = config.public.supabaseUrl
+  const supabaseAnonKey = config.public.supabaseAnonKey
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw createError({

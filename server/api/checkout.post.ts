@@ -290,9 +290,12 @@ export default defineEventHandler(async (event) => {
     shipping: 0,
     total: total,
     products: cart.map((item: TrustedCartItem) => {
-      let finalImage = item.image || 'https://novelsolar.ng/images/placeholder.png'
+      // Absolute URLs only — these render in the confirmation email, where a
+      // relative path resolves against the mail client, not the site.
+      const siteUrl = config.public.baseUrl.replace(/\/$/, '')
+      let finalImage = item.image || `${siteUrl}/images/placeholder.png`
       if (typeof finalImage === 'string' && finalImage.startsWith('/')) {
-        finalImage = `https://novelsolar.ng${finalImage}`
+        finalImage = `${siteUrl}${finalImage}`
       }
       return {
         name: item.name,

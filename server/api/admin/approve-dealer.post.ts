@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
         tls: { rejectUnauthorized: false },
       })
 
-      const domain = config.public.baseUrl ? config.public.baseUrl.replace(/\/$/, '') : 'https://novelsolar.ng'
+      const domain = config.public.baseUrl ? config.public.baseUrl.replace(/\/$/, '') : 'https://novelsolar.com'
       const setupLink = `${domain}/dealer/setup-account?token=${onboardingToken}`
 
       const emailHtml = `

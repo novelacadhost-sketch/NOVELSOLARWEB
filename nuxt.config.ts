@@ -25,6 +25,15 @@ const DEPRECATED_SUPABASE_ALIASES: Record<string, string> = {
 const SUPABASE_URL = process.env.NUXT_PUBLIC_SUPABASE_URL || ''
 const SUPABASE_KEY = process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
+// The canonical public address, used for BOTH the sitemap/canonical tags and
+// every link the server builds (dealer onboarding, password resets, emails).
+// These were previously separate hardcoded values that disagreed with each
+// other. Default is the eventual production domain; staging overrides it via
+// NUXT_PUBLIC_BASE_URL, so the cutover is an env change with no code edit.
+const PRODUCTION_URL = 'https://novelsolar.com'
+const SITE_URL = (process.env.NUXT_PUBLIC_BASE_URL || PRODUCTION_URL).replace(/\/$/, '')
+const IS_PRODUCTION_DOMAIN = SITE_URL === PRODUCTION_URL
+
 for (const [alias, canonical] of Object.entries(DEPRECATED_SUPABASE_ALIASES)) {
   if (!process.env[alias]) continue
 
@@ -55,7 +64,7 @@ export default defineNuxtConfig({
     '@nuxtjs/supabase',
   ],
   site: {
-    url: 'https://novelsolar.com',
+    url: SITE_URL,
     name: 'Novel Solar',
   },
   sitemap: {
@@ -112,7 +121,7 @@ export default defineNuxtConfig({
     public: {
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || '2348022119908',
       whatsappNumberFormatted: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER_FORMATTED || '+234 802 211 9908',
-      baseUrl: process.env.NUXT_PUBLIC_BASE_URL || 'https://novel-solar.vercel.app',
+      baseUrl: SITE_URL,
       supabaseUrl: SUPABASE_URL,
       supabaseAnonKey: SUPABASE_KEY,
     },
@@ -135,6 +144,11 @@ export default defineNuxtConfig({
     '/**': {
       headers: {
         'Content-Security-Policy': `frame-ancestors ${FRAME_ANCESTORS}`,
+        // Staging runs on a public vercel.app URL. Without this it gets
+        // crawled and competes with the live site for the same content.
+        // Self-disabling: once NUXT_PUBLIC_BASE_URL is the production
+        // domain, the header stops being sent.
+        ...(IS_PRODUCTION_DOMAIN ? {} : { 'X-Robots-Tag': 'noindex, nofollow' }),
       },
     },
   },

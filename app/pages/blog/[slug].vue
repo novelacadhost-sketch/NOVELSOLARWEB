@@ -80,7 +80,7 @@
 const route = useRoute()
 const runtimeConfig = useRuntimeConfig()
 
-const siteBaseUrl = runtimeConfig.public.baseUrl?.replace(/\/$/, '') || 'https://novel-solar.vercel.app'
+const siteBaseUrl = runtimeConfig.public.baseUrl?.replace(/\/$/, '') || 'https://novelsolar.com'
 const fallbackOgImage = `${siteBaseUrl}/images/fallback-post.png`
 const defaultDescription = 'Discover in-depth solar technology expertise.'
 
