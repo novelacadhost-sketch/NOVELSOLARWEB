@@ -1,0 +1,693 @@
+﻿
+> build
+> nuxt build
+
+Γöî  [36mBuilding Nuxt for production...[39m
+Γöé
+ΓùÅ  [32mNuxt [1m4.3.1[22m[39m[90m (with [39m[90mNitro [1m2.13.1[22m[39m[90m, Vite [1m7.3.1[22m[39m[90m and Vue [1m3.5.30[22m[39m[90m)[39m
+[90m[[90mnuxt:tailwindcss[90m][39m [36mΓä╣[39m Using default Tailwind CSS file
+[90m[[90m@nuxtjs/sanity[90m][39m [36mΓä╣[39m Running with Sanity project [1mu2k0ma15[22m ([1mproduction[22m).
+Γöé
+ΓùÅ  Nitro preset: [36mnode-server[39m
+[36mΓä╣[39m Building client...
+[36mΓä╣[39m [36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+[36mΓä╣[39m transforming...
+[36mΓä╣[39m [32mΓ£ô[39m 684 modules transformed.
+[36mΓä╣[39m rendering chunks...
+[36mΓä╣[39m computing gzip size...
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[32mmanifest.json                       [39m[1m[2m 16.49 kB[22m[1m[22m[2m Γöé gzip:  2.16 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/index.tn0RQdqM.css            [39m[1m[2m  0.00 kB[22m[1m[22m[2m Γöé gzip:  0.02 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/index.8giA77ol.css            [39m[1m[2m  0.08 kB[22m[1m[22m[2m Γöé gzip:  0.09 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/about.CchoSjOs.css            [39m[1m[2m  0.10 kB[22m[1m[22m[2m Γöé gzip:  0.08 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/account.D1E4cVWW.css          [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/thank-you.D9UOStIp.css        [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/index.BothpL3L.css            [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/login.BKIp_yYb.css            [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/index.BSCZ1509.css            [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/manage-products.DUyxVuTi.css  [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/_id_.It_PhiIq.css             [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/ProductCard.D4kezHOC.css      [39m[1m[2m  0.11 kB[22m[1m[22m[2m Γöé gzip:  0.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/_id_.DU0Sbqcw.css             [39m[1m[2m  0.14 kB[22m[1m[22m[2m Γöé gzip:  0.11 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/_slug_.CbVyXho-.css           [39m[1m[2m  0.15 kB[22m[1m[22m[2m Γöé gzip:  0.11 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/login.CoCh_Jlf.css            [39m[1m[2m  0.23 kB[22m[1m[22m[2m Γöé gzip:  0.17 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/_slug_.FngpRcWr.css           [39m[1m[2m  0.24 kB[22m[1m[22m[2m Γöé gzip:  0.14 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/branch-outlets.Si5LGXlk.css   [39m[1m[2m  0.32 kB[22m[1m[22m[2m Γöé gzip:  0.18 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/checkout.BoScRtvx.css         [39m[1m[2m  0.35 kB[22m[1m[22m[2m Γöé gzip:  0.21 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/default.D4lF7xyi.css          [39m[1m[2m  0.46 kB[22m[1m[22m[2m Γöé gzip:  0.24 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/index.BdYCE5ps.css            [39m[1m[2m  0.57 kB[22m[1m[22m[2m Γöé gzip:  0.32 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/add-product.DBSRSSGD.css      [39m[1m[2m  0.58 kB[22m[1m[22m[2m Γöé gzip:  0.26 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/_id_.-WTKq3VI.css             [39m[1m[2m  0.67 kB[22m[1m[22m[2m Γöé gzip:  0.32 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/error-500.DBWf9FGj.css        [39m[1m[2m  1.91 kB[22m[1m[22m[2m Γöé gzip:  0.73 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/error-404.C-Ezrlz-.css        [39m[1m[2m  2.43 kB[22m[1m[22m[2m Γöé gzip:  0.86 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[35m_nuxt/entry.BPytswnQ.css            [39m[1m[2m107.14 kB[22m[1m[22m[2m Γöé gzip: 16.09 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BNVerxbU.js                   [39m[1m[2m  0.20 kB[22m[1m[22m[2m Γöé gzip:  0.18 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/DvEnqVOu.js                   [39m[1m[2m  0.33 kB[22m[1m[22m[2m Γöé gzip:  0.25 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/4IZmY97K.js                   [39m[1m[2m  0.49 kB[22m[1m[22m[2m Γöé gzip:  0.34 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CIDxCXsZ.js                   [39m[1m[2m  0.53 kB[22m[1m[22m[2m Γöé gzip:  0.37 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/jjUwNET2.js                   [39m[1m[2m  0.53 kB[22m[1m[22m[2m Γöé gzip:  0.37 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CGmN-21l.js                   [39m[1m[2m  0.53 kB[22m[1m[22m[2m Γöé gzip:  0.38 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/ByYuiT9_.js                   [39m[1m[2m  0.59 kB[22m[1m[22m[2m Γöé gzip:  0.37 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/zw-r1YZg.js                   [39m[1m[2m  1.20 kB[22m[1m[22m[2m Γöé gzip:  0.66 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/DUK3murv.js                   [39m[1m[2m  1.50 kB[22m[1m[22m[2m Γöé gzip:  0.82 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BE64QcCA.js                   [39m[1m[2m  1.67 kB[22m[1m[22m[2m Γöé gzip:  0.98 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/NtDQYz8F.js                   [39m[1m[2m  1.72 kB[22m[1m[22m[2m Γöé gzip:  0.94 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BJ2ClxiI.js                   [39m[1m[2m  2.63 kB[22m[1m[22m[2m Γöé gzip:  1.11 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/yMgCup8V.js                   [39m[1m[2m  2.72 kB[22m[1m[22m[2m Γöé gzip:  1.43 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CVHtsR_1.js                   [39m[1m[2m  2.96 kB[22m[1m[22m[2m Γöé gzip:  1.20 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/B-OxpdkT.js                   [39m[1m[2m  3.27 kB[22m[1m[22m[2m Γöé gzip:  1.75 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BY6euk6x.js                   [39m[1m[2m  3.43 kB[22m[1m[22m[2m Γöé gzip:  1.20 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/Db2esnDD.js                   [39m[1m[2m  3.48 kB[22m[1m[22m[2m Γöé gzip:  1.56 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CzM8vMbU.js                   [39m[1m[2m  3.61 kB[22m[1m[22m[2m Γöé gzip:  1.73 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/C2dCTjuK.js                   [39m[1m[2m  3.79 kB[22m[1m[22m[2m Γöé gzip:  1.71 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/uZ0cI7Cq.js                   [39m[1m[2m  3.84 kB[22m[1m[22m[2m Γöé gzip:  1.62 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/Bn8pPa0o.js                   [39m[1m[2m  4.18 kB[22m[1m[22m[2m Γöé gzip:  1.99 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BMp5cpfV.js                   [39m[1m[2m  4.54 kB[22m[1m[22m[2m Γöé gzip:  1.96 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/W85xqRd6.js                   [39m[1m[2m  4.93 kB[22m[1m[22m[2m Γöé gzip:  2.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BwZJjZzk.js                   [39m[1m[2m  5.27 kB[22m[1m[22m[2m Γöé gzip:  2.09 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/DZIsWdbJ.js                   [39m[1m[2m  5.60 kB[22m[1m[22m[2m Γöé gzip:  2.47 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/D4O2nVmA.js                   [39m[1m[2m  5.82 kB[22m[1m[22m[2m Γöé gzip:  2.39 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/Rxl5rrmE.js                   [39m[1m[2m  7.21 kB[22m[1m[22m[2m Γöé gzip:  2.52 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/D-bYCGh3.js                   [39m[1m[2m  7.28 kB[22m[1m[22m[2m Γöé gzip:  2.74 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/03Klk11Q.js                   [39m[1m[2m  7.31 kB[22m[1m[22m[2m Γöé gzip:  2.79 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/Beez8bQa.js                   [39m[1m[2m  7.31 kB[22m[1m[22m[2m Γöé gzip:  2.46 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/Bk3efYlI.js                   [39m[1m[2m  7.58 kB[22m[1m[22m[2m Γöé gzip:  3.10 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/B5Q32vA3.js                   [39m[1m[2m  8.19 kB[22m[1m[22m[2m Γöé gzip:  2.93 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/B643iahb.js                   [39m[1m[2m  8.28 kB[22m[1m[22m[2m Γöé gzip:  2.74 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BAHta_BG.js                   [39m[1m[2m  8.58 kB[22m[1m[22m[2m Γöé gzip:  3.26 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CPvT3uYg.js                   [39m[1m[2m  8.77 kB[22m[1m[22m[2m Γöé gzip:  2.65 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/DzMZpY-c.js                   [39m[1m[2m  9.72 kB[22m[1m[22m[2m Γöé gzip:  4.10 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CHAp2Dv0.js                   [39m[1m[2m 10.13 kB[22m[1m[22m[2m Γöé gzip:  3.68 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/C9Exuvjf.js                   [39m[1m[2m 11.10 kB[22m[1m[22m[2m Γöé gzip:  3.35 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/FL4tx5QL.js                   [39m[1m[2m 12.08 kB[22m[1m[22m[2m Γöé gzip:  4.14 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/Xn1p4gax.js                   [39m[1m[2m 12.48 kB[22m[1m[22m[2m Γöé gzip:  5.22 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/B_-SrW0A.js                   [39m[1m[2m 12.56 kB[22m[1m[22m[2m Γöé gzip:  4.19 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CzmLdOMZ.js                   [39m[1m[2m 12.57 kB[22m[1m[22m[2m Γöé gzip:  4.92 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/t2b8tAFw.js                   [39m[1m[2m 14.37 kB[22m[1m[22m[2m Γöé gzip:  4.61 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/Ctlijgqg.js                   [39m[1m[2m 15.31 kB[22m[1m[22m[2m Γöé gzip:  4.48 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CZSWxoAs.js                   [39m[1m[2m 18.53 kB[22m[1m[22m[2m Γöé gzip:  6.83 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/AcIRxRXs.js                   [39m[1m[2m 21.44 kB[22m[1m[22m[2m Γöé gzip:  6.20 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/CyWfsKE6.js                   [39m[1m[2m 29.35 kB[22m[1m[22m[2m Γöé gzip:  7.09 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/1BLz1nYJ.js                   [39m[1m[2m 55.53 kB[22m[1m[22m[2m Γöé gzip: 18.01 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BrlKDOsq.js                   [39m[1m[2m 56.19 kB[22m[1m[22m[2m Γöé gzip: 12.13 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/D-693vjf.js                   [39m[1m[2m 75.31 kB[22m[1m[22m[2m Γöé gzip: 20.61 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BGxDwB4O.js                   [39m[1m[2m138.30 kB[22m[1m[22m[2m Γöé gzip: 43.35 kB[22m
+[36mΓä╣[39m [2m../node_modules/.cache/nuxt/.nuxt/dist/client/[22m[36m_nuxt/BNlttfHq.js                   [39m[1m[2m188.79 kB[22m[1m[22m[2m Γöé gzip: 70.93 kB[22m
+[36mΓä╣[39m [32mΓ£ô built in 21.49s[39m
+[32mΓ£ö[39m Client built in 21514ms
+[36mΓä╣[39m Building server...
+[36mΓä╣[39m [36mvite v7.3.1 [32mbuilding ssr environment for production...[36m[39m
+[36mΓä╣[39m transforming...
+[36mΓä╣[39m [32mΓ£ô[39m 285 modules transformed.
+[36mΓä╣[39m rendering chunks...
+[36mΓä╣[39m [32mΓ£ô built in 8.04s[39m
+[32mΓ£ö[39m Server built in 8097ms
+[90m[[90mnitro[90m][39m [32mΓ£ö[39m Generated public [36m.output/public[39m
+[90m[[90mnitro[90m][39m [36mΓä╣[39m Building Nuxt Nitro server (preset: [36mnode-server[39m, compatibility date: [36m2025-07-15[39m)
+node.exe : (node:6268) 
+[DEP0155] 
+DeprecationWarning: Use of 
+deprecated trailing slash 
+pattern mapping "./" in 
+the "exports" field module 
+resolution of the package 
+at C:\Users\Novel\.gemini\a
+ntigravity\scratch\NovelSol
+ar\node_modules\@vue\shared
+\package.json imported 
+from C:\Users\Novel\.gemini
+\antigravity\scratch\NovelS
+olar\node_modules\@nuxt\nit
+ro-server\dist\runtime\temp
+lates\error-500.mjs. 
+Mapping specifiers ending 
+in "/" is no longer 
+supported.
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: ((no  
+  de:6268) [DE...nger su   
+ pported.:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+(Use `node 
+--trace-deprecation ...` 
+to show where the warning 
+was created)
+(node:6268) [DEP0155] 
+DeprecationWarning: Use of 
+deprecated trailing slash 
+pattern mapping "./" in 
+the "exports" field module 
+resolution of the package 
+at C:\Users\Novel\.gemini\a
+ntigravity\scratch\NovelSol
+ar\node_modules\@portablete
+xt\vue\package.json 
+imported from C:\Users\Nove
+l\.gemini\antigravity\scrat
+ch\NovelSolar\node_modules\
+.cache\nuxt\.nuxt\dist\serv
+er\_nuxt\_slug_-Vf-LJn23.js
+. Mapping specifiers 
+ending in "/" is no longer 
+supported.
+
+[90m[[90mnitro[90m][39m
+ [41m[30m ERROR 
+[39m[49m Error: Could 
+not load C:/Users/Novel/.ge
+mini/antigravity/scratch/No
+velSolar/app//server/utils/
+normalizeProperty 
+(imported by 
+server/api/products.ts): 
+ENOENT: no such file or 
+directory, open 'C:\Users\N
+ovel\.gemini\antigravity\sc
+ratch\NovelSolar\app\server
+\utils\normalizeProperty'
+
+
+undefined
+
+Error: Could not load C:/Us
+ers/Novel/.gemini/antigravi
+ty/scratch/NovelSolar/app//
+server/utils/normalizePrope
+rty (imported by 
+server/api/products.ts): 
+ENOENT: no such file or 
+directory, open 'C:\Users\N
+ovel\.gemini\antigravity\sc
+ratch\NovelSolar\app\server
+\utils\normalizeProperty'
+    at async open (node:int
+ernal/fs/promises:636:25)
+    at async 
+Module.readFile (node:inter
+nal/fs/promises:1269:14)
+    at async file:///C:/Use
+rs/Novel/.gemini/antigravit
+y/scratch/NovelSolar/node_m
+odules/rollup/dist/es/share
+d/node-entry.js:21456:25
+    at async Queue.work (fi
+le:///C:/Users/Novel/.gemin
+i/antigravity/scratch/Novel
+Solar/node_modules/rollup/d
+ist/es/shared/node-entry.js
+:22681:32) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Novel\\
+.gemini\\antigravity\\scrat
+ch\\NovelSolar\\app\\server
+\\utils\\normalizeProperty'
+,
+  watchFiles: [
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\presets\\no
+de\\runtime\\node-server.mj
+s',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\d
+estr\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\h
+3\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+rossws\\dist\\adapters\\nod
+e.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+fo\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\r
+adix3\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+ncrypto\\dist\\crypto.node.
+mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\d
+efu\\dist\\defu.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+ode-mock-http\\dist\\index.
+mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\i
+ron-webcrypto\\dist\\index.
+js',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+rossws\\dist\\shared\\cross
+ws.DfCzGthR.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+rossws\\dist\\shared\\cross
+ws.By9qWDAI.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+rossws\\dist\\shared\\cross
+ws.D9ehKjSh.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+rossws\\dist\\shared\\cross
+ws.CipVM6lf.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\h
+3\\node_modules\\cookie-es\
+\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+dex.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\config.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\plugin.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\app.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\storage.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\route-rules.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\meta.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\database.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\task.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\renderer.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\context.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\cache.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\error\\utils.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\utils.lambda.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\utils.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\shutdown.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\utils.azure.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+nstorage\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+nstorage\\drivers\\fs-lite.
+mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\k
+lona\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\o
+fetch\\dist\\node.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\h
+ookable\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\d
+b0\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\s
+td-env\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+roner\\dist\\croner.js',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+nctx\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\utils.env.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\hash.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\middlew
+are\\adminGuard.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\middlew
+are\\admin-auth.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\bo
+ok-service.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\bi
+trix-image.get.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\pr
+oducts.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\it
+el-products.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ch
+eckout.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\in
+ventory.get.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\qu
+ote.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\failed-orders.get.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\check-duplicates.post.
+ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\update-product.post.ts
+',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\upload-product.post.ts
+',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\search-products.post.t
+s',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\delete-product.post.ts
+',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\au
+th\\send-otp.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\au
+th\\verify-otp.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\au
+th\\logout.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\pr
+oduct\\[id].ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\us
+er\\profile.get.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\us
+er\\profile.put.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+ookie-es\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\auth\\login.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\api\\ad
+min\\auth\\logout.post.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\static.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\handlers\\error.mjs
+',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\handlers\\renderer.
+mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\error\\prod.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+itropack\\dist\\runtime\\in
+ternal\\lib\\http-graceful-
+shutdown.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+nstorage\\drivers\\utils\\i
+ndex.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+nstorage\\dist\\shared\\uns
+torage.zVDD2mZo.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\u
+nstorage\\drivers\\utils\\n
+ode-fs.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\image\\dist\\runtime\
+\server\\routes\\_ipx.js',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\o
+fetch\\dist\\shared\\ofetch
+.CWycOUEr.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\utils\\
+emailTemplate.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\s
+cule\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\o
+hash\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+ode-fetch-native\\dist\\nat
+ive.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\p
+athe\\dist\\index.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\server\\utils\\
+normalizeProperty.ts',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\o
+hash\\dist\\crypto\\node\\i
+ndex.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+unhead\\vue\\dist\\server.m
+js',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\error.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\dev.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\cache.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\n
+odemailer\\lib\\nodemailer.
+js',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+sanity\\client\\dist\\index
+.js',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\templates\\error-50
+0.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\c
+loudinary\\cloudinary.js',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\renderer\\bu
+ild-files.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\renderer\\in
+line-styles.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\renderer\\ap
+p.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\renderer\\pa
+yload.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\@
+nuxt\\nitro-server\\dist\\r
+untime\\utils\\renderer\\is
+lands.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\o
+hash\\dist\\shared\\ohash.D
+__AXeF1.mjs',
+    'C:\\Users\\Novel\\.gem
+ini\\antigravity\\scratch\\
+NovelSolar\\node_modules\\p
+athe\\dist\\shared\\pathe.M
+-eThtNZ.mjs',
+    ... 488 more items
+  ]
+} 
+
