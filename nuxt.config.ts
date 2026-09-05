@@ -154,6 +154,13 @@ export default defineNuxtConfig({
   },
   nitro: {
     experimental: { tasks: true },
+    // The product sync is awaited (see trigger-sync.post.ts) and caps its own
+    // Bitrix fetch at 30s, so the function must outlive the default timeout.
+    vercel: {
+      functions: {
+        maxDuration: 60,
+      },
+    },
     scheduledTasks: {
       '0 18 * * *': ['sync:products'],
     },
