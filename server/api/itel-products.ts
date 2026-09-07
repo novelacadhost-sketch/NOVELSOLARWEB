@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     ID?: string | number
     NAME?: string
     PRICE?: string | number
-    PROPERTY_116?: unknown
+    PROPERTY_184?: unknown
     QUANTITY?: string | number
     CURRENCY_ID?: string
     SECTION_ID?: string | number
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
           'ID',
           'NAME',
           'PRICE',
-          'PROPERTY_116',
+          'PROPERTY_184',
           'QUANTITY',
           'CURRENCY_ID',
           'SECTION_ID',
@@ -92,12 +92,12 @@ export default defineEventHandler(async (event) => {
       PROPERTY_112: normalizeProperty(product.PROPERTY_112),
     }
 
-    const rawDealerPrice = normalizeProperty(product.PROPERTY_116)
-    if (isDealer && rawDealerPrice !== undefined && rawDealerPrice !== null) {
-      productObj.dealerPrice = Number(rawDealerPrice)
+    if (isDealer) {
+      const dealerPrice = parseBitrixPrice(normalizeProperty(product.PROPERTY_184))
+      if (dealerPrice !== null) productObj.dealerPrice = dealerPrice
     }
 
-    delete productObj.PROPERTY_116
+    delete productObj.PROPERTY_184
     return productObj
   })
 })

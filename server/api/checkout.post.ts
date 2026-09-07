@@ -5,6 +5,7 @@ import { generateOrderReceiptHtml } from '../utils/emailTemplate'
 import { fetchWithBitrixContext } from '../utils/bitrixAuth'
 import { serverSupabaseUser, serverSupabaseServiceRole } from '#supabase/server'
 import { normalizeProperty } from '../utils/normalizeProperty'
+import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
 import type { BitrixLeadResponse } from '../types/bitrix'
 import { logger } from '../utils/logger'
@@ -69,7 +70,7 @@ type BitrixProductResult = {
     ACTIVE: string
     NAME: string
     PRICE: string | number
-    PROPERTY_116?: unknown
+    PROPERTY_184?: unknown
     PROPERTY_102: unknown
     PROPERTY_44?: unknown
     PREVIEW_PICTURE?: unknown
@@ -141,9 +142,12 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
     }
 
     let price = Number(product.PRICE)
-    const rawDealerPrice = normalizeProperty(product.PROPERTY_116)
-    if (isDealer && rawDealerPrice !== undefined && rawDealerPrice !== null) {
-      price = Number(rawDealerPrice)
+    if (isDealer) {
+      // parseBitrixPrice returns null for unparseable values (e.g. the
+      // "65000|NGN" money format), so an odd row falls back to retail rather
+      // than making the order total NaN.
+      const dealerPrice = parseBitrixPrice(normalizeProperty(product.PROPERTY_184))
+      if (dealerPrice !== null) price = dealerPrice
     }
 
     if (!Number.isFinite(price) || price < 0) {

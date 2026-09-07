@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
     }
 
     if (isDealer) {
-      const rawDP = p.PROPERTY_116?.value ?? p.PROPERTY_116 ?? p.dealer_price
+      const rawDP = p.PROPERTY_184?.value ?? p.PROPERTY_184 ?? p.dealer_price
       if (rawDP !== undefined && rawDP !== null && rawDP !== '') {
         productObj.dealerPrice = Number(rawDP)
       }
@@ -119,7 +119,7 @@ export default defineEventHandler(async (event) => {
           'ID',
           'NAME',
           'PRICE',
-          'PROPERTY_116',
+          'PROPERTY_184',
           'CURRENCY_ID',
           'DESCRIPTION',
           'QUANTITY',

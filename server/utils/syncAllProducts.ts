@@ -59,7 +59,7 @@ export async function syncAllProducts(): Promise<ProductSyncResult> {
             'PROPERTY_102',
             'PROPERTY_104',
             'PROPERTY_112',
-            'PROPERTY_116',
+            'PROPERTY_184',
             'DETAIL_PICTURE',
             'PREVIEW_PICTURE',
             'PROPERTY_44',

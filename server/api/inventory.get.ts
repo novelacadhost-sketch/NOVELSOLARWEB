@@ -61,7 +61,7 @@ export default defineCachedEventHandler(
       }
 
       if (isDealer) {
-        const rawDP = normalizeProperty(raw.PROPERTY_116) ?? p.dealer_price
+        const rawDP = normalizeProperty(raw.PROPERTY_184) ?? p.dealer_price
         if (rawDP !== undefined && rawDP !== null && rawDP !== '') {
           const parsedPrice = Number(rawDP)
           if (!Number.isNaN(parsedPrice)) {
@@ -70,7 +70,7 @@ export default defineCachedEventHandler(
         }
       }
 
-      delete productObj.PROPERTY_116
+      delete productObj.PROPERTY_184
       return productObj
     }
 

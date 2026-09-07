@@ -4,7 +4,7 @@ interface BitrixRawProduct {
   ID: string | number
   NAME?: string
   PRICE?: string | number
-  PROPERTY_116?: unknown
+  PROPERTY_184?: unknown
   CURRENCY_ID?: string
   DESCRIPTION?: string
   DESCRIPTION_TYPE?: string
@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
           'ID',
           'NAME',
           'PRICE',
-          'PROPERTY_116',
+          'PROPERTY_184',
           'DESCRIPTION',
           'DESCRIPTION_TYPE',
           'MEASURE',
@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
         id: p.ID,
         name: p.NAME,
         price: p.PRICE,
-        dealerPrice: normalizeProperty(p.PROPERTY_116) ? Number(normalizeProperty(p.PROPERTY_116)) : null,
+        dealerPrice: normalizeProperty(p.PROPERTY_184) ? Number(normalizeProperty(p.PROPERTY_184)) : null,
         currency: p.CURRENCY_ID || 'NGN',
         description: p.DESCRIPTION,
         descriptionType: p.DESCRIPTION_TYPE,

@@ -1,10 +1,11 @@
+import { parseBitrixPrice } from './bitrixProperties'
 import { normalizeProperty } from './normalizeProperty'
 
 export interface BitrixProduct {
   ID?: string | number
   NAME?: string
   PRICE?: string | number
-  PROPERTY_116?: unknown
+  PROPERTY_184?: unknown
   DESCRIPTION?: unknown
   QUANTITY?: string | number
   ACTIVE?: string
@@ -78,11 +79,7 @@ export function normalizeBitrixProduct(product: BitrixProduct): MappedProduct {
   }
 
   // 4. Safely parse numbers
-  const rawDealerPrice = normalizeProperty(product.PROPERTY_116)
-  const dealer_price =
-    rawDealerPrice != null && rawDealerPrice !== '' && !Number.isNaN(Number(rawDealerPrice))
-      ? Number(rawDealerPrice)
-      : null
+  const dealer_price = parseBitrixPrice(normalizeProperty(product.PROPERTY_184))
 
   const quantity =
     product.QUANTITY != null && product.QUANTITY !== '' && !Number.isNaN(Number(product.QUANTITY))
