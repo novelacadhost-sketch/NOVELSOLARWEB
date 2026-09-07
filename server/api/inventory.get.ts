@@ -61,12 +61,12 @@ export default defineCachedEventHandler(
       }
 
       if (isDealer) {
-        const rawDP = normalizeProperty(raw.PROPERTY_184) ?? p.dealer_price
-        if (rawDP !== undefined && rawDP !== null && rawDP !== '') {
-          const parsedPrice = Number(rawDP)
-          if (!Number.isNaN(parsedPrice)) {
-            productObj.dealerPrice = parsedPrice
-          }
+        // parseBitrixPrice, not Number(): ~2% of dealer prices are stored in
+        // Bitrix's money format ("12000|NGN"), which Number() turns into NaN.
+        // Those products silently fell back to retail.
+        const dealerPrice = parseBitrixPrice(normalizeProperty(raw.PROPERTY_184) ?? p.dealer_price)
+        if (dealerPrice !== null) {
+          productObj.dealerPrice = dealerPrice
         }
       }
 

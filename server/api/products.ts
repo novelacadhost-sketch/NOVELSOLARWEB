@@ -84,9 +84,12 @@ export default defineEventHandler(async (event) => {
     }
 
     if (isDealer) {
+      // parseBitrixPrice handles the "12000|NGN" money format; the previous
+      // bare Number() produced NaN, which serialises to null.
       const rawDP = p.PROPERTY_184?.value ?? p.PROPERTY_184 ?? p.dealer_price
-      if (rawDP !== undefined && rawDP !== null && rawDP !== '') {
-        productObj.dealerPrice = Number(rawDP)
+      const dealerPrice = parseBitrixPrice(rawDP)
+      if (dealerPrice !== null) {
+        productObj.dealerPrice = dealerPrice
       }
     }
 

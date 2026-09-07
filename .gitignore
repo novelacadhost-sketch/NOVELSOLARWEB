@@ -49,3 +49,6 @@ clean-error.txt
 status.md
 CLAUDE.md
 server/scratch
+
+# one-off migration scripts (image upload) — kept locally, not tracked
+.migrate-*.tmp.mjs
