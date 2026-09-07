@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { logger } from '../utils/logger'
 import { getSupabaseAdminClient } from '../utils/supabaseAdmin'
 import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
@@ -128,9 +129,33 @@ export default defineCachedEventHandler(
     }
   },
   {
+    // The key previously varied only by pricing tier, so every search and
+    // every page collapsed onto the same two entries — a query for "inverter"
+    // was served the unfiltered first page. q/brand/start must be part of the
+    // key because they change the response body.
     getKey: async (event) => {
       const isDealer = await resolveIsDealerFromEvent(event)
-      return isDealer ? 'inventory-dealer-v2' : 'inventory-retail-v2'
+      const query = getQuery(event)
+
+      const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
+      const start = Number.parseInt(String(query.start ?? '0'), 10) || 0
+
+      // Free text is user input, so hash it rather than letting arbitrary
+      // characters into a cache storage key. JSON-encoded as a pair so the
+      // boundary is unambiguous — plain concatenation would make
+      // ("ab", "c") and ("a", "bc") share a key.
+      const filters = createHash('sha1')
+        .update(JSON.stringify([norm(query.brand), norm(query.q)]))
+        .digest('hex')
+        .slice(0, 16)
+
+      return `inventory-v3:${isDealer ? 'dealer' : 'retail'}:${filters}:${start}`
     },
+    // Was relying on Nitro's defaults, which serve a stale entry indefinitely
+    // while revalidating — that is why the wrong results persisted rather than
+    // expiring. Five minutes is a reasonable staleness window for a catalog.
+    maxAge: 300,
+    swr: true,
+    staleMaxAge: 60,
   },
 )
