@@ -15,6 +15,8 @@ export default defineEventHandler(async (event) => {
     const user = await serverSupabaseUser(event)
     out.userResolved = !!user
     out.userId = user?.id ?? null
+    out.userKeys = user ? Object.keys(user) : []
+    out.userSub = (user as unknown as Record<string, unknown>)?.sub ?? null
     out.userEmail = user?.email ?? null
 
     if (user) {
