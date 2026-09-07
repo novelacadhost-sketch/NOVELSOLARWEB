@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { readBody, sendRedirect, setCookie, createError } from 'h3'
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { verifyBitrixApplicationToken } from '../../utils/bitrixWebhookVerify'
+import { bindProductEvents, buildHandlerUrl } from '../../utils/bitrixEventBindings'
 import { logger } from '../../utils/logger'
 
 /** Constant-time compare that tolerates length mismatches without leaking them. */
@@ -186,7 +187,26 @@ export default defineEventHandler(async (event) => {
       sessionId = data.id
     }
 
-    // 3. Set cookie
+    // 3. Register product event handlers.
+    //
+    // This is the only point where we hold an OAuth token — event.bind is
+    // denied to inbound-webhook auth — so if it does not happen here it does
+    // not happen at all. Failures are logged, never fatal: the install itself
+    // must still complete, and the daily CRON keeps the mirror correct.
+    const runtime = useRuntimeConfig()
+    if (AUTH_ID && DOMAIN) {
+      try {
+        await bindProductEvents(
+          DOMAIN,
+          AUTH_ID,
+          buildHandlerUrl(runtime.public.baseUrl as string, runtime.bitrixHandlerToken as string | undefined),
+        )
+      } catch (bindError) {
+        logger.error('Bitrix Auth', 'Event binding failed during install', { error: bindError })
+      }
+    }
+
+    // 4. Set cookie
     setCookie(event, 'bitrix_session', sessionId, {
       httpOnly: true,
       secure: true,
@@ -194,7 +214,7 @@ export default defineEventHandler(async (event) => {
       maxAge: authExpires,
     })
 
-    // 4. Redirect based on permissions
+    // 5. Redirect based on permissions
     const redirectUrl = isAdmin ? '/admin' : '/'
     return sendRedirect(event, redirectUrl)
   } catch (error) {
