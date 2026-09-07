@@ -15,6 +15,8 @@ const {
   error,
 } = await useFetch<BitrixProduct>(`/api/product/${route.params.id}`, {
   key: `product-${route.params.id}-${user.value?.id || 'guest'}`,
+  // Forward the auth cookie so dealers get dealer pricing during SSR.
+  headers: useRequestHeaders(['cookie']),
 })
 const quantity = ref(1)
 const activeTab = ref('description')

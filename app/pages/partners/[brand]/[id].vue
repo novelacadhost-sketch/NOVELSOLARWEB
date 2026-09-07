@@ -1,7 +1,10 @@
 <script setup lang="ts">
 const route = useRoute()
 const brand = computed(() => (route.params.brand as string) || 'itel')
-const { data: product, pending, error } = await useFetch(`/api/product/${route.params.id}`)
+const { data: product, pending, error } = await useFetch(`/api/product/${route.params.id}`, {
+  // Forward the auth cookie so dealers get dealer pricing during SSR.
+  headers: useRequestHeaders(['cookie']),
+})
 
 useHead({
   title: `${product.value?.NAME || 'Product'} | ${brand.value.toUpperCase()} Solar Store`,

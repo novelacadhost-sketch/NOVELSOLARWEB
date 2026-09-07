@@ -427,7 +427,7 @@ const ALLOWED_BRANDS = ['novelsolar', 'novel solar', 'novel']
 const FEATURED_PER_WEEK = 4
 
 const { data: featuredProducts, pending } = await useAsyncData('home-featured-novelsolar', async () => {
-  const all = await $fetch<any[]>('/api/inventory')
+  const all = await $fetch<any[]>('/api/inventory', { headers: useRequestHeaders(['cookie']) })
 
   const novelSolarPool = excludeServiceProducts(all || [])
     .filter((p) => {

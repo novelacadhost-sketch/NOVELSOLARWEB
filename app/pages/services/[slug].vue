@@ -130,7 +130,10 @@ const route = useRoute()
 const slug = computed(() => (route.params.slug || '').toString().toLowerCase())
 const formattedSlug = computed(() => slug.value.replace(/-/g, ' '))
 
-const { data: products, pending } = useFetch('/api/inventory')
+const { data: products, pending } = useFetch('/api/inventory', {
+  // Forward the auth cookie so dealers get dealer pricing during SSR.
+  headers: useRequestHeaders(['cookie']),
+})
 
 const service = computed(() => {
   if (!products.value) return null

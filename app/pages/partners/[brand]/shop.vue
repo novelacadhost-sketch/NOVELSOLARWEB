@@ -84,6 +84,8 @@ const user = useSupabaseUser()
 const { data: partnerProducts, pending } = await useFetch('/api/itel-products', {
   query: { brand: brand.value },
   key: `brand-shop-${brand.value}-${user.value?.id || 'guest'}`,
+  // Forward the auth cookie so dealers get dealer pricing during SSR.
+  headers: useRequestHeaders(['cookie']),
 })
 
 // Dynamic banner logo based on landing page assets

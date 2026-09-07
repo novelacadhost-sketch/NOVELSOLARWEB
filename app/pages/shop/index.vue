@@ -157,6 +157,8 @@ const categories = [
 const user = useSupabaseUser()
 const { data: apiProducts, pending } = useFetch('/api/inventory', {
   key: `inventory-${user.value?.id || 'guest'}`,
+  // Forward the auth cookie so dealers get dealer pricing during SSR.
+  headers: useRequestHeaders(['cookie']),
 })
 
 const getProductsArray = () => {

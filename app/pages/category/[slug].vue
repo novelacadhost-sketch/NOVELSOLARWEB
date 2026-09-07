@@ -81,7 +81,10 @@ const route = useRoute()
 const categorySlug = computed(() => (route.params.slug || '').toString())
 
 // Fetch global inventory
-const { data: products, pending } = await useFetch('/api/inventory')
+const { data: products, pending } = await useFetch('/api/inventory', {
+  // Forward the auth cookie so dealers get dealer pricing during SSR.
+  headers: useRequestHeaders(['cookie']),
+})
 
 const activeFilter = ref('All')
 
