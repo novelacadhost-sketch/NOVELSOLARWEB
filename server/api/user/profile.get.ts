@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
       const { data: profile } = await supabase
         .from('profiles')
         .select('company_name, email, phone')
-        .eq('id', supabaseUser.id)
+        .eq('id', getAuthUserId(supabaseUser) ?? '')
         .single()
 
       return {

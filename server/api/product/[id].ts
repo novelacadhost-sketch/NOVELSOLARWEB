@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
       const { data: profile } = (await supabase
         .from('profiles')
         .select('role, dealer_status')
-        .eq('user_id', user.id)
+        .eq('user_id', getAuthUserId(user) ?? '')
         .single()) as { data: { role: string; dealer_status: string } | null }
 
       if (profile && profile.role === 'dealer' && profile.dealer_status === 'approved') {
