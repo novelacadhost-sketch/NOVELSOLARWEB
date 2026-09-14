@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { getMailTransporter } from '../utils/mailer'
 import { generateOrderReceiptHtml } from '../utils/emailTemplate'
-import { fetchWithBitrixContext } from '../utils/bitrixAuth'
+import { bitrixFetch } from '../utils/bitrixAuth'
 import { serverSupabaseUser, serverSupabaseServiceRole } from '#supabase/server'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { parseBitrixPrice } from '../utils/bitrixProperties'
@@ -108,7 +108,7 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
   // Fetch all products in parallel instead of serially
   const responses = await Promise.all(
     validatedItems.map(({ productId }) =>
-      fetchWithBitrixContext<BitrixProductResult>(event, `crm.product.get?id=${encodeURIComponent(String(productId))}`),
+      bitrixFetch<BitrixProductResult>(`crm.product.get?id=${encodeURIComponent(String(productId))}`),
     ),
   )
 

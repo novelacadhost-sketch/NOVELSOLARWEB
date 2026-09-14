@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { fetchWithBitrixContext } from './bitrixAuth'
+import { bitrixFetch } from './bitrixAuth'
 import { logger } from './logger'
 import type { BitrixProduct } from './normalizeBitrixProduct'
 
@@ -18,7 +18,7 @@ export async function fetchAllBitrixProducts(event: H3Event): Promise<BitrixProd
     while (hasMore) {
       const endpoint = `crm.product.list${start > 0 ? `?start=${start}` : ''}`
 
-      const response = await fetchWithBitrixContext<{ result: BitrixProduct[]; next?: number }>(event, endpoint, {
+      const response = await bitrixFetch<{ result: BitrixProduct[]; next?: number }>(endpoint, {
         method: 'POST',
         body: {
           limit: 50,

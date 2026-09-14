@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       dealerPrice?: number
       [key: string]: unknown
     }
-    const response = await fetchWithBitrixContext<{ result?: BitrixProduct }>(event, `crm.product.get?id=${id}`)
+    const response = await bitrixFetch<{ result?: BitrixProduct }>(`crm.product.get?id=${id}`)
     const product = response.result || null
 
     if (product) {

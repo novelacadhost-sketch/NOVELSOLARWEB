@@ -1,4 +1,4 @@
-import { fetchWithBitrixContext } from '../../utils/bitrixAuth'
+import { bitrixFetch } from '../../utils/bitrixAuth'
 import { classifyLeadByTitle } from '../../utils/leadPayloads'
 import { logger } from '../../utils/logger'
 import type { BitrixLeadListResponse, TaggedLead } from '../../types/bitrix'
@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // crm.lead.list bracket-syntax filter + ordering. Ask only for the fields we render.
-    const response = await fetchWithBitrixContext<BitrixLeadListResponse>(event, 'crm.lead.list', {
+    const response = await bitrixFetch<BitrixLeadListResponse>('crm.lead.list', {
       method: 'POST',
       body: {
         filter: { SOURCE_ID: 'WEB' },

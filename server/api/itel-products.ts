@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // ─── PHASE 1: Fetch products matching the dynamic brand (IDs and basic metadata) ───
-    const listResponse = await fetchWithBitrixContext<{ result?: BitrixItelProduct[] }>(event, 'crm.product.list', {
+    const listResponse = await bitrixFetch<{ result?: BitrixItelProduct[] }>('crm.product.list', {
       query: {
         'filter[%NAME]': brand,
         'filter[ACTIVE]': 'Y',

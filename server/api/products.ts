@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger'
 import { getSupabaseAdminClient } from '../utils/supabaseAdmin'
 import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
-import { fetchWithBitrixContext } from '../utils/bitrixAuth'
+import { bitrixFetch } from '../utils/bitrixAuth'
 import { normalizeProperty } from '../utils/normalizeProperty'
 
 export default defineEventHandler(async (event) => {
@@ -108,13 +108,13 @@ export default defineEventHandler(async (event) => {
       filters['?NAME'] = searchTerm
     }
 
-    const response = await fetchWithBitrixContext<{
+    const response = await bitrixFetch<{
       result?: any[] | { products?: any[] }
       total?: number
       next?: number
       error?: string
       error_description?: string
-    }>(event, 'crm.product.list', {
+    }>('crm.product.list', {
       method: 'POST',
       body: {
         filter: filters,

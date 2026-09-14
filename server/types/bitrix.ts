@@ -58,22 +58,7 @@ export interface BitrixProductListResponse {
 }
 
 // Bitrix Auth Types
-export interface BitrixTokenRefreshResponse {
-  access_token: string
-  expires_in: number
-  client_endpoint: string
-  refresh_token: string
-  domain: string
-  server_endpoint: string
-}
-
 // Bitrix Context Types (moved from bitrixAuth.ts)
-export interface BitrixContext {
-  baseUrl: string
-  authId?: string
-  domain?: string
-}
-
 // Bitrix Lead (subset of fields returned by crm.lead.list / crm.lead.get)
 export interface BitrixLead {
   ID: string

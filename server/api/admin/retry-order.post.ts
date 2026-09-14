@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { fetchWithBitrixContext } from '../../utils/bitrixAuth'
+import { bitrixFetch } from '../../utils/bitrixAuth'
 import { buildOrderLeadPayload } from '../../utils/leadPayloads'
 import { logger } from '../../utils/logger'
 import type { FailedOrder } from '../../types/database'
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const response = await fetchWithBitrixContext<BitrixLeadResponse>(event, 'crm.lead.add', {
+    const response = await bitrixFetch<BitrixLeadResponse>('crm.lead.add', {
       method: 'POST',
       body: buildOrderLeadPayload(stored),
     })

@@ -117,8 +117,6 @@ export default defineNuxtConfig({
     blogGithubOwner: process.env.BLOG_GITHUB_OWNER || 'dev-davies',
     blogGithubRepo: process.env.BLOG_GITHUB_REPO || 'NovelSolar',
     blogGithubBranch: process.env.BLOG_GITHUB_BRANCH || 'master',
-    bitrixClientId: process.env.BITRIX_CLIENT_ID,
-    bitrixClientSecret: process.env.BITRIX_CLIENT_SECRET,
     public: {
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || '2348022119908',
       whatsappNumberFormatted: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER_FORMATTED || '+234 802 211 9908',

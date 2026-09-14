@@ -8,7 +8,7 @@ check. A person can hold several at once, and knowing one tells you nothing abou
 | --- | --- | --- | --- |
 | **Admin** | `admin_token` | `admin_profiles` table | The `/admin` console and `/api/admin/*` |
 | **Customer / Dealer** | `sb-<project-ref>-auth-token` | `profiles.role` + `profiles.dealer_status` | Storefront login; dealer pricing |
-| **Bitrix portal user** | `bitrix_session` | `auth_sessions` table | Identifies who opened the app inside Bitrix24 |
+| **Bitrix portal user** | — | — | **Removed 2026-09-14.** See below. |
 
 An admin is **not** a row in `profiles`. A dealer is **not** a row in `admin_profiles`. The two
 never consult each other.
@@ -106,17 +106,27 @@ simply sees dealer prices.
 
 ---
 
-## 3. Bitrix portal user
+## 3. Bitrix portal user — removed
 
-Separate from everything above. When the app is opened inside the Bitrix24 iframe, Bitrix POSTs
-OAuth credentials to `server/api/bitrix/handler.ts`, which stores them in **`auth_sessions`**
-and sets a `bitrix_session` cookie. This identifies *who in the Bitrix portal opened the app*.
-It grants nothing in this app's own authorization — it exists so the app can call the Bitrix
-REST API as that user and so the install flow can register event handlers.
+There used to be a third system here: the `bitrix_session` cookie and the `auth_sessions` table
+held a per-user Bitrix24 OAuth token, so REST calls could be made *as the portal user who opened
+the iframe*. It predated Supabase Auth.
+
+**Removed on 2026-09-14.** It was dead weight: `auth_sessions` never held a single row on this
+project, so every Bitrix call already fell through to the service webhook, and the OAuth branch
+had two faults waiting to fire — it never checked `expires_at`, and the `refreshBitrixToken()`
+it would have needed was defined but never called. Had the install ever succeeded, the first
+portal user would have had roughly one working hour followed by silent failures.
+
+All Bitrix REST calls now go through `bitrixFetch()` in `server/utils/bitrixAuth.ts`, as the
+service webhook. `server/api/bitrix/handler.ts` still handles the install callback — it just uses
+the token to register event handlers and pick a redirect, and stores nothing.
+
+If per-user Bitrix attribution is ever wanted, build it deliberately; don't revive this.
 
 ---
 
-## 4. The fourth cookie: `auth_token`
+## 4. The other customer cookie: `auth_token`
 
 `server/utils/userSession.ts` implements a **separate, HMAC-signed customer session** stored in
 `user_sessions` and linked to a Bitrix CRM contact. Only `/api/auth/session`, `/api/auth/logout`,
