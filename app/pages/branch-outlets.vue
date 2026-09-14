@@ -277,13 +277,17 @@ const updateMarker = (branch) => {
     marker = L.marker(branch.coords).addTo(map)
   }
 
+  // The directions link routes by address text, not by `coords`. Thirteen
+  // branches have coordinates geocoded from their address that resolved only to
+  // locality or city centre, so navigating to the pin would send a customer to
+  // the wrong part of town; Google resolves the address string far better.
   marker
     .bindPopup(
       `
     <div style="font-family: inherit; padding: 12px; min-width: 180px;">
       <h4 style="margin: 0 0 4px; color: #002888; font-weight: 900; font-size: 14px; text-transform: uppercase;">${branch.name}</h4>
       <p style="margin: 0 0 12px; font-size: 11px; color: #64748b; font-weight: 600;">${branch.city}, ${branch.state}</p>
-      <a href="https://www.google.com/maps/dir/?api=1&destination=${branch.coords[0]},${branch.coords[1]}" 
+      <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(branch.address)}"
          target="_blank" 
          style="display: block; background: #002888; color: white; padding: 10px; border-radius: 12px; text-decoration: none; font-size: 10px; font-weight: 900; text-align: center; letter-spacing: 0.1em; text-transform: uppercase;">
          Navigate via Google Maps
