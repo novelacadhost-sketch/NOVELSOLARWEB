@@ -94,12 +94,24 @@ export default defineEventHandler(async (event) => {
   })
 
   if (profileError) {
+    // Logged because this used to fail with only a flat message: the real
+    // cause is almost always a Postgres constraint (duplicate username, or a
+    // user_id already in admin_profiles) and none of it reached the caller.
+    logger.error('Create Admin', 'admin_profiles insert failed', {
+      error: profileError.message,
+      code: profileError.code,
+    })
     await supabase.auth.admin.deleteUser(authData.user.id)
     throw createError({
       statusCode: 400,
       statusMessage: 'Failed to create admin profile.',
     })
   }
+
+  // The auth.users trigger creates a customer profile for every new auth user.
+  // An admin is a row in admin_profiles, not in profiles, and customers.get.ts
+  // lists by role — so without this the new admin shows up as a customer.
+  await supabase.from('profiles').delete().eq('user_id', authData.user.id)
 
   const redirectBaseUrl = config.public.baseUrl || 'http://localhost:3000'
   await supabase.auth.admin
