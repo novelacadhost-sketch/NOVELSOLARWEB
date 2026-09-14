@@ -165,3 +165,53 @@ nothing or `'customer'`. Check `admin_profiles`.
 | Anything price-related | Call `resolveIsDealerFromEvent(event)`. Never re-implement it. |
 | A new admin page | `definePageMeta({ middleware: 'admin' })` for the redirect, and rely on `adminGuard` for the real enforcement. |
 | A page that fetches per-user data during SSR | Pass `headers: useRequestHeaders(['cookie'])` to the fetch. |
+
+---
+
+## Mobile / native clients
+
+Added 2026-09-14. A native app authenticates with **`Authorization: Bearer <supabase access token>`**
+— the token the Supabase mobile SDKs already hold. No cookie jar is needed.
+
+```http
+GET /api/inventory?q=inverter
+Authorization: Bearer eyJhbGciOi...
+```
+
+Sign in with the Supabase SDK exactly as on web (`signInWithPassword` for dealers), take
+`session.access_token`, and send it on every request. Dealer pricing then applies identically to
+the browser: `dealerPrice` appears alongside `PRICE` for approved dealers, and is absent for
+everyone else.
+
+**Do not query the database directly for the catalogue.** RLS blocks `select` on `products` for
+both `anon` and `authenticated` — only the service role can read it, and the service key must
+never ship in an app. Go through the API.
+
+**The catalogue is Bitrix-first.** `/api/inventory` fetches live from Bitrix24 and only falls
+back to the Supabase mirror when Bitrix is unreachable. The mirror is a resilience layer
+refreshed once daily — not the source of truth.
+
+### Writes
+
+`POST`/`PUT`/`DELETE` normally require the CSRF cookie-and-header pair. A request carrying a
+**verified** Bearer token and no session cookie is exempt, because CSRF only defends against a
+browser attaching *ambient* credentials — a Bearer token is never ambient. A malformed or expired
+token is not exempt and still gets a 403.
+
+**Anonymous writes are still blocked.** A native client with no token cannot POST to
+`/api/contact`, `/api/quote` or `/api/book-service` — it gets a 403. Those endpoints need either
+a signed-in user or a deliberate exemption. Unresolved as of 2026-09-14.
+
+### Response shapes are inconsistent
+
+`/api/inventory` returns a **bare array**. `/api/products` returns **`{ products: [...] }`**.
+There is no API versioning. Pin nothing without checking, and expect shapes to move.
+
+### Why Bearer resolution lives in middleware
+
+`server/middleware/0.bearer-auth.ts` verifies the token and puts the user on
+`event.context.bearerUser`. It cannot be done inside the route handler:
+`defineCachedEventHandler` rebuilds the event and **drops the raw headers**, so
+`getHeader(event, 'authorization')` — and `cookie` — both read as empty inside `/api/inventory`.
+`event.context` survives; raw headers do not. If you add another auth source, resolve it in
+middleware for the same reason.
