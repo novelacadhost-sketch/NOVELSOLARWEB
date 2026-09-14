@@ -38,12 +38,14 @@ export default defineEventHandler((event) => {
     // Bearer token AND no session cookie. A browser request keeps the full
     // check even if it also sets an Authorization header, so a cookie-bearing
     // victim is never exempted.
-    const authHeader = getHeader(event, 'authorization') || ''
-    const hasBearer = authHeader.slice(0, 7).toLowerCase() === 'bearer ' && authHeader.slice(7).trim().length > 0
+    // `0.bearer-auth.ts` has already verified the token against GoTrue, so
+    // this is a genuine authenticated caller — not merely a well-formed
+    // header, which anyone could send.
+    const hasVerifiedBearer = Boolean(event.context.bearerUser)
     const hasSessionCookie = Boolean(
       getCookie(event, 'csrf-token') || getCookie(event, 'admin_token') || getCookie(event, 'auth_token'),
     )
-    if (hasBearer && !hasSessionCookie) return
+    if (hasVerifiedBearer && !hasSessionCookie) return
 
     // Mutating requests must matching header and cookie to prevent forgery
     const headerToken = getHeader(event, 'x-csrf-token')

@@ -1,15 +1,21 @@
 import { serverSupabaseUser, serverSupabaseServiceRole } from '#supabase/server'
 import type { H3Event } from 'h3'
 import { getAuthUserId } from './authUserId'
-import { resolveBearerUser } from './bearerAuth'
+import type { BearerUser } from './bearerAuth'
 import { logger } from './logger'
 
 /**
  * Identify the caller, whether they authenticated by cookie (browser) or by
  * `Authorization: Bearer` (native mobile client). Returns null for anonymous.
+ *
+ * Both paths read from `event.context`, never from raw headers, because
+ * `defineCachedEventHandler` strips headers before invoking the handler —
+ * `/api/inventory` would otherwise see an anonymous request. The Bearer user
+ * is put there by `server/middleware/0.bearer-auth.ts`; the cookie user by
+ * the Supabase module's own middleware.
  */
 async function resolveUserId(event: H3Event): Promise<string | null> {
-  // Cookie session first — this is the common path and costs no network call.
+  // Cookie session first — the common path, and it costs no network call.
   try {
     const user = await serverSupabaseUser(event)
     if (user) {
@@ -21,7 +27,7 @@ async function resolveUserId(event: H3Event): Promise<string | null> {
     // No cookie session; fall through to the Bearer path.
   }
 
-  const bearer = await resolveBearerUser(event)
+  const bearer = event.context.bearerUser as BearerUser | undefined
   return bearer?.id ?? null
 }
 
