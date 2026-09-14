@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { addToast } = useToast()
+const supabase = useSupabaseClient()
 const isLoading = ref(false)
 const isLoadingProfile = ref(true)
 const profile = ref({
@@ -73,7 +74,9 @@ const handleUpdateProfile = async () => {
 const handleLogout = async () => {
   isLoading.value = true
   try {
-    await useNuxtApp().$apiFetch('/api/auth/logout', { method: 'POST' })
+    // This previously only cleared the `auth_token` cookie and left the
+    // Supabase session intact — a logout that did not log you out.
+    await supabase.auth.signOut()
     navigateTo('/login')
   } catch (error) {
     console.error('Logout error:', error)

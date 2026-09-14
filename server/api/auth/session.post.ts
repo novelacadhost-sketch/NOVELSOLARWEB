@@ -1,11 +1,22 @@
-import { serverSupabaseUser, serverSupabaseClient } from '#supabase/server'
-import { createUserSession } from '../../utils/userSession'
+import { serverSupabaseUser } from '#supabase/server'
+import { resolveBitrixContactId } from '../../utils/bitrixContact'
+import { getAuthUserId } from '../../utils/authUserId'
 import { logger } from '../../utils/logger'
 
+/**
+ * Called by /confirm once the magic-link exchange has produced a Supabase
+ * session. It links the new user to their CRM contact and creates their
+ * `profiles` row.
+ *
+ * This used to mint a second session (`auth_token` cookie + `user_sessions`
+ * row) on top of the Supabase one. It no longer issues anything: Supabase
+ * Auth is the session, and this endpoint only warms the contact link.
+ */
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
+  const userId = getAuthUserId(user)
 
-  if (!user) {
+  if (!user || !userId) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Unauthorized. No Supabase session found.',
@@ -20,93 +31,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const config = useRuntimeConfig()
-  const bitrixUrl = config.bitrixWebhookUrl
-
-  if (!bitrixUrl) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'CRM Configuration missing',
-    })
-  }
-
-  const normalizedBitrixUrl = (bitrixUrl as string).endsWith('/') ? bitrixUrl : `${bitrixUrl}/`
-  let contactId: string | null = null
-
   try {
-    // 1. Check if contact exists in Bitrix
-    const searchResponse = await $fetch<{ result: { ID: string }[] }>(`${normalizedBitrixUrl}crm.contact.list`, {
-      method: 'POST',
-      body: {
-        filter: { EMAIL: email },
-        select: ['ID', 'NAME', 'LAST_NAME'],
-      },
+    await resolveBitrixContactId(userId, email)
+    return { success: true, redirect: '/account' }
+  } catch (error) {
+    // The customer is already authenticated; a CRM outage must not block
+    // them. /api/user/profile retries the link on the next request.
+    logger.error('Auth Session', 'CRM contact link failed', {
+      error: error instanceof Error ? error.message : error,
     })
-
-    if (searchResponse.result && searchResponse.result.length > 0) {
-      contactId = searchResponse.result[0]!.ID
-    } else {
-      // 2. Create a placeholder contact if not found
-      const createResponse = await $fetch<{ result: string }>(`${normalizedBitrixUrl}crm.contact.add`, {
-        method: 'POST',
-        body: {
-          fields: {
-            NAME: email.split('@')[0],
-            EMAIL: [{ VALUE: email, VALUE_TYPE: 'WORK' }],
-            TYPE_ID: 'CLIENT',
-            SOURCE_ID: 'WEB',
-          },
-        },
-      })
-      contactId = createResponse.result
-    }
-
-    if (!contactId) {
-      throw new Error('Failed to obtain contact ID from CRM')
-    }
-
-    // 3. Create the custom session
-    const { token, maxAge } = await createUserSession({
-      contactId,
-      email,
-    })
-
-    // 4. Set the auth_token cookie
-    setCookie(event, 'auth_token', token, {
-      maxAge,
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-    })
-
-    return {
-      success: true,
-      redirect: '/account',
-    }
-  } catch (error: unknown) {
-    const err = error as { data?: unknown }
-    logger.error('Auth Session', 'Sync error', { error: err.data || error })
-
-    // Fallback: Create a temporary session if CRM is down
-    // This allows the user to at least see a "Valued Customer" profile
-    const { token, maxAge } = await createUserSession({
-      contactId: `local_${Date.now()}`,
-      email,
-    })
-
-    setCookie(event, 'auth_token', token, {
-      maxAge,
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-    })
-
-    return {
-      success: true,
-      message: 'Logged in with local session (CRM offline)',
-      redirect: '/account',
-    }
+    return { success: true, message: 'Signed in; CRM link pending', redirect: '/account' }
   }
 })

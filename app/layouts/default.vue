@@ -975,8 +975,12 @@ const getCategoryLink = (title: string) => `/category/${title.toLowerCase().repl
 
 const { cartItemCount, toggleCart } = useCart()
 
-// Fetch user profile. It will silently return null if the auth cookie is missing or invalid.
-const { data: user } = await useFetch('/api/user/profile')
+// Nuxt does not forward cookies to internal API routes during SSR, so without
+// the explicit header this renders as anonymous for a signed-in customer.
+// Returns 401 (and leaves `user` null) when nobody is signed in.
+const { data: user } = await useFetch('/api/user/profile', {
+  headers: useRequestHeaders(['cookie']),
+})
 
 // Compute initials if the user exists
 const userInitials = computed(() => {
@@ -989,16 +993,14 @@ const userInitials = computed(() => {
 
 const handleLogout = async () => {
   try {
-    if (supabaseUser.value) {
-      await supabase.auth.signOut()
-      user.value = null
-      navigateTo('/dealer/login')
-    } else {
-      await useNuxtApp().$apiFetch('/api/auth/logout', { method: 'POST' })
-      // Clear user data and redirect
-      user.value = null
-      navigateTo('/login')
-    }
+    // Supabase Auth is the only customer session — the `auth_token` cookie
+    // and /api/auth/logout were removed. Dealers and customers land on
+    // different login pages; every signed-in user has a Supabase session, so
+    // the old `if (supabaseUser)` branch sent customers to /dealer/login.
+    const isDealer = supabaseUser.value?.user_metadata?.role === 'dealer'
+    await supabase.auth.signOut()
+    user.value = null
+    navigateTo(isDealer ? '/dealer/login' : '/login')
   } catch (error) {
     console.error('Logout failed:', error)
   }

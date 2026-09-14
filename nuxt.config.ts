@@ -105,7 +105,6 @@ export default defineNuxtConfig({
     cronSecret: process.env.CRON_SECRET,
     bitrixWebhookUrl: process.env.BITRIX_WEBHOOK_URL,
     otpSecret: process.env.OTP_SECRET,
-    authSessionSecret: process.env.AUTH_SESSION_SECRET,
     bitrixApplicationToken: process.env.BITRIX_APPLICATION_TOKEN,
     bitrixHandlerToken: process.env.BITRIX_HANDLER_TOKEN,
     smtpHost: process.env.SMTP_HOST,

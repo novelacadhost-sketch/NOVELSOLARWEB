@@ -14,7 +14,6 @@ const REQUIRED = [
   'NUXT_PUBLIC_SUPABASE_URL',
   'NUXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
-  'AUTH_SESSION_SECRET',
 ] as const
 
 // The site still serves without these, but a specific feature is dead.

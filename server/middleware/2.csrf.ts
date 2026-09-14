@@ -43,7 +43,7 @@ export default defineEventHandler((event) => {
     // header, which anyone could send.
     const hasVerifiedBearer = Boolean(event.context.bearerUser)
     const hasSessionCookie = Boolean(
-      getCookie(event, 'csrf-token') || getCookie(event, 'admin_token') || getCookie(event, 'auth_token'),
+      getCookie(event, 'csrf-token') || getCookie(event, 'admin_token'),
     )
     if (hasVerifiedBearer && !hasSessionCookie) return
 

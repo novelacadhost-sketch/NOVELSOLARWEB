@@ -1,14 +1,18 @@
 # Roles & Authentication
 
 The thing to understand first: **there is no single "role" field in this app.** There are
-three independent identity systems, each with its own cookie, its own storage, and its own
-check. A person can hold several at once, and knowing one tells you nothing about the others.
+two independent identity systems, each with its own cookie, its own storage, and its own
+check. A person can hold both at once, and knowing one tells you nothing about the other.
 
 | System | Cookie | Source of truth | Grants |
 | --- | --- | --- | --- |
 | **Admin** | `admin_token` | `admin_profiles` table | The `/admin` console and `/api/admin/*` |
 | **Customer / Dealer** | `sb-<project-ref>-auth-token` | `profiles.role` + `profiles.dealer_status` | Storefront login; dealer pricing |
-| **Bitrix portal user** | — | — | **Removed 2026-09-14.** See below. |
+| **Bitrix portal user** | — | — | **Removed 2026-09-14.** See §3. |
+| **`auth_token` customer session** | — | — | **Removed 2026-09-14.** See §4. |
+
+There were four. Two were removed on the same day, both for the same reason: they predated
+Supabase Auth and had been superseded without being deleted.
 
 An admin is **not** a row in `profiles`. A dealer is **not** a row in `admin_profiles`. The two
 never consult each other.
@@ -126,15 +130,52 @@ If per-user Bitrix attribution is ever wanted, build it deliberately; don't revi
 
 ---
 
-## 4. The other customer cookie: `auth_token`
+## 4. The other customer cookie: `auth_token` — removed
 
-`server/utils/userSession.ts` implements a **separate, HMAC-signed customer session** stored in
-`user_sessions` and linked to a Bitrix CRM contact. Only `/api/auth/session`, `/api/auth/logout`,
-and `/api/user/profile` use it.
+`server/utils/userSession.ts` held an HMAC-signed customer session in `user_sessions` behind an
+`auth_token` cookie. It was never a second **login** — `/api/auth/session` required a valid
+Supabase session before issuing one. What it actually stored was a single fact: *which Bitrix
+CRM contact this customer is.*
 
-`/api/user/profile` tries the Supabase session **first** and falls back to this one — so two
-different customer-identity systems overlap on one endpoint. Be aware of it before changing
-anything there.
+**Removed on 2026-09-14.** That fact is a permanent property of the user, not of a session, and
+`profiles.bitrix_contact_id` already existed for it — with an index — read by nothing. A third
+copy, the `bitrix_contact_links` table, existed too and had never been touched by any code.
+
+The link now resolves through `resolveBitrixContactId()` in `server/utils/bitrixContact.ts`:
+read `profiles.bitrix_contact_id` by `user_id`; if empty, find-or-create the CRM contact by
+email and write it back. `/api/auth/session` (called by `/confirm`) warms it on first sign-in;
+`/api/user/profile` resolves it lazily, so a CRM outage during sign-in costs nothing permanent.
+
+Gone with it: the `auth_token` cookie, `/api/auth/logout`, the `user_sessions` and
+`bitrix_contact_links` tables, the stateless HMAC fallback token (which could not be revoked
+before its 7-day expiry), the `temp_`/`local_` placeholder contact ids, and the
+`AUTH_SESSION_SECRET` env var — `userSession.ts` was its only consumer, so it can be deleted
+from Vercel.
+
+**Logout is now `supabase.auth.signOut()` only.** There is no server-side session to destroy.
+
+### What this fixed on the way
+
+- **`/api/user/profile` queried `profiles` by `.eq('id', …)`.** The primary key is `user_id`;
+  every other call site in the repo uses it. PostgREST returned the error in `error`, which the
+  handler discarded, so it fell through to a hardcoded `firstName: 'Dealer', isDealer: true`
+  for **every** signed-in customer. The account page had never shown anyone's real name. No
+  security impact — nothing on the client read `isDealer`, and pricing is gated server-side by
+  `resolveIsDealerFromEvent()`.
+- **Nothing ever created a `profiles` row for a retail customer.** The only writers were
+  `approve-dealer` (`role: 'dealer'`) and `reject-dealer` (`role: 'customer'`, for a *rejected*
+  applicant). `admin/customers.get.ts` filters `.in('role', ['customer','dealer'])`, so the
+  admin Customers list had only ever shown dealers. First sign-in now creates the row, and
+  `cacheProfileName()` keeps `first_name`/`last_name` readable there without a CRM call per row.
+- **`account.vue` logged out without `supabase.auth.signOut()`** — it cleared `auth_token` and
+  left the real session alive.
+- **`default.vue` sent every Supabase user to `/dealer/login`.** Customers have a Supabase
+  session too; it now branches on `user_metadata.role`.
+- **`/api/user/profile` in the layout had no `useRequestHeaders(['cookie'])`**, so it rendered
+  anonymous during SSR — the same landmine that broke dealer pricing.
+
+`phone` and `address` are deliberately **not** mirrored into `profiles`. Bitrix stays the only
+copy of those; only the name is cached, for the admin list.
 
 ---
 

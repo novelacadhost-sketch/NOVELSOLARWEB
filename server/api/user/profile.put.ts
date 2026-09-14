@@ -1,92 +1,52 @@
-import { getUserSession, createUserSession } from '../../utils/userSession'
+import { serverSupabaseUser } from '#supabase/server'
+import { resolveBitrixContactId, cacheProfileName } from '../../utils/bitrixContact'
+import { getAuthUserId } from '../../utils/authUserId'
+import { bitrixFetch } from '../../utils/bitrixAuth'
 import { logger } from '../../utils/logger'
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
-  const bitrixUrl = config.bitrixWebhookUrl
-  const authToken = getCookie(event, 'auth_token')
-  const userSession = await getUserSession(authToken)
-  const body = await readBody(event)
-  const { firstName, lastName, phone, address } = body
+  const user = await serverSupabaseUser(event)
+  const userId = getAuthUserId(user)
 
-  if (!userSession) {
+  if (!user || !userId) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Unauthorized',
     })
   }
 
-  const contactId = userSession.contactId
-  const isLocalSession = contactId.startsWith('local_') || contactId.startsWith('temp_')
+  const body = await readBody(event)
+  const { firstName, lastName, phone, address } = body
 
-  if (!bitrixUrl) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'CRM Configuration missing',
-    })
-  }
-
-  const normalizedBitrixUrl = bitrixUrl.endsWith('/') ? bitrixUrl : `${bitrixUrl}/`
+  const contactId = await resolveBitrixContactId(userId, user.email ?? '')
 
   try {
-    let finalContactId = contactId
-
-    if (isLocalSession) {
-      // 1. Create a NEW contact for this previously local session
-      logger.info('AUTH', 'Promoting local session to real CRM contact', { email: userSession.email })
-      const createResponse = await $fetch<{ result: string }>(`${normalizedBitrixUrl}crm.contact.add`, {
-        method: 'POST',
-        body: {
-          fields: {
-            NAME: firstName,
-            LAST_NAME: lastName,
-            EMAIL: [{ VALUE: userSession.email, VALUE_TYPE: 'WORK' }],
-            PHONE: [{ VALUE: phone, VALUE_TYPE: 'WORK' }],
-            ADDRESS: address,
-            TYPE_ID: 'CLIENT',
-            SOURCE_ID: 'WEB',
-          },
+    await bitrixFetch('crm.contact.update', {
+      method: 'POST',
+      body: {
+        id: contactId,
+        fields: {
+          NAME: firstName,
+          LAST_NAME: lastName,
+          PHONE: [{ VALUE: phone, VALUE_TYPE: 'WORK' }],
+          ADDRESS: address,
         },
-      })
-      finalContactId = createResponse.result
+      },
+    })
 
-      // 2. Update the session with the new real contactId
-      const { token, maxAge } = await createUserSession({
-        contactId: finalContactId,
-        email: userSession.email,
-      })
-
-      setCookie(event, 'auth_token', token, {
-        maxAge,
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-      })
-    } else {
-      // 3. Regular update for existing contacts
-      await $fetch(`${normalizedBitrixUrl}crm.contact.update`, {
-        method: 'POST',
-        body: {
-          id: finalContactId,
-          fields: {
-            NAME: firstName,
-            LAST_NAME: lastName,
-            PHONE: [{ VALUE: phone, VALUE_TYPE: 'WORK' }],
-            ADDRESS: address,
-          },
-        },
-      })
-    }
+    // The GET caches the CRM contact for 5 minutes; without this the page
+    // re-reads its own pre-edit data straight after saving.
+    await useStorage('cache').removeItem(`profile:${contactId}`)
+    await cacheProfileName(userId, firstName ?? '', lastName ?? '')
 
     return {
       success: true,
-      message: isLocalSession ? 'Account created and profile updated successfully' : 'Profile updated successfully',
-      contactId: finalContactId,
+      message: 'Profile updated successfully',
+      contactId,
     }
   } catch (error: unknown) {
     const err = error as { data?: unknown }
-    logger.error('Profile Update', 'Bitrix update/promotion error', { error: err.data || error })
+    logger.error('Profile Update', 'Bitrix update error', { error: err.data || error })
     throw createError({
       statusCode: 500,
       statusMessage: 'Failed to synchronize profile with CRM',

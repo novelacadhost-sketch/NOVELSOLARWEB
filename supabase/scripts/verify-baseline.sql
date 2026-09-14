@@ -40,8 +40,10 @@ UNION ALL
 SELECT '6. tables the app queries',
        coalesce(string_agg(x, ', '), 'none missing'),
        CASE WHEN count(*) = 0 THEN 'PASS' ELSE 'FAIL' END
-FROM unnest(ARRAY['admin_profiles','admin_sessions','auth_sessions','dealer_applications',
-                  'dealer_invitations','orders','products','profiles','sync_meta','user_sessions']) AS x
+-- auth_sessions and user_sessions were dropped (2026-09-14); Supabase Auth is
+-- the only customer session and admin_sessions the only server-side one.
+FROM unnest(ARRAY['admin_profiles','admin_sessions','dealer_applications',
+                  'dealer_invitations','orders','products','profiles','sync_meta']) AS x
 WHERE x NOT IN (SELECT relname FROM t)
 UNION ALL
 SELECT '7. admin_settings is empty',
