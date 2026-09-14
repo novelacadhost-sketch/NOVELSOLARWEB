@@ -27,6 +27,24 @@ export default defineEventHandler((event) => {
       })
     }
   } else {
+    // Native clients (the mobile app) authenticate with an Authorization
+    // header and have no cookie jar. CSRF defends against a browser attaching
+    // *ambient* credentials to a cross-site request — a Bearer token is never
+    // ambient, the caller must hold it deliberately, so the attack CSRF
+    // prevents cannot happen here. Requiring the token dance would only block
+    // legitimate native clients.
+    //
+    // Deliberately narrow: this applies only when the request carries a
+    // Bearer token AND no session cookie. A browser request keeps the full
+    // check even if it also sets an Authorization header, so a cookie-bearing
+    // victim is never exempted.
+    const authHeader = getHeader(event, 'authorization') || ''
+    const hasBearer = authHeader.slice(0, 7).toLowerCase() === 'bearer ' && authHeader.slice(7).trim().length > 0
+    const hasSessionCookie = Boolean(
+      getCookie(event, 'csrf-token') || getCookie(event, 'admin_token') || getCookie(event, 'auth_token'),
+    )
+    if (hasBearer && !hasSessionCookie) return
+
     // Mutating requests must matching header and cookie to prevent forgery
     const headerToken = getHeader(event, 'x-csrf-token')
     const cookieToken = getCookie(event, 'csrf-token')

@@ -1,19 +1,34 @@
 import { serverSupabaseUser, serverSupabaseServiceRole } from '#supabase/server'
 import type { H3Event } from 'h3'
 import { getAuthUserId } from './authUserId'
+import { resolveBearerUser } from './bearerAuth'
 import { logger } from './logger'
+
+/**
+ * Identify the caller, whether they authenticated by cookie (browser) or by
+ * `Authorization: Bearer` (native mobile client). Returns null for anonymous.
+ */
+async function resolveUserId(event: H3Event): Promise<string | null> {
+  // Cookie session first — this is the common path and costs no network call.
+  try {
+    const user = await serverSupabaseUser(event)
+    if (user) {
+      const id = getAuthUserId(user)
+      if (id) return id
+      logger.warn('DealerCheck', 'Cookie session has no resolvable id', { keys: Object.keys(user) })
+    }
+  } catch {
+    // No cookie session; fall through to the Bearer path.
+  }
+
+  const bearer = await resolveBearerUser(event)
+  return bearer?.id ?? null
+}
 
 export async function resolveIsDealerFromEvent(event: H3Event): Promise<boolean> {
   try {
-    const user = await serverSupabaseUser(event)
-    if (!user) return false
-
-    // The module returns JWT claims, where the id is `sub`, not `id`.
-    const userId = getAuthUserId(user)
-    if (!userId) {
-      logger.warn('DealerCheck', 'Authenticated user has no resolvable id', { keys: Object.keys(user) })
-      return false
-    }
+    const userId = await resolveUserId(event)
+    if (!userId) return false
 
     const supabase = await serverSupabaseServiceRole(event)
     const { data, error } = (await supabase

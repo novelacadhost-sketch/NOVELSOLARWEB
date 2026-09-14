@@ -1,28 +1,13 @@
 import { logger } from '../utils/logger'
-import { serverSupabaseUser, serverSupabaseServiceRole } from '#supabase/server'
+import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const brand = ((query.brand as string) || 'itel').toLowerCase()
 
-  let isDealer = false
-  try {
-    const user = await serverSupabaseUser(event)
-    if (user) {
-      const supabase = await serverSupabaseServiceRole(event)
-      const { data: profile } = (await supabase
-        .from('profiles')
-        .select('role, dealer_status')
-        .eq('user_id', getAuthUserId(user) ?? '')
-        .single()) as { data: { role: string; dealer_status: string } | null }
-
-      if (profile && profile.role === 'dealer' && profile.dealer_status === 'approved') {
-        isDealer = true
-      }
-    }
-  } catch (err) {
-    // Ignore errors for unauthenticated users
-  }
+  // One shared gate: it accepts both the browser cookie session and an
+  // Authorization: Bearer token, so native clients get dealer pricing too.
+  const isDealer = await resolveIsDealerFromEvent(event)
 
   interface BitrixItelProduct {
     ID?: string | number
