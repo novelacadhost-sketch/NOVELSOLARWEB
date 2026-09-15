@@ -15,11 +15,17 @@ function getClientIp(event: any) {
   )
 }
 
-function getRateLimitConfig(path: string) {
+function getRateLimitConfig(path: string, isAnonymous: boolean) {
   if (path.startsWith('/api/admin/auth/')) return { maxRequests: 20, windowSizeInSeconds: 60, bucket: 'admin-auth' }
   if (path.startsWith('/api/auth/')) return { maxRequests: 20, windowSizeInSeconds: 60, bucket: 'auth' }
-  if (['/api/checkout', '/api/contact', '/api/quote', '/api/book-service'].includes(path))
+  if (['/api/checkout', '/api/contact', '/api/quote', '/api/book-service'].includes(path)) {
+    // Credential-less callers skip the CSRF check (see 2.csrf.ts) so that the
+    // mobile app can take guest enquiries and guest orders. Nothing else stands
+    // between them and the CRM, so they get a tighter budget than the website:
+    // still far more than a person filling in a form, little use for flooding.
+    if (isAnonymous) return { maxRequests: 10, windowSizeInSeconds: 60, bucket: 'lead-anon' }
     return { maxRequests: 30, windowSizeInSeconds: 60, bucket: 'lead' }
+  }
   if (path.startsWith('/api/admin/')) return { maxRequests: 60, windowSizeInSeconds: 60, bucket: 'admin' }
   return { maxRequests: 100, windowSizeInSeconds: 60, bucket: 'api' }
 }
@@ -34,7 +40,12 @@ export default defineEventHandler(async (event) => {
   const storage = useStorage('rateLimit')
 
   const ip = getClientIp(event)
-  const { maxRequests, windowSizeInSeconds, bucket } = getRateLimitConfig(event.path)
+
+  // Query string stripped: the lead paths are matched exactly, and a stray `?`
+  // would drop the caller into the default 100/min bucket.
+  const path = event.path.split('?')[0] ?? event.path
+  const isAnonymous = !event.context.bearerUser && !hasAmbientCredentials(event)
+  const { maxRequests, windowSizeInSeconds, bucket } = getRateLimitConfig(path, isAnonymous)
 
   // The KV key for this IP's current window bucket
   const currentMinute = Math.floor(Date.now() / 1000 / windowSizeInSeconds)

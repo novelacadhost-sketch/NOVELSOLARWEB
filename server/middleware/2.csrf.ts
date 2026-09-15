@@ -42,10 +42,23 @@ export default defineEventHandler((event) => {
     // this is a genuine authenticated caller — not merely a well-formed
     // header, which anyone could send.
     const hasVerifiedBearer = Boolean(event.context.bearerUser)
-    const hasSessionCookie = Boolean(
-      getCookie(event, 'csrf-token') || getCookie(event, 'admin_token'),
-    )
+    const hasSessionCookie = hasAmbientCredentials(event)
     if (hasVerifiedBearer && !hasSessionCookie) return
+
+    // Guest lead capture from a native client: no cookie jar, no token, and
+    // nothing to forge. CSRF protects a victim's *ambient* credentials, so a
+    // request carrying none of them is not an attack it can prevent — the same
+    // POST can be made directly with curl, and always could: a script need only
+    // GET one page to be handed a csrf-token cookie and echo it back.
+    //
+    // Narrow on purpose. It applies to four lead-capture paths, and only when
+    // the request has no credentials at all. /api/checkout is the reason for
+    // that second condition: forcing a signed-in dealer's browser to place an
+    // order IS a real CSRF target, so anything cookie-bearing keeps the full
+    // check. Abuse is bounded by the stricter anonymous bucket in 1.rate-limit.
+    if (ANONYMOUS_WRITE_PATHS.has(event.path.split('?')[0] ?? '') && !hasSessionCookie && !hasVerifiedBearer) {
+      return
+    }
 
     // Mutating requests must matching header and cookie to prevent forgery
     const headerToken = getHeader(event, 'x-csrf-token')

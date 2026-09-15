@@ -203,7 +203,8 @@ For `branch`, use the live branch list — see [Branches](#7-branches).
 
 ## 6. Enquiry forms
 
-All `POST`, all require a Bearer token today (see [What's blocked](#whats-blocked)).
+All `POST`. **A guest may send these without signing in** — no token, no CSRF header, nothing.
+If the user *is* signed in, send the Bearer token as usual and the enquiry is attributed to them.
 
 | Endpoint | Body |
 | --- | --- |
@@ -260,15 +261,15 @@ A quick sanity check: call `/api/inventory?q=philips` signed in as an approved d
 
 ## What's blocked
 
-**Anonymous writes return 403.** With no token and no cookie, `POST /api/contact`, `/api/quote`,
-`/api/book-service` and guest `/api/checkout` are all rejected.
+**Guest writes now work** (2026-09-15). `POST /api/contact`, `/api/quote`, `/api/book-service`
+and guest `/api/checkout` accept a request with no credentials at all, so enquiry forms and guest
+checkout can be built without a sign-in wall.
 
-This matters for app design: enquiry forms and guest checkout are usually the screens you show
-*before* asking someone to sign in. **Raise it with Davies before building those screens** —
-it needs a decision on the backend (a device token, a per-route exemption with rate limiting, or
-requiring sign-in).
+Anonymous callers get a tighter rate limit than the website: **10 requests per minute per IP**
+across those four endpoints combined, versus 30 for a signed-in or browser request. Ample for a
+person filling in a form; if you see `429` in testing, that is why.
 
-Also unavailable:
+Everything else still requires authentication. Unavailable:
 
 - Any table other than `products`, `public_products` and your own `profiles` row
 - `dealer_price` and `raw` on `products` — no client can read these
@@ -282,7 +283,7 @@ Also unavailable:
 | --- | --- |
 | `42501` (PostgREST) | No permission. Usually `select *` on `products` — name the columns, or use `public_products`. |
 | Empty array, no error | RLS filtered every row. Signed in? Querying your own `user_id`? |
-| `403` on a POST | No token and no cookie — see What's blocked. |
+| `403` on a POST | CSRF. You sent *some* credential but not a valid pair — e.g. a cookie without the matching `x-csrf-token` header. Send either a clean anonymous request or a Bearer token, not a half-set. |
 | `200` but no `dealerPrice` | Not an approved dealer, **or the token didn't arrive**. See Failing closed. |
 | `401` on `/api/user/profile` | No valid Supabase session on the request. |
 
@@ -290,6 +291,5 @@ Also unavailable:
 
 ## Questions worth asking early
 
-1. Should guests be able to send enquiries and check out? (Blocked today.)
-2. Do you need an endpoint for branches, or is a bundled list fine?
-3. Push notifications for order status — nothing exists server-side for this yet.
+1. Do you need an endpoint for branches, or is a bundled list fine?
+2. Push notifications for order status — nothing exists server-side for this yet.
