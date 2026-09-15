@@ -121,6 +121,19 @@
               <p class="text-slate-500 text-sm">Try adjusting your filters or price range.</p>
             </div>
 
+            <template v-else-if="sectionRuns">
+              <section v-for="run in sectionRuns" :key="run.name" class="mb-10">
+                <h3 class="mb-4 flex items-center gap-3 text-sm font-black uppercase tracking-wider text-slate-500">
+                  {{ run.name }}
+                  <span class="text-xs font-bold text-slate-400">{{ run.products.length }}</span>
+                  <span class="h-px flex-1 bg-slate-200" />
+                </h3>
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-6 lg:grid-cols-4">
+                  <ProductCard v-for="product in run.products" :key="product.ID" :product="product" />
+                </div>
+              </section>
+            </template>
+
             <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
               <ProductCard v-for="product in displayedProducts" :key="product.ID" :product="product" />
             </div>
@@ -142,17 +155,32 @@
 
 <script setup lang="ts">
 import { excludeServiceProducts } from '~/utils/productFilters'
+import { CATEGORY_GROUPS, groupIdForSection, isExcludedSection, orderSections } from '~/utils/productCategories'
 import { watch, computed, ref } from 'vue'
 
-const categories = [
-  { id: 'solar-panels', name: 'Solar Panels', SECTION_ID: null },
-  { id: 'inverters', name: 'Inverters', SECTION_ID: null },
-  { id: 'batteries', name: 'Batteries', SECTION_ID: null },
-  { id: 'charge-controllers', name: 'Charge Controllers', SECTION_ID: null },
-  { id: 'lighting', name: 'Lighting', SECTION_ID: null },
-  { id: 'power-banks', name: 'Power Banks', SECTION_ID: null },
-  { id: 'accessories', name: 'Accessories', SECTION_ID: null },
-]
+// Index signature deliberate: the /api/inventory response is a union whose
+// Bitrix-path member has no section fields, and a type with only optional
+// properties would be rejected for having nothing in common with it.
+type WithSection = { sectionName?: string | null; section_name?: string | null; [key: string]: unknown }
+const sectionOf = (product: WithSection) => product.sectionName || product.section_name || null
+
+/**
+ * Categories come from the Bitrix taxonomy via ~/utils/productCategories, and
+ * only appear once something is in them — an empty filter is worse than no
+ * filter. The seven hardcoded ones here each carried SECTION_ID: null, left
+ * over from when the portal's sections were deleted.
+ */
+const categories = computed(() => {
+  const present = new Set(
+    getProductsArray()
+      .map((p: WithSection) => groupIdForSection(sectionOf(p)))
+      .filter(Boolean),
+  )
+  // Before the mirror carries sections, nothing resolves and the name-based
+  // fallback below decides — so show every group rather than an empty sidebar.
+  if (present.size === 0) return CATEGORY_GROUPS
+  return CATEGORY_GROUPS.filter((g) => present.has(g.id))
+})
 
 const user = useSupabaseUser()
 const { data: apiProducts, pending } = useFetch('/api/inventory', {
@@ -169,8 +197,23 @@ const getProductsArray = () => {
   return []
 }
 
+/**
+ * Category match. The section wins whenever the product has one.
+ *
+ * The title-keyword branch below is the pre-2026-09-15 behaviour, kept ONLY for
+ * products with no section — a brand new Bitrix product before the next sync,
+ * or the portal losing its sections again as it already did once. It is wrong
+ * by construction ("Solar Kit" matches nothing, "Inverter Generator" matches
+ * two) and should not be extended; fix the section in Bitrix instead.
+ */
 const matchesCategory = (product, categoryId) => {
   if (categoryId === 'all') return true
+
+  const section = sectionOf(product)
+  if (section) {
+    if (isExcludedSection(section)) return false
+    return groupIdForSection(section) === categoryId
+  }
 
   const title = (product.NAME || product.name || '').toLowerCase()
   const isBattery =
@@ -237,6 +280,31 @@ const matchingProducts = computed(() => {
 })
 
 const displayedProducts = computed(() => matchingProducts.value.slice(0, displayLimit.value))
+
+/**
+ * Products split into their Bitrix sections, for subheadings inside a category.
+ *
+ * Null when browsing everything, or when a category has only one section —
+ * a lone "Solar Panel" heading under "Solar Panels" is noise, so the template
+ * falls back to a plain grid.
+ */
+const sectionRuns = computed(() => {
+  if (selectedCategory.value === 'all') return null
+
+  const bySection = new Map()
+  for (const product of displayedProducts.value) {
+    const name = sectionOf(product)
+    if (!name) continue
+    if (!bySection.has(name)) bySection.set(name, [])
+    bySection.get(name).push(product)
+  }
+  if (bySection.size < 2) return null
+
+  return orderSections(selectedCategory.value, [...bySection.keys()]).map((name) => ({
+    name,
+    products: bySection.get(name) ?? [],
+  }))
+})
 
 watch([searchQuery, selectedCategory, maxPrice], () => {
   displayLimit.value = 50

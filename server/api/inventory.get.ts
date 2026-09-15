@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from '../utils/supabaseAdmin'
 import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
 import { fetchAllBitrixProducts } from '../utils/fetchAllBitrixProducts'
 import { normalizeProperty } from '../utils/normalizeProperty'
+import { getSectionMap } from '../utils/bitrixSections'
 
 export default defineCachedEventHandler(
   async (event) => {
@@ -27,6 +28,17 @@ export default defineCachedEventHandler(
       sectionName: string | null
       dealerPrice?: number
       [key: string]: unknown
+    }
+
+    // Cached for five minutes inside getSectionMap, so this is one Bitrix call
+    // per cache window rather than per request, and it never throws.
+    const sectionNames = await getSectionMap()
+
+    const sectionOf = (p: any, raw: any): { id: string | null; name: string | null } => {
+      const rawId = p?.section_id ?? raw?.SECTION_ID
+      const id = rawId != null && rawId !== '' ? String(rawId) : null
+      if (!id) return { id: null, name: null }
+      return { id, name: p?.section_name ?? sectionNames.get(id) ?? null }
     }
 
     const mapProduct = (p: any, fromDb = true): MappedProduct => {
@@ -60,13 +72,16 @@ export default defineCachedEventHandler(
         PROPERTY_102: normalizeProperty(raw.PROPERTY_102),
         PROPERTY_104: normalizeProperty(raw.PROPERTY_104),
         PROPERTY_112: normalizeProperty(raw.PROPERTY_112),
-        // The catalogue's real category. On the Bitrix path only the id is on
-        // the payload; the name is a mirror column, so it is null there and the
-        // client resolves it from /api/categories. Grouping should key on the
-        // NAME — sections on this portal were deleted and re-added once
-        // already, which changed every id.
-        sectionId: raw.SECTION_ID != null && raw.SECTION_ID !== '' ? String(raw.SECTION_ID) : null,
-        sectionName: (fromDb ? (p.section_name ?? null) : null) as string | null,
+        // The catalogue's real category. Resolved on BOTH paths: the Bitrix
+        // payload carries only SECTION_ID, so the name comes from the section
+        // map (one cached lookup per request). Without this the primary path
+        // would return unnamed categories and the shop would group nothing,
+        // while the rarely-used fallback path worked — the worst way round.
+        //
+        // Group on the NAME, not the id: these sections were deleted from the
+        // portal and re-added, which changed every id.
+        sectionId: sectionOf(p, raw).id,
+        sectionName: sectionOf(p, raw).name,
       }
 
       if (isDealer) {
