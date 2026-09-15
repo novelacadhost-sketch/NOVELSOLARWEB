@@ -1,8 +1,24 @@
 import { timingSafeEqual } from 'node:crypto'
-import { readBody, sendRedirect, createError } from 'h3'
+import { readBody, sendRedirect } from 'h3'
+import type { H3Event } from 'h3'
 import { verifyBitrixApplicationToken } from '../../utils/bitrixWebhookVerify'
 import { bindProductEvents, buildHandlerUrl } from '../../utils/bitrixEventBindings'
 import { logger } from '../../utils/logger'
+
+/**
+ * End the request without Nitro's error envelope.
+ *
+ * `createError` produces a JSON body that includes the request `url` — and this
+ * endpoint's shared secret travels in the query string (`?t=…`), so every error
+ * response echoed the token back in plain text, into anything that captured the
+ * body. Returning a bare status and a fixed message keeps it out.
+ *
+ * The status code is what Bitrix acts on; it ignores the body entirely.
+ */
+function fail(event: H3Event, status: number, message: string) {
+  setResponseStatus(event, status)
+  return { success: false, message }
+}
 
 /** Constant-time compare that tolerates length mismatches without leaking them. */
 function timingSafeEqualStr(a: string, b: string): boolean {
@@ -64,7 +80,7 @@ interface BitrixUserCurrentResponse {
 
 export default defineEventHandler(async (event) => {
   if (event.method !== 'POST') {
-    throw createError({ statusCode: 405, statusMessage: 'Method Not Allowed' })
+    return fail(event, 405, 'Method Not Allowed')
   }
 
   const body = await readBody(event)
@@ -83,13 +99,13 @@ export default defineEventHandler(async (event) => {
     const supplied = String(getQuery(event).t ?? '')
     if (!timingSafeEqualStr(supplied, String(bitrixHandlerToken))) {
       logger.warn('Bitrix Webhook', 'Rejected request with missing or invalid handler token')
-      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+      return fail(event, 403, 'Forbidden')
     }
   }
 
   const tokenCheck = verifyBitrixApplicationToken(body ?? {}, bitrixApplicationToken as string)
   if (!tokenCheck.valid) {
-    throw createError({ statusCode: 403, statusMessage: 'Forbidden: invalid Bitrix application token' })
+    return fail(event, 403, 'Forbidden')
   }
 
   if (!bitrixHandlerToken && tokenCheck.reason === 'unconfigured') {
@@ -112,7 +128,7 @@ export default defineEventHandler(async (event) => {
         eventName,
         bodyKeys: Object.keys(body ?? {}),
       })
-      throw createError({ statusCode: 400, statusMessage: 'Product event missing a readable product id' })
+      return fail(event, 400, 'Product event missing a readable product id')
     }
 
     // Awaited: on serverless the instance is frozen once the response is
@@ -127,7 +143,7 @@ export default defineEventHandler(async (event) => {
       logger.error('ProductSync', 'Single product sync failed', { error, productId, eventName })
       // 500 so Bitrix records a delivery failure and retries, rather than
       // treating a silent no-op as success.
-      throw createError({ statusCode: 500, statusMessage: 'Product sync failed' })
+      return fail(event, 500, 'Product sync failed')
     }
   }
 
@@ -135,7 +151,7 @@ export default defineEventHandler(async (event) => {
   const DOMAIN = body?.DOMAIN
 
   if (!AUTH_ID || !DOMAIN) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing Bitrix24 authentication tokens' })
+    return fail(event, 400, 'Missing Bitrix24 authentication tokens')
   }
 
   try {
@@ -173,9 +189,6 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, redirectUrl)
   } catch (error) {
     logger.error('Bitrix Auth', 'Handler error', { error })
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Authentication failed',
-    })
+    return fail(event, 500, 'Authentication failed')
   }
 })
