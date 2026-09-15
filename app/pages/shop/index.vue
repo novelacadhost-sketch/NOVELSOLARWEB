@@ -138,10 +138,10 @@
               <ProductCard v-for="product in displayedProducts" :key="product.ID" :product="product" />
             </div>
 
-            <div v-if="matchingProducts.length > displayedProducts.length" class="mt-8 flex justify-center">
+            <div v-if="!reachedEnd" class="mt-8 flex justify-center">
               <button
                 class="px-8 py-3 bg-white border-2 border-[#002888] text-[#002888] font-bold rounded-xl hover:bg-slate-50 transition-colors"
-                @click="displayLimit += 50"
+                @click="loadMore"
               >
                 Load More Products
               </button>
@@ -170,32 +170,100 @@ const sectionOf = (product: WithSection) => product.sectionName || product.secti
  * filter. The seven hardcoded ones here each carried SECTION_ID: null, left
  * over from when the portal's sections were deleted.
  */
+// Declared before the loader below, which watches them.
+const searchQuery = ref('')
+const selectedCategory = ref('all')
+const maxPrice = ref(2000000)
+
+const { data: categoryData } = await useFetch('/api/categories')
+
+/**
+ * Category list comes from /api/categories — every section in the catalogue with
+ * its count — NOT from the products currently loaded. Deriving it from the page
+ * meant only sections that happened to fall in the first 50 products appeared,
+ * so Charge Controllers, Solar Kits and Electric Mobility were simply missing.
+ */
 const categories = computed(() => {
-  const present = new Set(
-    getProductsArray()
-      .map((p: WithSection) => groupIdForSection(sectionOf(p)))
-      .filter(Boolean),
-  )
-  // Before the mirror carries sections, nothing resolves and the name-based
-  // fallback below decides — so show every group rather than an empty sidebar.
-  if (present.size === 0) return CATEGORY_GROUPS
-  return CATEGORY_GROUPS.filter((g) => present.has(g.id))
+  const counts = new Map<string, number>()
+  for (const c of categoryData.value?.categories ?? []) {
+    const groupId = groupIdForSection(c.name)
+    if (!groupId) continue
+    counts.set(groupId, (counts.get(groupId) ?? 0) + c.productCount)
+  }
+  if (counts.size === 0) return CATEGORY_GROUPS
+  return CATEGORY_GROUPS.filter((g) => (counts.get(g.id) ?? 0) > 0).map((g) => ({
+    ...g,
+    count: counts.get(g.id) ?? 0,
+  }))
 })
 
 const user = useSupabaseUser()
-const { data: apiProducts, pending } = useFetch('/api/inventory', {
-  key: `inventory-${user.value?.id || 'guest'}`,
-  // Forward the auth cookie so dealers get dealer pricing during SSR.
-  headers: useRequestHeaders(['cookie']),
+
+/**
+ * Category and search are resolved by the SERVER, and pages accumulate here.
+ *
+ * This page used to fetch one page of 50 and filter it in memory, so a category
+ * showed only the products that happened to land in that page — "Solar Panels"
+ * read 1 Result out of 125 — and Load More sliced an array that never grew.
+ */
+const sectionsParam = computed(() => {
+  if (selectedCategory.value === 'all') return ''
+  return CATEGORY_GROUPS.find((g) => g.id === selectedCategory.value)?.sections.join(',') ?? ''
 })
 
-const getProductsArray = () => {
-  if (!apiProducts.value) return []
-  if (Array.isArray(apiProducts.value.data)) return excludeServiceProducts(apiProducts.value.data)
-  if (Array.isArray(apiProducts.value.result)) return excludeServiceProducts(apiProducts.value.result)
-  if (Array.isArray(apiProducts.value)) return excludeServiceProducts(apiProducts.value)
+const start = ref(0)
+const loaded = ref([])
+const pending = ref(true)
+const reachedEnd = ref(false)
+const PAGE_SIZE = 50
+
+const toArray = (payload) => {
+  if (!payload) return []
+  if (Array.isArray(payload.data)) return payload.data
+  if (Array.isArray(payload.result)) return payload.result
+  if (Array.isArray(payload)) return payload
   return []
 }
+
+async function loadPage(reset = false) {
+  if (reset) {
+    start.value = 0
+    reachedEnd.value = false
+  }
+  pending.value = reset
+  try {
+    const payload = await $fetch('/api/inventory', {
+      query: { q: searchQuery.value || undefined, sections: sectionsParam.value || undefined, start: start.value },
+      // Forward the auth cookie so dealers get dealer pricing during SSR.
+      headers: useRequestHeaders(['cookie']),
+    })
+    const page = excludeServiceProducts(toArray(payload))
+    loaded.value = reset ? page : [...loaded.value, ...page]
+    if (page.length < PAGE_SIZE) reachedEnd.value = true
+  } catch {
+    if (reset) loaded.value = []
+    reachedEnd.value = true
+  } finally {
+    pending.value = false
+  }
+}
+
+await loadPage(true)
+
+// Debounced so typing does not fire a request per keystroke.
+let searchTimer = null
+watch(searchQuery, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => loadPage(true), 300)
+})
+watch(selectedCategory, () => loadPage(true))
+
+async function loadMore() {
+  start.value += PAGE_SIZE
+  await loadPage(false)
+}
+
+const getProductsArray = () => loaded.value
 
 /**
  * Category match. The section wins whenever the product has one.
@@ -244,10 +312,6 @@ const matchesCategory = (product, categoryId) => {
   return false
 }
 
-const searchQuery = ref('')
-const selectedCategory = ref('all')
-const maxPrice = ref(2000000)
-const displayLimit = ref(50)
 
 // Determine if the user is actively using any filters
 const isFilterActive = computed(() => {
@@ -267,19 +331,13 @@ const selectCategoryAndScroll = (catId) => {
 }
 
 const matchingProducts = computed(() => {
-  const products = getProductsArray()
-  if (products.length === 0) return []
-  return products.filter((product) => {
-    const productName = product.NAME || product.name || ''
-    const matchesSearch = productName.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesCategoryFilter = matchesCategory(product, selectedCategory.value)
-    const rawPrice = product.PRICE || product.price || 0
-    const matchesPrice = Number(rawPrice) <= maxPrice.value
-    return matchesSearch && matchesCategoryFilter && matchesPrice
-  })
+  // Category and search are already applied by the server. Only the price
+  // slider is client-side, and it only narrows what has been loaded so far —
+  // the API has no price parameter.
+  return getProductsArray().filter((product) => Number(product.PRICE || product.price || 0) <= maxPrice.value)
 })
 
-const displayedProducts = computed(() => matchingProducts.value.slice(0, displayLimit.value))
+const displayedProducts = computed(() => matchingProducts.value)
 
 /**
  * Products split into their Bitrix sections, for subheadings inside a category.
@@ -306,9 +364,6 @@ const sectionRuns = computed(() => {
   }))
 })
 
-watch([searchQuery, selectedCategory, maxPrice], () => {
-  displayLimit.value = 50
-})
 
 const getProductsForCategory = (categoryId) => {
   const products = getProductsArray()

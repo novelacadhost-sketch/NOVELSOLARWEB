@@ -16,6 +16,19 @@ export default defineCachedEventHandler(
     const brand = ((queryParams.brand as string) || '').trim()
     const start = Number.parseInt((queryParams.start as string) || '0', 10) || 0
 
+    // Comma-separated Bitrix section names. The client owns the merchandising —
+    // which sections make up "Inverters" lives in app/utils/productCategories.ts
+    // — so the server only has to filter on what it is given. Filtering happens
+    // BEFORE pagination, which is the whole point: the category pages used to
+    // fetch one 50-product page and filter it client-side, so "Inverters"
+    // showed however many inverters happened to fall in an arbitrary first 50.
+    const sectionFilter = new Set(
+      String(queryParams.sections ?? '')
+        .split(',')
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean),
+    )
+
     interface MappedProduct {
       ID: string | number
       NAME: string | undefined
@@ -114,6 +127,13 @@ export default defineCachedEventHandler(
         filtered = filtered.filter((p) => p.NAME && String(p.NAME).toLowerCase().includes(q.toLowerCase()))
       }
 
+      if (sectionFilter.size) {
+        filtered = filtered.filter((p) => {
+          const name = sectionOf(p, p).name
+          return name ? sectionFilter.has(name.toLowerCase()) : false
+        })
+      }
+
       // ordered by id descending
       filtered.sort((a, b) => Number(b.ID) - Number(a.ID))
 
@@ -135,6 +155,10 @@ export default defineCachedEventHandler(
         query = query.ilike('name', `%${brand}%`)
       } else if (q) {
         query = query.ilike('name', `%${q}%`)
+      }
+
+      if (sectionFilter.size) {
+        query = query.in('section_name', [...sectionFilter].map((n) => n))
       }
 
       // start (for pagination, range of 50)
@@ -173,7 +197,11 @@ export default defineCachedEventHandler(
         .digest('hex')
         .slice(0, 16)
 
-      return `inventory-v4:${isDealer ? 'dealer' : 'retail'}:${filters}:${start}`
+      const sections = String(query.sections ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9,&\- ]/g, '')
+        .slice(0, 120)
+      return `inventory-v4:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than
