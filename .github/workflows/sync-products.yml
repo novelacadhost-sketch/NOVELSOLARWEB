@@ -1,0 +1,73 @@
+name: Sync products from Bitrix
+
+# Replaces the Vercel cron, which never ran once on this project: the mirror sat
+# untouched from 2026-09-07 to 2026-09-15 across eight scheduled 18:00s. It could
+# not be diagnosed either — the Hobby plan keeps only an hour of runtime logs, so
+# by the time a run is missed the evidence is already gone.
+#
+# GitHub Actions is free, keeps logs for 90 days, is not capped at one run a day,
+# and fails visibly. The endpoint is unchanged; only the thing calling it moved.
+
+on:
+  schedule:
+    # 18:00 UTC daily — the schedule the Vercel cron had.
+    - cron: '0 18 * * *'
+  # So a sync can be forced from the Actions tab without a deploy or a terminal.
+  workflow_dispatch:
+
+concurrency:
+  # A full sync rewrites all ~1150 rows. Two at once would interleave upserts and
+  # deletes over the same table for no benefit.
+  group: sync-products
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the product sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SYNC_URL: ${{ vars.SYNC_URL || 'https://novelsolarweb.vercel.app/api/admin/trigger-sync' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::CRON_SECRET repository secret is not set — the endpoint will answer 401."
+            exit 1
+          fi
+
+          # --max-time 120: the endpoint awaits the whole sync, which caps its own
+          # Bitrix fetch at 30s. A recent run took 6s; 120 is slack, not a target.
+          body=$(mktemp)
+          status=$(curl -sS -o "$body" -w '%{http_code}' --max-time 120 \
+            -X POST "$SYNC_URL" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H 'Content-Type: application/json' \
+            -d '{}')
+
+          echo "HTTP $status"
+          cat "$body"
+          echo
+
+          if [ "$status" != "200" ]; then
+            echo "::error::Sync endpoint returned HTTP $status"
+            exit 1
+          fi
+
+          # A 200 is not enough on its own: the handler returns a JSON envelope and
+          # the meaningful part is `success`. Checking only the status is how the
+          # previous version of this sync reported success while writing nothing.
+          if ! grep -q '"success":true' "$body"; then
+            echo "::error::Sync endpoint returned 200 but not success:true"
+            exit 1
+          fi
+
+          synced=$(sed -n 's/.*"synced":\([0-9]*\).*/\1/p' "$body")
+          if [ -z "$synced" ] || [ "$synced" -lt 1 ]; then
+            echo "::error::Sync reported ${synced:-no} products — expected over a thousand."
+            exit 1
+          fi
+
+          echo "::notice::Synced $synced products."
