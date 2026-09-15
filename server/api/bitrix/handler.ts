@@ -16,6 +16,42 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB)
 }
 
+/**
+ * Pull the product id out of a Bitrix event payload, whichever shape it arrives in.
+ *
+ * Bitrix posts events as `application/x-www-form-urlencoded` with bracket keys
+ * (`data[FIELDS][ID]=218`). h3's `readBody` hands that back **flat** — the key
+ * is the literal string `"data[FIELDS][ID]"` — so the nested read this handler
+ * used to do (`body.data.FIELDS.ID`) was always undefined for a real webhook.
+ * It then returned `{ success: true, message: 'Event accepted (no product id)' }`,
+ * so Bitrix recorded a 200 and never retried. Verified against production on
+ * 2026-09-15 with a synthetic event.
+ *
+ * Both shapes are accepted because a JSON-bodied caller (our own tests, or a
+ * future OAuth app) does produce the nested form. FIELDS_AFTER is checked first
+ * for ADD; some Bitrix versions send FIELDS there instead, so fall through
+ * rather than assume.
+ */
+function extractProductId(body: Record<string, unknown> | undefined): string | null {
+  if (!body) return null
+
+  const nested = body.data as { FIELDS?: { ID?: unknown }; FIELDS_AFTER?: { ID?: unknown } } | undefined
+  const candidates = [
+    nested?.FIELDS_AFTER?.ID,
+    nested?.FIELDS?.ID,
+    body['data[FIELDS_AFTER][ID]'],
+    body['data[FIELDS][ID]'],
+  ]
+
+  for (const value of candidates) {
+    if (value === undefined || value === null) continue
+    const id = String(value).trim()
+    if (id) return id
+  }
+
+  return null
+}
+
 interface BitrixUserCurrentResponse {
   result?: {
     ID?: string | number
@@ -67,10 +103,16 @@ export default defineEventHandler(async (event) => {
   const eventName = body?.event
   if (eventName === 'ONCRMPRODUCTUPDATE' || eventName === 'ONCRMPRODUCTADD' || eventName === 'ONCRMPRODUCTDELETE') {
     const config = useRuntimeConfig()
-    const productId = eventName === 'ONCRMPRODUCTADD' ? body?.data?.FIELDS_AFTER?.ID : body?.data?.FIELDS?.ID
+    const productId = extractProductId(body)
 
     if (!productId) {
-      return { success: true, message: 'Event accepted (no product id)' }
+      // 400, not 200: a product event with no id we can read is a payload we do
+      // not understand, and answering "accepted" told Bitrix to stop retrying.
+      logger.error('ProductSync', 'Product event carried no readable id', {
+        eventName,
+        bodyKeys: Object.keys(body ?? {}),
+      })
+      throw createError({ statusCode: 400, statusMessage: 'Product event missing a readable product id' })
     }
 
     // Awaited: on serverless the instance is frozen once the response is
