@@ -325,7 +325,11 @@ useHead({
   title: 'Novel Solar: Leading Solar Energy Company in Nigeria - novelsolar',
 })
 
-const heroSlides = [
+// Built-in hero slides. These are the FALLBACK, not dead code: they render
+// before anything has been edited in /admin/manage-pages, and whenever the CMS
+// is empty or unreachable. Do not delete them to "clean up" — a database hiccup
+// would then blank the hero.
+const HERO_SLIDES_FALLBACK = [
   {
     image: '/images/Website BannersItel 500W SG.jpg.jpeg',
     eyebrow: 'Fast-Moving Solar Stock',
@@ -400,15 +404,18 @@ const heroSlides = [
   },
 ]
 
+const { slot } = await usePageContent('home')
+const heroSlides = computed(() => slot('hero', HERO_SLIDES_FALLBACK))
+
 const activeHeroSlide = ref(0)
 let heroCarouselInterval: ReturnType<typeof setInterval> | null = null
 
 const goToNextHeroSlide = () => {
-  activeHeroSlide.value = (activeHeroSlide.value + 1) % heroSlides.length
+  activeHeroSlide.value = (activeHeroSlide.value + 1) % heroSlides.value.length
 }
 
 const goToPreviousHeroSlide = () => {
-  activeHeroSlide.value = (activeHeroSlide.value - 1 + heroSlides.length) % heroSlides.length
+  activeHeroSlide.value = (activeHeroSlide.value - 1 + heroSlides.value.length) % heroSlides.value.length
 }
 
 onMounted(() => {

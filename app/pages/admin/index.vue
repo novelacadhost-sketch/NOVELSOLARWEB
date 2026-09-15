@@ -146,6 +146,17 @@ const cards = computed(() => [
     disabled: false,
   },
   {
+    to: '/admin/manage-pages',
+    title: 'Edit Pages',
+    subtitle: 'Swap the homepage banners and other page images without a developer or a deploy.',
+    icon: 'photo_library',
+    iconBg: 'bg-sky-100',
+    iconColor: 'text-sky-600',
+    decorClass: 'text-sky-500',
+    linkColor: 'text-sky-600',
+    disabled: false,
+  },
+  {
     to: '/admin/manage-blog',
     title: 'Blog Manager',
     subtitle: 'Write, edit, and publish SEO-optimized articles, guides, and company insights.',
