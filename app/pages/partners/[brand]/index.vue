@@ -1,8 +1,12 @@
 <template>
   <div>
+    <!-- A hand-built component always wins. See the note in the script block. -->
     <component :is="activeComponent" v-if="activeComponent" />
 
-    <!-- Fallback / Coming Soon state for unmapped partners -->
+    <!-- Otherwise a partner created in /admin/manage-partners, via the shared template. -->
+    <PartnerTemplate v-else-if="hasTemplatePartner" :slug="slug" />
+
+    <!-- Neither: the brand is not a partner we know about. -->
     <div v-else class="min-h-[70vh] flex flex-col items-center justify-center bg-gray-50 p-8 text-center pt-32 pb-32">
       <div
         class="w-24 h-24 bg-white rounded-full shadow-md flex items-center justify-center mb-8 border border-gray-100"
@@ -55,10 +59,35 @@ const componentMap: Record<string, any> = {
   hithium: defineAsyncComponent(() => import('~/components/partners/PartnerHithium.vue')),
 }
 
-const activeComponent = computed(() => {
-  const b = route.params.brand as string
-  return b ? componentMap[b.toLowerCase()] || null : null
-})
+const slug = computed(() => String(route.params.brand ?? '').toLowerCase())
+
+/**
+ * A registered component always wins over the database.
+ *
+ * That ordering is what lets a partner page built in the admin be remade by
+ * hand later: write PartnerFoo.vue, add it to componentMap above, and it takes
+ * over the same URL on the next deploy. Nothing needs migrating, no link
+ * breaks, and the row can stay or be switched off afterwards.
+ */
+const activeComponent = computed(() => (slug.value ? componentMap[slug.value] || null : null))
+
+// Only asked when no custom component exists, so the five hand-built partners
+// cost no extra request.
+const { data: templatePartner } = await useAsyncData(
+  () => `partner-exists:${slug.value}`,
+  async () => {
+    if (!slug.value || componentMap[slug.value]) return null
+    try {
+      return await $fetch<{ partner: { slug: string } }>(`/api/partner/${slug.value}`)
+    } catch {
+      // 404 is the ordinary answer for a brand nobody has set up.
+      return null
+    }
+  },
+  { watch: [slug] },
+)
+
+const hasTemplatePartner = computed(() => Boolean(templatePartner.value?.partner))
 
 useHead({
   title: `${formattedBrand.value} Portal | NovelSolar Partner`,

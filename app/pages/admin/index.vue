@@ -157,6 +157,17 @@ const cards = computed(() => [
     disabled: false,
   },
   {
+    to: '/admin/manage-partners',
+    title: 'Partner Pages',
+    subtitle: 'Create a page for a new partner brand, or edit one already published.',
+    icon: 'storefront',
+    iconBg: 'bg-teal-100',
+    iconColor: 'text-teal-600',
+    decorClass: 'text-teal-500',
+    linkColor: 'text-teal-600',
+    disabled: false,
+  },
+  {
     to: '/admin/manage-blog',
     title: 'Blog Manager',
     subtitle: 'Write, edit, and publish SEO-optimized articles, guides, and company insights.',

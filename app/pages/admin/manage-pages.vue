@@ -56,13 +56,38 @@ const PAGES: PageDef[] = [
   ...EDITABLE_IMAGE_PAGES.map((p) => ({ page: p.page, label: p.label, blockSlots: [], images: [...p.images] })),
 ]
 
-const selectedPage = ref<string>('home')
+interface TemplatePartner { slug: string; name: string }
+
+/**
+ * Admin-built partners are appended at runtime: their slugs are not known at
+ * build time. They expose the two collections the shared template renders.
+ */
+const { data: templatePartners } = await useAsyncData('admin-template-partners', () =>
+  useNuxtApp().$apiFetch<{ partners: TemplatePartner[] }>('/api/admin/partners/list'),
+)
+
+const allPages = computed<PageDef[]>(() => [
+  ...PAGES,
+  ...(templatePartners.value?.partners ?? []).map((p) => ({
+    page: `partners/${p.slug}`,
+    label: `Partner — ${p.name}`,
+    blockSlots: [
+      { slot: 'highlights', label: 'Highlight cards', help: 'Cards with a picture, a heading and a paragraph.', hasCopy: true },
+      { slot: 'gallery', label: 'Gallery', help: 'Pictures shown in a grid near the bottom of the page.', hasCopy: false },
+    ],
+    images: [],
+  })),
+])
+
+// Deep-linked from the partner list ("Pictures"), so the right page is preselected.
+const route = useRoute()
+const selectedPage = ref<string>(String(route.query.page ?? 'home'))
 const slots = ref<Record<string, Block[]>>({})
 const isLoading = ref(true)
 const isSaving = ref<string | null>(null)
 const busyImage = ref<string | null>(null)
 
-const currentPage = computed(() => PAGES.find((p) => p.page === selectedPage.value))
+const currentPage = computed(() => allPages.value.find((p) => p.page === selectedPage.value))
 
 function emptyBlock(): Block {
   return { image_url: '', alt: '', eyebrow: '', title: '', description: '', caption: '', link: '', active: true }
@@ -222,7 +247,7 @@ async function saveBlocks(slot: string) {
         v-model="selectedPage"
         class="w-full max-w-sm rounded-xl border border-slate-300 px-3 py-2 text-sm"
       >
-        <option v-for="p in PAGES" :key="p.page" :value="p.page">{{ p.label }}</option>
+        <option v-for="p in allPages" :key="p.page" :value="p.page">{{ p.label }}</option>
       </select>
     </div>
 
