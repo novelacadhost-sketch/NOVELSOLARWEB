@@ -26,7 +26,7 @@ await Supabase.initialize(url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY);
 
 | Value | Where |
 | --- | --- |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API. Ask the backend maintainer. |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API. Ask Davies. |
 | API base (staging) | `https://novelsolarweb.vercel.app` |
 | API base (production) | `https://novelsolar.com` — not live yet, still WordPress |
 
@@ -219,7 +219,7 @@ safe to show.
 ## 7. Branches
 
 38 selling branches, in `app/utils/locations.ts` in the web repo. There's no endpoint for them
-yet — ask the backend maintainer for the current list, or scrape it from `/branch-outlets`.
+yet — ask Davies for the current list, or scrape it from `/branch-outlets`.
 
 Each has `name`, `city`, `state`, `address`, `phone`, `email1`, `coords`, and `bitrixId`.
 
@@ -264,7 +264,7 @@ A quick sanity check: call `/api/inventory?q=philips` signed in as an approved d
 `/api/book-service` and guest `/api/checkout` are all rejected.
 
 This matters for app design: enquiry forms and guest checkout are usually the screens you show
-*before* asking someone to sign in. **Raise it with the backend maintainer before building those screens** —
+*before* asking someone to sign in. **Raise it with Davies before building those screens** —
 it needs a decision on the backend (a device token, a per-route exemption with rate limiting, or
 requiring sign-in).
 
