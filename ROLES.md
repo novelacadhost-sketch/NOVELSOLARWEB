@@ -234,9 +234,54 @@ Sign in with the Supabase SDK exactly as on web (`signInWithPassword` for dealer
 the browser: `dealerPrice` appears alongside `PRICE` for approved dealers, and is absent for
 everyone else.
 
-**Do not query the database directly for the catalogue.** RLS blocks `select` on `products` for
-both `anon` and `authenticated` — only the service role can read it, and the service key must
-never ship in an app. Go through the API.
+**`dealerPrice` is absent, not null,** for anyone who is not an approved dealer. Treat a missing
+key as retail; do not compare against zero.
+
+**This superseded the original advice, 2026-09-15.** Until then RLS blocked `select` on
+`products` for both `anon` and `authenticated`, and this document said to go through the API for
+everything. The catalogue is now directly readable — see below. Prices for a signed-in user are
+still API-only, and always will be.
+
+### Reading data directly from Supabase
+
+Two tables are reachable with the anon key. Everything else is service-role only.
+
+| Table / view | Who | What |
+| --- | --- | --- |
+| `public_products` (view) | `anon`, `authenticated` | active products, `select *` works |
+| `products` | `anon`, `authenticated` | same rows, but **columns must be named** |
+| `profiles` | `authenticated` | the caller's own row only |
+
+**`select *` on `products` fails with `42501`, deliberately.** RLS filters rows, not columns, so
+the column restriction is a column-level `GRANT` instead — and a grant without a column list
+means *all* columns. Naming them is what keeps `dealer_price` and `raw` out:
+
+```sql
+GRANT SELECT (id, name, price, description, specs, gallery_urls, image_url, quantity, active)
+  ON public.products TO anon, authenticated;
+```
+
+`raw` is excluded because it carries `PROPERTY_184` — the dealer price again. Failing loudly on
+`select *` is the point: the alternative is a client that silently receives the wholesale price
+list. **Never write `GRANT SELECT ON public.products` without a column list.** It does not error,
+it does not warn, and the RLS policy still looks correct afterwards.
+
+Use the `public_products` view if naming columns is a nuisance. It is `security_invoker`, so the
+same policy applies — it is a convenience, not a way around RLS.
+
+### Profiles
+
+**The client never inserts a profile.** A trigger on `auth.users` (`handle_new_user`) creates the
+row at signup with `role = 'customer'`. There is no INSERT policy and the grant is revoked.
+
+This is not an oversight to work around. `profiles` carries the dealer gate and the dealer
+onboarding token, so a client-side insert would let any signed-in user grant themselves dealer
+pricing, or plant a token for another user's id and reset that account's password through
+`/api/dealer/create-account`.
+
+A client may read its own row and update **`first_name`, `last_name`, `phone`, `address`** —
+nothing else. `role` and `dealer_status` are readable so the app can tell whether the user is a
+dealer, but not writable; RLS cannot restrict columns, so that is a column-level grant too.
 
 **The catalogue is Bitrix-first.** `/api/inventory` fetches live from Bitrix24 and only falls
 back to the Supabase mirror when Bitrix is unreachable. The mirror is a resilience layer
@@ -250,13 +295,40 @@ browser attaching *ambient* credentials — a Bearer token is never ambient. A m
 token is not exempt and still gets a 403.
 
 **Anonymous writes are still blocked.** A native client with no token cannot POST to
-`/api/contact`, `/api/quote` or `/api/book-service` — it gets a 403. Those endpoints need either
-a signed-in user or a deliberate exemption. Unresolved as of 2026-09-14.
+`/api/contact`, `/api/quote`, `/api/book-service` — or `/api/checkout` as a guest. All return
+403. Those endpoints need either a signed-in user or a deliberate exemption. **Still unresolved
+as of 2026-09-15**, and it is the thing most likely to bite a mobile build: enquiry forms and
+guest checkout are exactly the screens an app offers before asking anyone to sign in. Decide it
+before building them.
 
 ### Response shapes are inconsistent
 
 `/api/inventory` returns a **bare array**. `/api/products` returns **`{ products: [...] }`**.
 There is no API versioning. Pin nothing without checking, and expect shapes to move.
+
+### A worked example
+
+Browse anonymously, then show the right price once signed in:
+
+```dart
+// 1. anonymous catalogue — straight from Supabase
+final rows = await supabase.from('public_products').select();
+
+// 2. sign in (magic link for customers, password for dealers)
+await supabase.auth.signInWithPassword(email: e, password: p);
+
+// 3. prices for a signed-in user — API only, never the table
+final token = supabase.auth.currentSession!.accessToken;
+final r = await http.get(
+  Uri.parse('$base/api/inventory?q=inverter&start=0'),
+  headers: {'Authorization': 'Bearer $token'},
+);
+final List items = jsonDecode(r.body);      // bare array
+final price = items[0]['dealerPrice'] ?? items[0]['PRICE'];
+```
+
+Step 3 is not optional for a dealer build. A dealer served from step 1 is quoted retail, which is
+the bug that went unnoticed here from June to September 2026.
 
 ### Why Bearer resolution lives in middleware
 
