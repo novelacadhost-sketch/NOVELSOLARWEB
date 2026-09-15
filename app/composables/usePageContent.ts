@@ -68,5 +68,20 @@ export async function usePageContent(page: string) {
     return slot(name, [fallback])[0] ?? fallback
   }
 
-  return { slot, one }
+  /**
+   * Replace one image, keyed on the path it currently uses.
+   *
+   *   :src="image('/images/hithium_hero.png')"
+   *
+   * The key being the original path is the point. There is nothing to name and
+   * nothing to keep in sync: the admin sees a thumbnail of the picture that is
+   * on the page and swaps it, and if no override exists the original renders.
+   * Slots starting with "/" are image replacements; anything else is a named
+   * block collection like the homepage hero.
+   */
+  function image(originalPath: string): string {
+    return data.value?.slots?.[originalPath]?.[0]?.image_url || originalPath
+  }
+
+  return { slot, one, image }
 }

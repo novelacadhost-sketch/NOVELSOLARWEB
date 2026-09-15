@@ -6,7 +6,7 @@
     >
       <img
         loading="lazy"
-        src="/images/hithium_partner.png"
+        :src="image('/images/hithium_partner.png')"
         alt="Novel Solar x Hithium Partnership"
         class="h-12 md:h-20 object-contain px-4"
       />
@@ -18,7 +18,7 @@
       <div class="absolute inset-0 z-0 scale-110 blur-sm opacity-40">
         <img
           loading="lazy"
-          src="/images/hithium_hero.png"
+          :src="image('/images/hithium_hero.png')"
           alt="Hithium Energy Storage Facility"
           class="w-full h-full object-cover"
         />
@@ -94,7 +94,7 @@
             />
             <img
               loading="lazy"
-              src="/images/Hithium3.png"
+              :src="image('/images/Hithium3.png')"
               alt="Hithium 1kWh Solar Generator"
               class="relative w-full h-auto object-contain z-10 group-hover:scale-105 transition-transform duration-700 drop-shadow-2xl"
             />
@@ -109,7 +109,7 @@
             />
             <img
               loading="lazy"
-              src="/images/Hithium1.jpg"
+              :src="image('/images/Hithium1.jpg')"
               alt="Hithium Heroee 2 Solar Generator"
               class="relative w-full h-auto object-contain z-10 group-hover:scale-105 transition-transform duration-700 drop-shadow-2xl"
             />
@@ -195,6 +195,10 @@
 </template>
 
 <script setup lang="ts">
+
+// Images on this page can be replaced from /admin/manage-pages. The paths
+// below are the originals and stay as the fallback if nothing is set.
+const { image } = await usePageContent('partners/hithium')
 useHead({
   title: 'Hithium Portable Solar Generators | NovelSolar Partner',
   meta: [

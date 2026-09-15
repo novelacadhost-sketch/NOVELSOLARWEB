@@ -4,7 +4,7 @@
     <div class="bg-white w-full py-6 flex justify-center items-center border-b border-gray-100">
       <img
         loading="lazy"
-        src="/images/Haisic_partner.png"
+        :src="image('/images/Haisic_partner.png')"
         alt="Novel Solar x Haisic Partnership"
         class="h-12 md:h-16 w-auto object-contain mx-auto"
       />
@@ -57,7 +57,7 @@
             <div class="absolute inset-0 bg-blue-600/20 rounded-full blur-[100px] -z-10 animate-pulse" />
             <img
               loading="lazy"
-              src="/images/haisic_aa_4.png"
+              :src="image('/images/haisic_aa_4.png')"
               alt="Haisic Enterprise Solution"
               class="w-full h-auto drop-shadow-[0_20px_50px_rgba(37,99,235,0.3)] hover:scale-105 transition-transform duration-700"
             />
@@ -192,7 +192,7 @@
               <div class="absolute inset-0 bg-blue-600/5 translate-x-4 translate-y-4 rounded-3xl" />
               <img
                 loading="lazy"
-                src="/images/haisic_aa_1.png"
+                :src="image('/images/haisic_aa_1.png')"
                 alt="Haisic Heavy Duty Inverter"
                 class="rounded-3xl shadow-xl w-full object-cover relative z-10 hover:-translate-y-2 transition-transform duration-500"
               />
@@ -209,7 +209,7 @@
               <div class="absolute inset-0 bg-blue-600/5 -translate-x-4 translate-y-4 rounded-3xl" />
               <img
                 loading="lazy"
-                src="/images/haisic_aa_2.png"
+                :src="image('/images/haisic_aa_2.png')"
                 alt="Haisic Stackable Battery System"
                 class="rounded-3xl shadow-xl w-full object-cover relative z-10 hover:-translate-y-2 transition-transform duration-500"
               />
@@ -273,7 +273,7 @@
             <div class="overflow-hidden rounded-2xl aspect-square bg-white border border-slate-200">
               <img
                 loading="lazy"
-                src="/images/haisic_aa_3.png"
+                :src="image('/images/haisic_aa_3.png')"
                 alt="Haisic Core Components"
                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               />
@@ -283,7 +283,7 @@
             <div class="overflow-hidden rounded-2xl aspect-square bg-white border border-slate-200">
               <img
                 loading="lazy"
-                src="/images/haisic_aa_5.png"
+                :src="image('/images/haisic_aa_5.png')"
                 alt="Haisic Smart BMS Interface"
                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               />
@@ -293,7 +293,7 @@
             <div class="overflow-hidden rounded-2xl aspect-square bg-white border border-slate-200">
               <img
                 loading="lazy"
-                src="/images/haisic_aa_6.png"
+                :src="image('/images/haisic_aa_6.png')"
                 alt="Haisic Modular Scaling"
                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               />
@@ -328,6 +328,10 @@
 </template>
 
 <script setup lang="ts">
+
+// Images on this page can be replaced from /admin/manage-pages. The paths
+// below are the originals and stay as the fallback if nothing is set.
+const { image } = await usePageContent('partners/haisic')
 useHead({
   title: 'Haisic High-Performance Solar | NovelSolar Partner',
   meta: [

@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+// Images on this page can be replaced from /admin/manage-pages. The paths
+// below are the originals and stay as the fallback if nothing is set.
+const { image } = await usePageContent('partners/livoltek')
+
 const products = [
   {
     id: 'hybrid',
     name: 'Complete Hybrid Systems',
     desc: 'The ultimate solar kit featuring Livoltek hybrid inverters, tier-1 panels, and smart monitoring. Perfect for achieving total energy independence while staying grid-connected.',
-    image: '/images/livoltek1.png',
+    image: image('/images/livoltek1.png'),
     features: ['Dual MPPT Tracking', 'Seamless Grid Switching', 'IP65 Rated Protection'],
     specsUrl: 'https://ng.livoltek.com/product/hybrid-inverter-single-phase-3-6kw/',
   },
@@ -14,7 +18,7 @@ const products = [
     id: 'storage',
     name: 'All-In-One Storage',
     desc: 'Sleek, stackable lithium battery systems designed for modern homes. Maximum safety meets minimalist design.',
-    image: '/images/livoltek2.jpg',
+    image: image('/images/livoltek2.jpg'),
     features: ['Safe LiFePO4 Chemistry', 'Plug & Play Expansion', 'Space-Saving Vertical Design'],
     specsUrl: 'https://www.livoltek.com/product/hyrid-all-in-one-ess-3-6kw/',
   },
@@ -22,7 +26,7 @@ const products = [
     id: 'offgrid',
     name: 'Off-Grid Inverters',
     desc: 'Robust 3.5kW to 6.2kW off-grid solutions built specifically to withstand heavy loads and unstable local grids.',
-    image: '/images/livoltek3.png',
+    image: image('/images/livoltek3.png'),
     features: ['High Surge Capacity', 'Generator Compatible', 'Built-in MPPT Charge Controller'],
     specsUrl: 'https://ng.livoltek.com/product/off-grid-inverter-3-5-6-2kw/',
   },
@@ -39,7 +43,7 @@ const activeProduct = ref(products[0])
     >
       <img
         loading="lazy"
-        src="/images/livoltekpartner.png"
+        :src="image('/images/livoltekpartner.png')"
         alt="Novel Solar x Livoltek Partnership"
         class="h-12 md:h-20 object-contain px-4"
       />
@@ -267,7 +271,7 @@ const activeProduct = ref(products[0])
       <div class="absolute inset-0 z-0">
         <img
           loading="lazy"
-          src="/images/livoltek_family.png"
+          :src="image('/images/livoltek_family.png')"
           alt="Nigerian Family with Solar"
           class="w-full h-full object-cover object-center"
         />

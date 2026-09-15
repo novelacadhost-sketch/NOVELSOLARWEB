@@ -4,7 +4,7 @@
     <div class="bg-white w-full py-6 flex justify-center items-center border-b border-gray-100">
       <img
         loading="lazy"
-        src="/images/yinergy_partner.png"
+        :src="image('/images/yinergy_partner.png')"
         alt="Novel Solar x Yinergy Partnership"
         class="h-12 md:h-16 w-auto object-contain mx-auto"
       />
@@ -92,7 +92,7 @@
               >
                 <img
                   loading="lazy"
-                  src="/images/yinergy4.png"
+                  :src="image('/images/yinergy4.png')"
                   alt="Yinergy Industrial Solution"
                   class="w-full h-auto object-contain rounded-[30px]"
                 />
@@ -197,7 +197,7 @@
               <div class="absolute inset-0 bg-emerald-600/5 translate-x-4 translate-y-4 rounded-3xl" />
               <img
                 loading="lazy"
-                src="/images/Yinergy2.png"
+                :src="image('/images/Yinergy2.png')"
                 alt="Yinergy Hybrid Inverter"
                 class="rounded-3xl shadow-xl w-full object-cover relative z-10 hover:-translate-y-2 transition-transform duration-500"
               />
@@ -214,7 +214,7 @@
               <div class="absolute inset-0 bg-emerald-600/5 -translate-x-4 translate-y-4 rounded-3xl" />
               <img
                 loading="lazy"
-                src="/images/yinergy3.png"
+                :src="image('/images/yinergy3.png')"
                 alt="Yinergy Energy Storage"
                 class="rounded-3xl shadow-xl w-full object-cover relative z-10 hover:-translate-y-2 transition-transform duration-500"
               />
@@ -278,7 +278,7 @@
             <div class="overflow-hidden rounded-2xl aspect-square bg-white border border-slate-200">
               <img
                 loading="lazy"
-                src="/images/yinergy1.png"
+                :src="image('/images/yinergy1.png')"
                 alt="Yinergy Core Technology"
                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               />
@@ -288,7 +288,7 @@
             <div class="overflow-hidden rounded-2xl aspect-square bg-white border border-slate-200">
               <img
                 loading="lazy"
-                src="/images/yinergy5.png"
+                :src="image('/images/yinergy5.png')"
                 alt="Yinergy Smart Interface"
                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               />
@@ -298,7 +298,7 @@
             <div class="overflow-hidden rounded-2xl aspect-square bg-white border border-slate-200">
               <img
                 loading="lazy"
-                src="/images/yinergy1.png"
+                :src="image('/images/yinergy1.png')"
                 alt="Yinergy Industrial Scale"
                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               />
@@ -334,6 +334,10 @@
 </template>
 
 <script setup lang="ts">
+
+// Images on this page can be replaced from /admin/manage-pages. The paths
+// below are the originals and stay as the fallback if nothing is set.
+const { image } = await usePageContent('partners/yinergy')
 const {
   public: { whatsappNumber },
 } = useRuntimeConfig()

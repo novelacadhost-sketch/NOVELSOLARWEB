@@ -4,7 +4,7 @@
     <div class="w-full bg-white border-b border-gray-100 py-4 px-8 flex justify-center">
       <img
         loading="lazy"
-        src="/images/logo-new-novel.-itel.png"
+        :src="image('/images/logo-new-novel.-itel.png')"
         alt="NovelSolar x itel"
         class="h-12 md:h-16 w-auto object-contain"
       />
@@ -31,7 +31,7 @@
         <div class="relative">
           <img
             loading="lazy"
-            src="/images/itel_3.png"
+            :src="image('/images/itel_3.png')"
             alt="itel Home Solar"
             class="rounded-3xl shadow-2xl w-full object-cover aspect-[4/3]"
           />
@@ -48,7 +48,7 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="grid md:grid-cols-2 gap-16 items-center">
           <div>
-            <img loading="lazy" src="/images/itel.jpg" alt="itel Reliable Power" class="rounded-2xl shadow-lg w-full" />
+            <img loading="lazy" :src="image('/images/itel.jpg')" alt="itel Reliable Power" class="rounded-2xl shadow-lg w-full" />
           </div>
           <div>
             <h2 class="text-4xl font-bold text-gray-900 mb-6">Silent, Safe, and Smart Home Energy</h2>
@@ -83,7 +83,7 @@
           <div class="md:col-span-2">
             <img
               loading="lazy"
-              src="/images/itel-5-600x600.webp"
+              :src="image('/images/itel-5-600x600.webp')"
               alt="itel Home Inverter"
               class="max-w-md mx-auto drop-shadow-2xl hover:scale-105 transition-transform duration-700"
             />
@@ -122,7 +122,7 @@
           <!-- Benefit 1 -->
           <div class="flex flex-col gap-8">
             <div class="h-[400px] overflow-hidden rounded-3xl">
-              <img loading="lazy" src="/images/itel_2.jpg" alt="Home Integration" class="w-full h-full object-cover" />
+              <img loading="lazy" :src="image('/images/itel_2.jpg')" alt="Home Integration" class="w-full h-full object-cover" />
             </div>
             <div>
               <h4 class="text-2xl font-bold text-gray-900 mb-4">Seamless Home Integration</h4>
@@ -135,7 +135,7 @@
           <!-- Benefit 2 -->
           <div class="flex flex-col gap-8">
             <div class="h-[400px] overflow-hidden rounded-3xl">
-              <img loading="lazy" src="/images/itel_1.jpg" alt="Reliability" class="w-full h-full object-cover" />
+              <img loading="lazy" :src="image('/images/itel_1.jpg')" alt="Reliability" class="w-full h-full object-cover" />
             </div>
             <div>
               <h4 class="text-2xl font-bold text-gray-900 mb-4">Long-Term Family Security</h4>
@@ -172,6 +172,10 @@
 </template>
 
 <script setup lang="ts">
+
+// Images on this page can be replaced from /admin/manage-pages. The paths
+// below are the originals and stay as the fallback if nothing is set.
+const { image } = await usePageContent('partners/itel')
 useHead({
   title: 'itel Home Solar Solutions | 24/7 Energy Independence',
   meta: [
