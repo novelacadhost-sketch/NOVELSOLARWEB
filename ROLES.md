@@ -289,17 +289,36 @@ refreshed once daily — not the source of truth.
 
 ### Writes
 
-`POST`/`PUT`/`DELETE` normally require the CSRF cookie-and-header pair. A request carrying a
-**verified** Bearer token and no session cookie is exempt, because CSRF only defends against a
-browser attaching *ambient* credentials — a Bearer token is never ambient. A malformed or expired
-token is not exempt and still gets a 403.
+`POST`/`PUT`/`DELETE` normally require the CSRF cookie-and-header pair. There are two exemptions,
+and both turn on the same question: **did the browser attach these credentials by itself?**
+`hasAmbientCredentials()` in `server/utils/requestCredentials.ts` is the single answer — it looks
+for `csrf-token`, `admin_token`, or a Supabase session cookie matched by shape
+(`sb-<project-ref>-auth-token`).
 
-**Anonymous writes are still blocked.** A native client with no token cannot POST to
-`/api/contact`, `/api/quote`, `/api/book-service` — or `/api/checkout` as a guest. All return
-403. Those endpoints need either a signed-in user or a deliberate exemption. **Still unresolved
-as of 2026-09-15**, and it is the thing most likely to bite a mobile build: enquiry forms and
-guest checkout are exactly the screens an app offers before asking anyone to sign in. Decide it
-before building them.
+**1. A verified Bearer token with no session cookie.** A Bearer token is never ambient; the
+caller must hold it deliberately, so the attack CSRF prevents cannot happen. On any other path a
+malformed or expired token is not exempt and still gets a 403.
+
+**2. A request with no credentials at all, to one of four lead-capture paths** — `/api/contact`,
+`/api/quote`, `/api/book-service`, `/api/checkout` (`ANONYMOUS_WRITE_PATHS`). Added 2026-09-15 so
+the mobile app can take guest enquiries and guest orders.
+
+CSRF on an anonymous endpoint protects nothing: a POST with no credentials has no privilege to
+abuse, and the identical request can be made with curl. It was never a spam control either — a
+script need only GET one page to be handed a `csrf-token` cookie and echo it back. The control
+that does the work is the rate limiter: anonymous lead writes get **10/min per IP** against the
+website's 30.
+
+The "no credentials at all" condition is load-bearing, and `/api/checkout` is why. Forcing a
+signed-in dealer's browser to place an order **is** a real CSRF target, so anything cookie-bearing
+keeps the full check. The website is unaffected — a browser holds a `csrf-token` cookie after any
+GET.
+
+> One consequence to know: on those four paths a **bogus or expired** Bearer token is not a 403.
+> It fails verification, leaves no `bearerUser`, and the request is then indistinguishable from a
+> guest — so it is treated as one. It grants nothing; the caller has exactly a stranger's
+> privileges. But a dealer whose token has gone stale is served **retail** and their order is
+> placed as a guest, silently. See Failing closed.
 
 ### Response shapes are inconsistent
 
