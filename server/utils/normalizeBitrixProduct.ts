@@ -9,6 +9,7 @@ export interface BitrixProduct {
   DESCRIPTION?: unknown
   QUANTITY?: string | number
   ACTIVE?: string
+  SECTION_ID?: string | number
   PROPERTY_102?: unknown
   PROPERTY_104?: unknown
   PROPERTY_112?: unknown
@@ -19,6 +20,8 @@ export interface BitrixProduct {
 }
 
 export interface MappedProduct {
+  section_id: string | null
+  section_name: string | null
   id: string
   name: string
   price: number
@@ -33,7 +36,7 @@ export interface MappedProduct {
   synced_at: string
 }
 
-export function normalizeBitrixProduct(product: BitrixProduct): MappedProduct {
+export function normalizeBitrixProduct(product: BitrixProduct, sections?: Map<string, string>): MappedProduct {
   // 1. Resolve image_url fallback chain
   let image_url: string | null = null
   const cloudinaryUrl = normalizeProperty(product.PROPERTY_102)
@@ -89,6 +92,16 @@ export function normalizeBitrixProduct(product: BitrixProduct): MappedProduct {
   // 5. Parse description
   const descriptionStr = normalizeProperty(product.DESCRIPTION)
 
+  // The section is the catalogue's real category.
+  //
+  // The NAME is stored alongside the id, not just for the convenience of a
+  // client reading the mirror without a join. Sections on this portal were
+  // created, deleted, and re-added — so the ids are not stable across that, and
+  // anything keyed on an id silently stops matching when it happens again.
+  // Names survived. Group on the name.
+  const section_id = product.SECTION_ID != null && product.SECTION_ID !== '' ? String(product.SECTION_ID) : null
+  const section_name = section_id ? (sections?.get(section_id) ?? null) : null
+
   return {
     id: String(product.ID || ''),
     name: String(product.NAME || ''),
@@ -100,6 +113,8 @@ export function normalizeBitrixProduct(product: BitrixProduct): MappedProduct {
     image_url,
     quantity,
     active: product.ACTIVE === 'Y',
+    section_id,
+    section_name,
     raw: product as Record<string, unknown>,
     synced_at: new Date().toISOString(),
   }

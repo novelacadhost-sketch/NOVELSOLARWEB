@@ -1,6 +1,7 @@
 import { logger } from './logger'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { normalizeBitrixProduct, type BitrixProduct } from './normalizeBitrixProduct'
+import { getSectionMap } from './bitrixSections'
 
 export interface ProductSyncResult {
   synced: number
@@ -80,7 +81,10 @@ export async function syncAllProducts(): Promise<ProductSyncResult> {
       }
     }
 
-    const mappedProducts = allProducts.map(normalizeBitrixProduct)
+    // One lookup for the whole run rather than per page. Never throws — a
+    // failed section call leaves names null, not the sync broken.
+    const sections = await getSectionMap()
+    const mappedProducts = allProducts.map((p) => normalizeBitrixProduct(p, sections))
     const supabase = getSupabaseAdminClient()
 
     if (mappedProducts.length > 0) {

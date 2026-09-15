@@ -23,6 +23,8 @@ export default defineCachedEventHandler(
       PROPERTY_102: string | null
       PROPERTY_104: string | null
       PROPERTY_112: string | null
+      sectionId: string | null
+      sectionName: string | null
       dealerPrice?: number
       [key: string]: unknown
     }
@@ -58,6 +60,13 @@ export default defineCachedEventHandler(
         PROPERTY_102: normalizeProperty(raw.PROPERTY_102),
         PROPERTY_104: normalizeProperty(raw.PROPERTY_104),
         PROPERTY_112: normalizeProperty(raw.PROPERTY_112),
+        // The catalogue's real category. On the Bitrix path only the id is on
+        // the payload; the name is a mirror column, so it is null there and the
+        // client resolves it from /api/categories. Grouping should key on the
+        // NAME — sections on this portal were deleted and re-added once
+        // already, which changed every id.
+        sectionId: raw.SECTION_ID != null && raw.SECTION_ID !== '' ? String(raw.SECTION_ID) : null,
+        sectionName: (fromDb ? (p.section_name ?? null) : null) as string | null,
       }
 
       if (isDealer) {
@@ -149,7 +158,7 @@ export default defineCachedEventHandler(
         .digest('hex')
         .slice(0, 16)
 
-      return `inventory-v3:${isDealer ? 'dealer' : 'retail'}:${filters}:${start}`
+      return `inventory-v4:${isDealer ? 'dealer' : 'retail'}:${filters}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than

@@ -1,6 +1,7 @@
 import { logger } from './logger'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { normalizeBitrixProduct, type BitrixProduct } from './normalizeBitrixProduct'
+import { getSectionMap } from './bitrixSections'
 
 export async function syncSingleProduct(productId: string, config: ReturnType<typeof useRuntimeConfig>): Promise<void> {
   try {
@@ -24,7 +25,7 @@ export async function syncSingleProduct(productId: string, config: ReturnType<ty
       return
     }
 
-    const mappedProduct = normalizeBitrixProduct(response.result)
+    const mappedProduct = normalizeBitrixProduct(response.result, await getSectionMap())
     const { error: upsertError } = await supabase.from('products').upsert(mappedProduct, { onConflict: 'id' })
     if (upsertError) throw upsertError
 
