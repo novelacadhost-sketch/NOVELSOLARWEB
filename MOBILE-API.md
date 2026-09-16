@@ -49,7 +49,24 @@ await supabase.auth.signOut();
 
 Nothing else is needed at signup. A database trigger creates the user's `profiles` row
 automatically. **Do not insert into `profiles`** — there is no permission for it and the attempt
-will fail. That is intentional, not an oversight.
+will fail. That is intentional, not an oversight: three of the four ways an account gets created
+here are server-side (an admin approving a dealer, an admin creating an admin), where there is no
+client session to do the insert. The trigger covers every path.
+
+**Pass the customer's details at signup** and the profile is populated immediately rather than
+staying blank until they edit it:
+
+```dart
+await supabase.auth.signUp(
+  email: email,
+  password: password,
+  data: {'first_name': 'Ada', 'last_name': 'Obi', 'phone': '080...'},
+);
+```
+
+`first_name`, `last_name` and `phone` are read from that metadata. **`role` is not**, and sending
+it does nothing — it is an authorization field, and `raw_user_meta_data` is client-supplied. A
+role is granted by an admin approving a dealer application, never by the account asking for it.
 
 Dealers cannot self-register. An admin approves a dealer application, which provisions the
 account and emails a 48-hour onboarding link.
