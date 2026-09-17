@@ -130,7 +130,13 @@ const route = useRoute()
 const slug = computed(() => (route.params.slug || '').toString().toLowerCase())
 const formattedSlug = computed(() => slug.value.replace(/-/g, ' '))
 
+// Services are excluded from product listings by default, so this page opts
+// back in — and asks for the SERVICES section specifically rather than reading
+// page one of everything. The old call took the first 50 products and searched
+// those for the slug, which happened to work only because the service items
+// carry the lowest product ids.
 const { data: products, pending } = useFetch('/api/inventory', {
+  query: { sections: 'SERVICES', includeServices: '1' },
   // Forward the auth cookie so dealers get dealer pricing during SSR.
   headers: useRequestHeaders(['cookie']),
 })

@@ -22,6 +22,16 @@ export default defineCachedEventHandler(
     // BEFORE pagination, which is the whole point: the category pages used to
     // fetch one 50-product page and filter it client-side, so "Inverters"
     // showed however many inverters happened to fall in an arbitrary first 50.
+    // Services are not merchandise — installation, de-commissioning, logistics,
+    // the "OLD ... DISCOUNTED" trade-ins, and oddments like Cement and CHARCOAL.
+    // They are excluded from product listings by default. The services pages opt
+    // back in, since finding a service by slug is the one thing that needs them.
+    //
+    // Excluded by SECTION, not by name. The keyword filter this replaces
+    // (audit|installation|repair|maintenance) caught 10 of the 23 and would
+    // wrongly drop a real product called something like "Repair Kit".
+    const includeServices = String(queryParams.includeServices ?? '') === '1'
+
     const sectionFilter = new Set(
       String(queryParams.sections ?? '')
         .split(',')
@@ -154,6 +164,10 @@ export default defineCachedEventHandler(
         })
       }
 
+      if (!includeServices) {
+        filtered = filtered.filter((p) => (sectionOf(p, p).name ?? '').toUpperCase() !== 'SERVICES')
+      }
+
       // ordered by id descending
       filtered.sort((a, b) => Number(b.ID) - Number(a.ID))
 
@@ -180,6 +194,11 @@ export default defineCachedEventHandler(
 
       if (sectionFilter.size) {
         query = query.in('section_name', [...sectionFilter].map((n) => n))
+      }
+
+      if (!includeServices) {
+        // or(): a product with no section must still be listed.
+        query = query.or('section_name.is.null,section_name.neq.SERVICES')
       }
 
       // start (for pagination, range of 50)
@@ -222,7 +241,8 @@ export default defineCachedEventHandler(
         .toLowerCase()
         .replace(/[^a-z0-9,&\- ]/g, '')
         .slice(0, 120)
-      return `inventory-v5:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${start}`
+      const svc = String(query.includeServices ?? '') === '1' ? 'svc' : 'nosvc'
+      return `inventory-v5:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than
