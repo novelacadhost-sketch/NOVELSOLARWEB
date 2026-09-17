@@ -119,3 +119,75 @@ export async function mirrorPrimaryImage(
     return null
   }
 }
+
+/**
+ * Which of these products actually have a photo in Bitrix.
+ *
+ * Asking per product is what made the first version useless: a budget of 25
+ * lookups per night, spent almost entirely on products with nothing, meant a
+ * picture 1035 places down the queue was 41 nights away. Bitrix's `batch`
+ * answers 50 products per HTTP call, so the whole 1156-product catalogue costs
+ * ~24 calls and about 26 seconds.
+ *
+ * Time-boxed and resumable rather than unconditional, because 26 seconds is a
+ * large slice of a 60-second function and this portal has timed out before.
+ * The caller persists `nextIndex` and resumes there, so a slow night sweeps
+ * less and the following run continues instead of restarting.
+ */
+export interface Discovery {
+  hits: Map<string, string>
+  nextIndex: number
+  complete: boolean
+  scanned: number
+}
+
+const BATCH_SIZE = 50
+
+export async function discoverProductsWithImages(
+  productIds: string[],
+  startIndex: number,
+  deadlineMs: number,
+): Promise<Discovery> {
+  const hits = new Map<string, string>()
+  const started = Date.now()
+  let index = startIndex >= productIds.length ? 0 : startIndex
+  let scanned = 0
+
+  while (index < productIds.length) {
+    if (Date.now() - started > deadlineMs) {
+      return { hits, nextIndex: index, complete: false, scanned }
+    }
+
+    const chunk = productIds.slice(index, index + BATCH_SIZE)
+    const cmd: Record<string, string> = {}
+    chunk.forEach((id, i) => {
+      cmd[`c${i}`] = `catalog.productImage.list?productId=${encodeURIComponent(id)}`
+    })
+
+    try {
+      const response = await bitrixFetch<{ result?: { result?: Record<string, { productImages?: BitrixProductImage[] }> } }>(
+        'batch',
+        { method: 'POST', body: { halt: 0, cmd } },
+      )
+      const results = response.result?.result ?? {}
+      chunk.forEach((id, i) => {
+        const images = results[`c${i}`]?.productImages ?? []
+        const primary = pickPrimary(images)
+        if (primary) hits.set(id, String(primary.id))
+      })
+    } catch (error) {
+      // One bad batch should not end the sweep; the cursor moves past it and
+      // the next run picks those products up again on the following lap.
+      logger.warn('ProductImages', 'Discovery batch failed', {
+        from: index,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    scanned += chunk.length
+    index += BATCH_SIZE
+  }
+
+  return { hits, nextIndex: 0, complete: true, scanned }
+}
+

@@ -2,11 +2,13 @@ import { logger } from './logger'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { normalizeBitrixProduct, type BitrixProduct } from './normalizeBitrixProduct'
 import { getSectionMap } from './bitrixSections'
-import { mirrorPrimaryImage, isProxiedBitrixImage } from './bitrixProductImages'
+import { mirrorPrimaryImage, isProxiedBitrixImage, discoverProductsWithImages } from './bitrixProductImages'
 
 export interface ProductSyncResult {
   synced: number
   deleted: number
+  /** Absent when the image step could not run at all. */
+  images?: MirrorReport
 }
 
 /**
@@ -38,7 +40,6 @@ export interface ProductSyncResult {
  * covers it: editing a product fires ONCRMPRODUCTUPDATE and syncSingleProduct
  * re-mirrors immediately. Nightly fills gaps, the webhook handles changes.
  */
-const MIRROR_BUDGET_PER_RUN = 25
 
 interface MirrorableProduct {
   id: string
@@ -47,17 +48,65 @@ interface MirrorableProduct {
 }
 
 export interface MirrorReport {
-  attempted: number
+  scanned: number
+  found: number
   mirrored: number
   carried: number
+  sweepComplete: boolean
   skipped?: string
+}
+
+/**
+ * Fill in product pictures from Bitrix's catalog images, via Cloudinary.
+ *
+ * Three jobs, and the first is the one that is easy to miss: this sync UPSERTS
+ * whole rows, and a mirrored product has no picture in its Bitrix CRM fields —
+ * so without carrying the existing image_url forward, every nightly run would
+ * overwrite it with null and un-picture the catalogue.
+ *
+ * Then DISCOVERY, in bulk. The first version asked Bitrix per product under a
+ * budget of 25 a night, and since only 5 of 1156 products have a photo, that
+ * budget was spent almost entirely on empty lookups — a picture 1035 places
+ * down the queue was 41 nights from appearing. A batched sweep answers 50
+ * products per call and covers the catalogue in about 26 seconds, so uploads
+ * are attempted only where there is something to upload.
+ *
+ * Finally the UPLOADS, which stay capped: they are the expensive half, and a
+ * bulk import of a thousand photos must not blow the 60-second function.
+ *
+ * The sweep is time-boxed and resumes from a cursor in sync_meta, so a slow
+ * night covers less ground instead of timing out. A photo REPLACED in Bitrix is
+ * still picked up immediately by the webhook path, which has no budget.
+ */
+const MIRROR_UPLOAD_BUDGET = 25
+const DISCOVERY_DEADLINE_MS = 20_000
+const CURSOR_KEY = 'image_scan_cursor'
+
+interface MirrorableProduct {
+  id: string
+  image_url: string | null
+  bitrix_image_id?: string | null
+}
+
+async function readCursor(supabase: ReturnType<typeof getSupabaseAdminClient>): Promise<number> {
+  const { data } = await supabase.from('sync_meta').select('value').eq('key', CURSOR_KEY).maybeSingle()
+  const raw = (data as { value?: string } | null)?.value
+  const parsed = Number.parseInt(raw ?? '0', 10)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+}
+
+async function writeCursor(supabase: ReturnType<typeof getSupabaseAdminClient>, value: number): Promise<void> {
+  await supabase
+    .from('sync_meta')
+    .upsert({ key: CURSOR_KEY, value: String(value), updated_at: new Date().toISOString() } as never, {
+      onConflict: 'key',
+    })
 }
 
 async function applyMirroredImages(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
   mapped: MirrorableProduct[],
 ): Promise<MirrorReport> {
-  let attempted = 0
   try {
     const { data, error } = await supabase.from('products').select('id, image_url, bitrix_image_id')
     if (error) throw error
@@ -67,15 +116,13 @@ async function applyMirroredImages(
       existing.set(String(row.id), { image_url: row.image_url, bitrix_image_id: row.bitrix_image_id })
     }
 
-    let budget = MIRROR_BUDGET_PER_RUN
-    let mirrored = 0
+    const candidates: MirrorableProduct[] = []
     let carried = 0
 
     for (const product of mapped) {
-      // A Cloudinary URL set in Bitrix's own PROPERTY_102 wins — a human chose
-      // it. A /api/bitrix-image proxy URL does not: it is a hop through our
-      // server to an unoptimised original, and mirroring replaces it with a CDN
-      // URL, so it is a candidate rather than a finished picture.
+      // A Cloudinary URL from Bitrix PROPERTY_102 wins — a human chose it. A
+      // /api/bitrix-image proxy URL does not: it is a hop through our server to
+      // an unoptimised original, so it is a candidate for replacement.
       if (product.image_url && !isProxiedBitrixImage(product.image_url)) continue
 
       const prior = existing.get(product.id)
@@ -86,11 +133,27 @@ async function applyMirroredImages(
         continue
       }
 
-      if (budget <= 0) continue
-      budget--
-      attempted++
+      candidates.push(product)
+    }
 
-      const result = await mirrorPrimaryImage(product.id, prior?.bitrix_image_id)
+    if (!candidates.length) {
+      return { scanned: 0, found: 0, mirrored: 0, carried, sweepComplete: true }
+    }
+
+    const cursor = await readCursor(supabase)
+    const ids = candidates.map((c) => c.id)
+    const discovery = await discoverProductsWithImages(ids, cursor, DISCOVERY_DEADLINE_MS)
+    await writeCursor(supabase, discovery.nextIndex)
+
+    let budget = MIRROR_UPLOAD_BUDGET
+    let mirrored = 0
+
+    for (const product of candidates) {
+      const imageId = discovery.hits.get(product.id)
+      if (!imageId || budget <= 0) continue
+      budget--
+
+      const result = await mirrorPrimaryImage(product.id, existing.get(product.id)?.bitrix_image_id)
       if (result && result !== 'unchanged') {
         product.image_url = result.url
         product.bitrix_image_id = result.imageId
@@ -98,15 +161,22 @@ async function applyMirroredImages(
       }
     }
 
-    logger.info('ProductSync', 'Product images resolved', { attempted, mirrored, carried, budgetLeft: budget })
-    return { attempted, mirrored, carried }
+    const report: MirrorReport = {
+      scanned: discovery.scanned,
+      found: discovery.hits.size,
+      mirrored,
+      carried,
+      sweepComplete: discovery.complete,
+    }
+    logger.info('ProductSync', 'Product images resolved', { ...report })
+    return report
   } catch (error) {
     // Pictures are not worth failing a product sync over — but the outcome is
     // reported rather than swallowed, because a mirroring step that quietly
     // does nothing is indistinguishable from one that is not running at all.
     const message = error instanceof Error ? error.message : String(error)
     logger.warn('ProductSync', 'Image mirroring skipped', { error: message })
-    return { attempted: 0, mirrored: 0, carried: 0, skipped: message }
+    return { scanned: 0, found: 0, mirrored: 0, carried: 0, sweepComplete: false, skipped: message }
   }
 }
 
