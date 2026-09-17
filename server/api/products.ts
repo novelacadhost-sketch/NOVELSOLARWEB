@@ -30,6 +30,8 @@ export default defineEventHandler(async (event) => {
     QUANTITY?: string | number
     ACTIVE?: string
     imageUrl: string
+    sectionId: string | null
+    sectionName: string | null
     PROPERTY_102: string | null
     PROPERTY_104: string | null
     PROPERTY_112: string | null
@@ -40,6 +42,18 @@ export default defineEventHandler(async (event) => {
   // which this endpoint never consulted — so a product whose only photo came
   // through the mirror got the Bitrix proxy URL built below instead, and that
   // is a RELATIVE portal path the proxy cannot resolve. Hence the empty card.
+  // Resolved once per request; getSectionMap caches for five minutes and never
+  // throws, so a failed lookup means unnamed sections rather than a broken page.
+  const sections = await getSectionMap()
+  const sectionIdOf = (p: any, raw: any): string | null => {
+    const v = p?.section_id ?? raw?.SECTION_ID
+    return v != null && v !== '' ? String(v) : null
+  }
+  const sectionNameOf = (p: any, raw: any): string | null => {
+    const id = sectionIdOf(p, raw)
+    return p?.section_name ?? (id ? (sections.get(id) ?? null) : null)
+  }
+
   const mirroredImages = new Map<string, string>()
   const loadMirroredImages = async (ids: string[]) => {
     if (!ids.length) return
@@ -101,6 +115,8 @@ export default defineEventHandler(async (event) => {
       QUANTITY: quantity,
       ACTIVE: active,
       imageUrl: imageUrl || '/images/placeholder.png',
+      sectionId: sectionIdOf(p, raw),
+      sectionName: sectionNameOf(p, raw),
       PROPERTY_102: normalizeProperty(raw.PROPERTY_102), // Cloudinary URL
       PROPERTY_104: normalizeProperty(raw.PROPERTY_104), // Specs
       PROPERTY_112: normalizeProperty(raw.PROPERTY_112), // Gallery
@@ -150,6 +166,11 @@ export default defineEventHandler(async (event) => {
           'DESCRIPTION',
           'QUANTITY',
           'ACTIVE',
+          // Required for the services filter and for sectionName below. Its
+          // absence is why ?q=cement still returned a SERVICES product: the
+          // filter read p.SECTION_ID, Bitrix never sent it, and every product
+          // resolved to no section.
+          'SECTION_ID',
           'PREVIEW_PICTURE',
           'DETAIL_PICTURE',
           'PROPERTY_44',
@@ -183,13 +204,9 @@ export default defineEventHandler(async (event) => {
     }
 
     await loadMirroredImages(bitrixProducts.map((p) => String(p.ID)))
-    const sectionNames = await getSectionMap()
     const visible = includeServices
       ? bitrixProducts
-      : bitrixProducts.filter((p) => {
-          const id = p.SECTION_ID != null ? String(p.SECTION_ID) : ''
-          return (sectionNames.get(id) ?? '').toUpperCase() !== 'SERVICES'
-        })
+      : bitrixProducts.filter((p) => (sectionNameOf(p, p) ?? '').toUpperCase() !== 'SERVICES')
     const products = visible.map((p) => mapProduct(p, false))
     const nextStart =
       typeof response?.next === 'number'
