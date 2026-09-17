@@ -31,6 +31,24 @@ export default defineEventHandler(async (event) => {
     dealerPrice?: number
   }
 
+  // Pictures mirrored from Bitrix into Cloudinary live on products.image_url,
+  // which this endpoint never consulted — so a product whose only photo came
+  // through the mirror got the Bitrix proxy URL built below instead, and that
+  // is a RELATIVE portal path the proxy cannot resolve. Hence the empty card.
+  const mirroredImages = new Map<string, string>()
+  const loadMirroredImages = async (ids: string[]) => {
+    if (!ids.length) return
+    try {
+      const supabase = getSupabaseAdminClient()
+      const { data } = await supabase.from('products').select('id, image_url').in('id', ids)
+      for (const row of (data ?? []) as { id: string; image_url: string | null }[]) {
+        if (row.image_url) mirroredImages.set(String(row.id), row.image_url)
+      }
+    } catch {
+      // A missing picture is a worse card, not a broken shop.
+    }
+  }
+
   const mapProduct = (p: any, fromDb = true): MappedProduct => {
     let raw: any
     let id, name, price, active, quantity, description, currency
@@ -55,11 +73,11 @@ export default defineEventHandler(async (event) => {
       currency = p.CURRENCY_ID
     }
 
-    let imageUrl = null
-    const cloudinaryUrl = normalizeProperty(raw.PROPERTY_102)
+    let imageUrl: string | null = mirroredImages.get(String(id)) ?? (p?.image_url as string | null) ?? null
+    const cloudinaryUrl = imageUrl ? null : normalizeProperty(raw.PROPERTY_102)
     if (cloudinaryUrl) {
       imageUrl = cloudinaryUrl as string
-    } else {
+    } else if (!imageUrl) {
       const bitrixImage =
         normalizeProperty(raw.PROPERTY_44) ||
         normalizeProperty(raw.PREVIEW_PICTURE) ||
@@ -159,6 +177,7 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    await loadMirroredImages(bitrixProducts.map((p) => String(p.ID)))
     const products = bitrixProducts.map((p) => mapProduct(p, false))
     const nextStart =
       typeof response?.next === 'number'
