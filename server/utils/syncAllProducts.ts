@@ -46,10 +46,18 @@ interface MirrorableProduct {
   bitrix_image_id?: string | null
 }
 
+export interface MirrorReport {
+  attempted: number
+  mirrored: number
+  carried: number
+  skipped?: string
+}
+
 async function applyMirroredImages(
   supabase: ReturnType<typeof getSupabaseAdminClient>,
   mapped: MirrorableProduct[],
-): Promise<void> {
+): Promise<MirrorReport> {
+  let attempted = 0
   try {
     const { data, error } = await supabase.from('products').select('id, image_url, bitrix_image_id')
     if (error) throw error
@@ -78,6 +86,7 @@ async function applyMirroredImages(
 
       if (budget <= 0) continue
       budget--
+      attempted++
 
       const result = await mirrorPrimaryImage(product.id, prior?.bitrix_image_id)
       if (result && result !== 'unchanged') {
@@ -87,14 +96,15 @@ async function applyMirroredImages(
       }
     }
 
-    if (mirrored || carried) {
-      logger.info('ProductSync', 'Product images resolved', { mirrored, carried, budgetLeft: budget })
-    }
+    logger.info('ProductSync', 'Product images resolved', { attempted, mirrored, carried, budgetLeft: budget })
+    return { attempted, mirrored, carried }
   } catch (error) {
-    // Pictures are not worth failing a product sync over.
-    logger.warn('ProductSync', 'Image mirroring skipped', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+    // Pictures are not worth failing a product sync over — but the outcome is
+    // reported rather than swallowed, because a mirroring step that quietly
+    // does nothing is indistinguishable from one that is not running at all.
+    const message = error instanceof Error ? error.message : String(error)
+    logger.warn('ProductSync', 'Image mirroring skipped', { error: message })
+    return { attempted: 0, mirrored: 0, carried: 0, skipped: message }
   }
 }
 
@@ -168,7 +178,7 @@ export async function syncAllProducts(): Promise<ProductSyncResult> {
     const mappedProducts = allProducts.map((p) => normalizeBitrixProduct(p, sections))
     const supabase = getSupabaseAdminClient()
 
-    await applyMirroredImages(supabase, mappedProducts)
+    const images = await applyMirroredImages(supabase, mappedProducts)
 
     if (mappedProducts.length > 0) {
       const { error: upsertError } = await supabase
@@ -207,7 +217,7 @@ export async function syncAllProducts(): Promise<ProductSyncResult> {
     if (metaError) throw metaError
 
     logger.info('ProductSync', 'Sync complete', { synced: mappedProducts.length, deleted: deletedCount })
-    return { synced: mappedProducts.length, deleted: deletedCount }
+    return { synced: mappedProducts.length, deleted: deletedCount, images }
   } catch (error) {
     if (abortController.signal.aborted) {
       const timeoutErr = new Error('Bitrix catalog fetch timed out after 30s')
