@@ -117,12 +117,6 @@ const isExpired = (invitation: Record<string, unknown> | null | undefined) => {
           >
             <span class="material-symbols-outlined group-hover:scale-110 transition-transform">delete</span>
           </NuxtLink>
-          <NuxtLink
-            to="/admin"
-            class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold flex items-center gap-2 text-sm transition-all shadow-sm"
-          >
-            Dashboard Home
-          </NuxtLink>
           <button
             class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold flex items-center gap-2 text-sm transition-all"
             @click="handleLogout"

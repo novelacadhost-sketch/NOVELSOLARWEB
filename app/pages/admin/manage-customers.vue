@@ -3,14 +3,7 @@
     <header class="bg-white border-b border-slate-200">
       <div class="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div class="flex items-center gap-4">
-          <NuxtLink
-            to="/admin"
-            class="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-            title="Back to Dashboard"
-          >
-            <span class="material-symbols-outlined text-2xl">arrow_back</span>
-          </NuxtLink>
-          <NuxtLink
+<NuxtLink
             to="/admin/customers-trash"
             class="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all shadow-sm group"
             title="View Trashed Customers"
