@@ -58,6 +58,24 @@ export async function fetchProductImages(productId: string): Promise<BitrixProdu
   }
 }
 
+/**
+ * Is this image_url only the authenticated Bitrix proxy?
+ *
+ * PROPERTY_44 gives a portal-relative path that needs credentials, so the
+ * mapper wraps it in /api/bitrix-image. That counts as "has a picture" for
+ * rendering, but NOT for mirroring: it is a hop through our own server to an
+ * unoptimised original, and the same image is available on Bitrix's public CDN
+ * where Cloudinary can fetch it once and serve WebP thereafter.
+ *
+ * Getting this wrong is what made the first version mirror nothing. The only
+ * four products with catalog images are the same four with PROPERTY_44 set, so
+ * treating a proxy URL as a finished picture skipped precisely the products
+ * that had something to copy.
+ */
+export function isProxiedBitrixImage(url?: string | null): boolean {
+  return Boolean(url && url.startsWith('/api/bitrix-image'))
+}
+
 /** Prefers the main photo when Bitrix distinguishes one; otherwise the first. */
 function pickPrimary(images: BitrixProductImage[]): BitrixProductImage | null {
   const usable = images.filter((i) => i.detailUrl && i.id != null)

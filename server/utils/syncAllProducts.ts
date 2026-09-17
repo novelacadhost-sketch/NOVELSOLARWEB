@@ -2,7 +2,7 @@ import { logger } from './logger'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { normalizeBitrixProduct, type BitrixProduct } from './normalizeBitrixProduct'
 import { getSectionMap } from './bitrixSections'
-import { mirrorPrimaryImage } from './bitrixProductImages'
+import { mirrorPrimaryImage, isProxiedBitrixImage } from './bitrixProductImages'
 
 export interface ProductSyncResult {
   synced: number
@@ -72,9 +72,11 @@ async function applyMirroredImages(
     let carried = 0
 
     for (const product of mapped) {
-      // A picture set in Bitrix's own fields (PROPERTY_102) wins; it is the one
-      // a human chose.
-      if (product.image_url) continue
+      // A Cloudinary URL set in Bitrix's own PROPERTY_102 wins — a human chose
+      // it. A /api/bitrix-image proxy URL does not: it is a hop through our
+      // server to an unoptimised original, and mirroring replaces it with a CDN
+      // URL, so it is a candidate rather than a finished picture.
+      if (product.image_url && !isProxiedBitrixImage(product.image_url)) continue
 
       const prior = existing.get(product.id)
       if (prior?.bitrix_image_id && prior.image_url) {

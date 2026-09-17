@@ -2,7 +2,7 @@ import { logger } from './logger'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { normalizeBitrixProduct, type BitrixProduct } from './normalizeBitrixProduct'
 import { getSectionMap } from './bitrixSections'
-import { mirrorPrimaryImage } from './bitrixProductImages'
+import { mirrorPrimaryImage, isProxiedBitrixImage } from './bitrixProductImages'
 
 export async function syncSingleProduct(productId: string, config: ReturnType<typeof useRuntimeConfig>): Promise<void> {
   try {
@@ -33,7 +33,7 @@ export async function syncSingleProduct(productId: string, config: ReturnType<ty
     // appear on the site seconds after someone uploads it. It is also the only
     // path that notices an image being REPLACED: the nightly sync carries the
     // existing mirror forward without re-checking, deliberately.
-    if (!mappedProduct.image_url) {
+    if (!mappedProduct.image_url || isProxiedBitrixImage(mappedProduct.image_url)) {
       const { data: prior } = await supabase
         .from('products')
         .select('bitrix_image_id')
