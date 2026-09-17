@@ -54,6 +54,22 @@ export default defineCachedEventHandler(
       return { id, name: p?.section_name ?? sectionNames.get(id) ?? null }
     }
 
+    // One lookup for the whole page rather than per product. Empty on failure:
+    // a missing picture is a worse card, not a broken shop.
+    const mirroredImages = new Map<string, string>()
+    const loadMirroredImages = async (ids: string[]) => {
+      if (!ids.length) return
+      try {
+        const supabase = getSupabaseAdminClient()
+        const { data } = await supabase.from('products').select('id, image_url').in('id', ids)
+        for (const row of (data ?? []) as { id: string; image_url: string | null }[]) {
+          if (row.image_url) mirroredImages.set(String(row.id), row.image_url)
+        }
+      } catch {
+        // deliberately silent — see above
+      }
+    }
+
     const mapProduct = (p: any, fromDb = true): MappedProduct => {
       let raw: any
       let id, name, price, active
@@ -80,7 +96,11 @@ export default defineCachedEventHandler(
         ACTIVE: active,
         DETAIL_PICTURE: raw.DETAIL_PICTURE || null,
         PREVIEW_PICTURE: raw.PREVIEW_PICTURE || null,
-        imageUrl: null, // As previously hardcoded
+        // The mirrored Cloudinary URL. Previously hardcoded null, which meant
+        // the mirror was written to products.image_url and then never read:
+        // both product read paths are Bitrix-primary, and only the rarely-used
+        // Supabase fallback ever saw that column.
+        imageUrl: (p?.image_url as string | null) ?? mirroredImages.get(String(id)) ?? null,
         PROPERTY_44: normalizeProperty(raw.PROPERTY_44),
         PROPERTY_102: normalizeProperty(raw.PROPERTY_102),
         PROPERTY_104: normalizeProperty(raw.PROPERTY_104),
@@ -138,6 +158,7 @@ export default defineCachedEventHandler(
       filtered.sort((a, b) => Number(b.ID) - Number(a.ID))
 
       const paginated = filtered.slice(start, start + 50)
+      await loadMirroredImages(paginated.map((p) => String(p.ID)))
       return paginated.map((p) => mapProduct(p, false))
     } catch (error) {
       logger.warn('Inventory', 'Bitrix unavailable, falling back to Supabase', { error })
@@ -201,7 +222,7 @@ export default defineCachedEventHandler(
         .toLowerCase()
         .replace(/[^a-z0-9,&\- ]/g, '')
         .slice(0, 120)
-      return `inventory-v4:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${start}`
+      return `inventory-v5:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than

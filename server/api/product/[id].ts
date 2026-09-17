@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger'
 import { resolveIsDealerFromEvent } from '../../utils/dealerCheck'
+import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -33,6 +34,18 @@ export default defineEventHandler(async (event) => {
       if (isDealer) {
         const dealerPrice = parseBitrixPrice(normalizeProperty(product.PROPERTY_184))
         if (dealerPrice !== null) product.dealerPrice = dealerPrice
+      }
+
+      // The mirrored Cloudinary URL, which the Bitrix payload knows nothing
+      // about. Without this the detail page falls all the way through to the
+      // placeholder for any product whose picture only exists in the mirror.
+      try {
+        const supabase = getSupabaseAdminClient()
+        const { data } = await supabase.from('products').select('image_url').eq('id', String(id)).maybeSingle()
+        const mirrored = (data as { image_url?: string | null } | null)?.image_url
+        if (mirrored) product.imageUrl = mirrored
+      } catch {
+        // A missing picture is a worse page, not a broken one.
       }
 
       // Always strip the raw PROPERTY_184 so it doesn't leak
