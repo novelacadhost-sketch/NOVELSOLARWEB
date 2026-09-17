@@ -81,7 +81,29 @@ export async function mirrorRemoteImageToCloudinary(
     resource_type: 'image',
   })
 
-  return result.secure_url
+  return withDeliveryTransformation(result.secure_url)
+}
+
+/**
+ * Put the delivery transformation into a Cloudinary URL.
+ *
+ * `secure_url` is the ORIGINAL asset — for a mirrored Bitrix photo that meant
+ * a 427 KB PNG where the same image with f_auto,q_auto,w_1200 is 98 KB of
+ * WebP. Serving the untransformed URL throws away most of the reason for
+ * copying the file to Cloudinary in the first place.
+ *
+ * Matches the shape of the URLs already stored in Bitrix PROPERTY_102, so
+ * every product image on the site is delivered the same way.
+ */
+export function withDeliveryTransformation(secureUrl: string, transformation = 'f_auto,q_auto,w_1200'): string {
+  const marker = '/image/upload/'
+  const at = secureUrl.indexOf(marker)
+  // Leave anything unexpected alone rather than build a broken URL.
+  if (at === -1) return secureUrl
+  const head = secureUrl.slice(0, at + marker.length)
+  const tail = secureUrl.slice(at + marker.length)
+  if (tail.startsWith(`${transformation}/`)) return secureUrl
+  return `${head}${transformation}/${tail}`
 }
 
 export async function uploadBufferToCloudinary(
