@@ -616,6 +616,22 @@
     </header>
 
     <!-- Main Content -->
+    <!-- Every admin page except the dashboard itself gets a way back to it.
+         Placed in the layout rather than on each page because only 2 of 13
+         admin pages had a dashboard link, and the next page added would have
+         been the fourteenth to forget one. -->
+    <div v-if="showAdminBackBar" class="border-b border-slate-200 bg-white">
+      <div class="mx-auto flex max-w-7xl items-center gap-2 px-4 py-3">
+        <NuxtLink
+          to="/admin"
+          class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black uppercase tracking-wider text-[#002888] transition-colors hover:bg-slate-100"
+        >
+          <span class="material-symbols-outlined text-lg">arrow_back</span>
+          Back to Dashboard
+        </NuxtLink>
+      </div>
+    </div>
+
     <main class="flex-grow pb-24 md:pb-0">
       <slot />
     </main>
@@ -969,6 +985,19 @@ const mobileMenuSections = computed(() => [
 ])
 
 const route = useRoute()
+
+/**
+ * Admin pages had no way back to the dashboard — the only route was logging
+ * out and in again. Excluded: the dashboard itself, and the auth pages, which
+ * are reachable while signed out and must not offer a link into the console.
+ */
+const ADMIN_AUTH_ROUTES = ['/admin/login', '/admin/forgot-password', '/admin/reset-password']
+const showAdminBackBar = computed(() => {
+  const path = route.path.replace(/\/+$/, '')
+  if (!path.startsWith('/admin')) return false
+  if (path === '/admin') return false
+  return !ADMIN_AUTH_ROUTES.includes(path)
+})
 const isBlogRoute = computed(() => route.path === '/blog' || route.path.startsWith('/blog/'))
 
 const getCategoryLink = (title: string) => `/category/${title.toLowerCase().replace(/\s+/g, '-')}`
