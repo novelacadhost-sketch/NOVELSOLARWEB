@@ -20,6 +20,7 @@ export interface BitrixProduct {
 }
 
 export interface MappedProduct {
+  bitrix_image_id?: string | null
   section_id: string | null
   section_name: string | null
   id: string

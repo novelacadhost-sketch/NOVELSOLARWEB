@@ -53,6 +53,37 @@ export function configureCloudinary() {
   })
 }
 
+/**
+ * Copy a remote image into Cloudinary and return the delivery URL.
+ *
+ * Cloudinary fetches the file itself, so the bytes never pass through this
+ * function — one API call per image instead of a download followed by an
+ * upload, which matters inside a 60-second serverless budget.
+ *
+ * `publicId` must be derived from something stable about the SOURCE image, so
+ * the same picture always lands on the same Cloudinary object. With
+ * `overwrite: false` a repeat call is then a no-op rather than a second copy
+ * and a second set of credits — the nightly sync walks every product, so
+ * without this it would re-upload the whole catalogue every night.
+ */
+export async function mirrorRemoteImageToCloudinary(
+  remoteUrl: string,
+  publicId: string,
+  folder = 'novel_solar_bitrix',
+): Promise<string> {
+  const result = await cloudinary.uploader.upload(remoteUrl, {
+    public_id: publicId,
+    folder,
+    overwrite: false,
+    // Cloudinary returns the EXISTING asset rather than erroring when the id is
+    // taken, which is what makes a repeat run cheap instead of fatal.
+    invalidate: false,
+    resource_type: 'image',
+  })
+
+  return result.secure_url
+}
+
 export async function uploadBufferToCloudinary(
   buffer: Buffer,
   folder = 'novel_solar_products',
