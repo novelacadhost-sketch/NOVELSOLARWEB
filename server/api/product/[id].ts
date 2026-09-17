@@ -1,6 +1,7 @@
 import { logger } from '../../utils/logger'
 import { resolveIsDealerFromEvent } from '../../utils/dealerCheck'
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
+import { getHiddenProductIds } from '../../utils/productVisibility'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -24,6 +25,12 @@ export default defineEventHandler(async (event) => {
 
     if (product) {
       if (product.ACTIVE === 'N') {
+        throw createError({ statusCode: 404, statusMessage: 'Product not found' })
+      }
+
+      // Hidden on the website. 404 rather than render: hiding it from the
+      // listings but leaving the URL live would only half-hide it.
+      if ((await getHiddenProductIds()).has(String(id))) {
         throw createError({ statusCode: 404, statusMessage: 'Product not found' })
       }
 

@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger'
+import { getHiddenProductIds } from '../../utils/productVisibility'
 
 interface BitrixRawProduct {
   ID: string | number
@@ -27,6 +28,8 @@ interface BitrixSearchResponse {
 }
 
 export default defineEventHandler(async (event) => {
+  const hiddenIds = await getHiddenProductIds()
+
   const body = await readBody(event)
   const { query, start } = body
   const config = useRuntimeConfig()
@@ -91,7 +94,10 @@ export default defineEventHandler(async (event) => {
         description: p.DESCRIPTION,
         descriptionType: p.DESCRIPTION_TYPE,
         measure: p.MEASURE,
-        isDisabled: p.ACTIVE === 'N',
+        // The website flag, not Bitrix's ACTIVE. A product can be active in
+        // the CRM and hidden on the site, which is now the normal case.
+        isDisabled: hiddenIds.has(String(p.ID)),
+        isInactiveInBitrix: p.ACTIVE === 'N',
         persistedMainImageUrl: cloudinaryUrl || '',
         // Priority 1: Cloudinary URL (PROPERTY_102), Priority 2: Bitrix Image Proxy
         imageUrl:

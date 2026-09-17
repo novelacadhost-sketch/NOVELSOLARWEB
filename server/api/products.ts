@@ -4,6 +4,7 @@ import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
 import { bitrixFetch } from '../utils/bitrixAuth'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { getSectionMap } from '../utils/bitrixSections'
+import { getHiddenProductIds } from '../utils/productVisibility'
 
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
@@ -13,6 +14,7 @@ export default defineEventHandler(async (event) => {
   // ?includeServices=1. Excluded by SECTION rather than by name — see
   // inventory.get.ts for why the old keyword filter was unreliable.
   const includeServices = String(query.includeServices ?? '') === '1'
+  const hidden = await getHiddenProductIds()
   const searchTerm = ((query.q as string) || '').trim().toLowerCase()
   const brandFilter = ((query.brand as string) || '').trim()
   const parsedStart = Number.parseInt((query.start as string) || '0', 10)
@@ -204,9 +206,9 @@ export default defineEventHandler(async (event) => {
     }
 
     await loadMirroredImages(bitrixProducts.map((p) => String(p.ID)))
-    const visible = includeServices
-      ? bitrixProducts
-      : bitrixProducts.filter((p) => (sectionNameOf(p, p) ?? '').toUpperCase() !== 'SERVICES')
+    const visible = bitrixProducts
+      .filter((p) => includeServices || (sectionNameOf(p, p) ?? '').toUpperCase() !== 'SERVICES')
+      .filter((p) => !hidden.has(String(p.ID)))
     const products = visible.map((p) => mapProduct(p, false))
     const nextStart =
       typeof response?.next === 'number'
@@ -251,9 +253,13 @@ export default defineEventHandler(async (event) => {
       throw error
     }
 
-    const rows = includeServices
-      ? data || []
-      : (data || []).filter((p) => String((p as { section_name?: string }).section_name ?? '').toUpperCase() !== 'SERVICES')
+    const rows = (data || [])
+      .filter(
+        (p) =>
+          includeServices ||
+          String((p as { section_name?: string }).section_name ?? '').toUpperCase() !== 'SERVICES',
+      )
+      .filter((p) => !hidden.has(String((p as { id?: string | number }).id)))
     const products = rows.map((p) => mapProduct(p, true))
     const totalCount = count || 0
     const nextStart = startFrom + PAGE_SIZE < totalCount ? startFrom + PAGE_SIZE : null

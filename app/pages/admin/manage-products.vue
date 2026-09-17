@@ -539,7 +539,7 @@ onUnmounted(() => {
                     <div>
                       <p class="text-xs font-black uppercase tracking-widest text-slate-400">Storefront Visibility</p>
                       <p class="mt-2 text-sm font-medium text-slate-600">
-                        Disable this product to hide it from all customer-facing product pages without changing stock
+                        Hides this product from the shop, search and category pages. It stays active in Bitrix, so sales, quotes and the CRM catalogue are unaffected
                         quantity.
                       </p>
                     </div>

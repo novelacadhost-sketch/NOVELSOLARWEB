@@ -5,6 +5,7 @@ import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
 import { fetchAllBitrixProducts } from '../utils/fetchAllBitrixProducts'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { getSectionMap } from '../utils/bitrixSections'
+import { getHiddenProductIds, getVisibilityVersion } from '../utils/productVisibility'
 
 export default defineCachedEventHandler(
   async (event) => {
@@ -31,6 +32,9 @@ export default defineCachedEventHandler(
     // (audit|installation|repair|maintenance) caught 10 of the 23 and would
     // wrongly drop a real product called something like "Repair Kit".
     const includeServices = String(queryParams.includeServices ?? '') === '1'
+
+    // Hidden by an admin on the website only; Bitrix still lists them.
+    const hidden = await getHiddenProductIds()
 
     const sectionFilter = new Set(
       String(queryParams.sections ?? '')
@@ -168,6 +172,10 @@ export default defineCachedEventHandler(
         filtered = filtered.filter((p) => (sectionOf(p, p).name ?? '').toUpperCase() !== 'SERVICES')
       }
 
+      if (hidden.size) {
+        filtered = filtered.filter((p) => !hidden.has(String(p.ID)))
+      }
+
       // ordered by id descending
       filtered.sort((a, b) => Number(b.ID) - Number(a.ID))
 
@@ -199,6 +207,10 @@ export default defineCachedEventHandler(
       if (!includeServices) {
         // or(): a product with no section must still be listed.
         query = query.or('section_name.is.null,section_name.neq.SERVICES')
+      }
+
+      if (hidden.size) {
+        query = query.not('id', 'in', `(${[...hidden].join(',')})`)
       }
 
       // start (for pagination, range of 50)
@@ -242,7 +254,10 @@ export default defineCachedEventHandler(
         .replace(/[^a-z0-9,&\- ]/g, '')
         .slice(0, 120)
       const svc = String(query.includeServices ?? '') === '1' ? 'svc' : 'nosvc'
-      return `inventory-v5:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${start}`
+      // Without the visibility version a product stays in the cached page for
+      // five minutes after being hidden.
+      const vis = await getVisibilityVersion()
+      return `inventory-v5:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than

@@ -7,6 +7,7 @@ import {
 } from '../../utils/productMedia'
 import type { BitrixResponse } from '../../types/bitrix'
 import { logger } from '../../utils/logger'
+import { setProductHidden } from '../../utils/productVisibility'
 
 export default defineEventHandler(async (event) => {
   const contentType = getHeader(event, 'content-type') || ''
@@ -119,7 +120,10 @@ export default defineEventHandler(async (event) => {
       PROPERTY_184: productDealerPrice || '',
       DESCRIPTION: productDescription || '',
       DESCRIPTION_TYPE: 'html',
-      ACTIVE: productDisabled ? 'N' : 'Y',
+      // ACTIVE is deliberately NOT sent. Hiding a product is a website
+      // decision; writing ACTIVE: 'N' deactivated it in Bitrix for sales,
+      // quotes and the catalogue too, and the webhook then deleted it from the
+      // mirror. Visibility is stored in product_visibility instead.
       PROPERTY_104: productSpecs ? JSON.stringify(productSpecs) : '[]',
     }
 
@@ -156,6 +160,21 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 400,
         statusMessage: 'Update failed in Bitrix: No result returned',
+      })
+    }
+
+    // After Bitrix, so a failed product update does not leave the site hiding
+    // something that was never saved.
+    try {
+      await setProductHidden(String(productId), productDisabled, event.context.admin?.user_id)
+    } catch (visibilityError) {
+      logger.error('UPDATE', 'Product saved but visibility not stored', {
+        id: productId,
+        error: visibilityError instanceof Error ? visibilityError.message : String(visibilityError),
+      })
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'The product was saved, but its visibility setting was not. Try again.',
       })
     }
 
