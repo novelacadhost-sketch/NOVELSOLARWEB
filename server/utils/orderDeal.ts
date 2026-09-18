@@ -195,6 +195,7 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
     COMMENTS: buildComments(order),
     SOURCE_ID: 'WEB',
     TYPE_ID: 'SALE',
+    [BITRIX_DEAL.WEB_ORDER_FLAG]: BITRIX_DEAL.WEB_ORDER_FLAG_YES,
   }
 
   if (contactId) fields.CONTACT_ID = contactId

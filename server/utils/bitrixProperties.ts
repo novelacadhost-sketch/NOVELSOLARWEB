@@ -56,6 +56,15 @@ export const BITRIX_DEAL = {
    * the deal and the right store sees it.
    */
   BRANCH_FIELD: 'UF_CRM_1781105708',
+  /**
+   * "Web/app order?" — a checkbox, default 0. Set to 1 on everything this
+   * file creates, which is the point: it marks the order as having come from
+   * the website or the mobile app rather than being keyed in by staff, so
+   * the CRM can filter and report on online sales.
+   */
+  WEB_ORDER_FLAG: 'UF_CRM_1789747055987',
+  /** Bitrix boolean userfields take 1/0, not true/false. */
+  WEB_ORDER_FLAG_YES: 1,
 } as const
 
 /**
