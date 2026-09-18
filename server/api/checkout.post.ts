@@ -7,7 +7,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
-import type { BitrixLeadResponse } from '../types/bitrix'
+import { createOrderDeal } from '../utils/orderDeal'
 import { logger } from '../utils/logger'
 
 import type { H3Event } from 'h3'
@@ -355,48 +355,26 @@ export default defineEventHandler(async (event) => {
     paymentMethod,
   })
 
-  // 1. FORMAT CART FOR CRM
-  const orderDetailsList = cart
-    .map((item: TrustedCartItem) => `- ${item.quantity}x ${item.name} (₦${item.price.toLocaleString()})`)
-    .join('\n')
-
-  const crmComments = `
-    NEW WEB ORDER (${orderId})
-    Fulfillment: ${paymentMethod === 'pickup' ? 'Store Pickup' : 'Delivery'}
-    Branch: ${branch?.address || 'N/A'}
-    Payment: ${paymentMethod}
-    Notes: ${customer.note || 'None'}
-    
-    ITEMS:
-    ${orderDetailsList}
-  `
-
   logger.info('Checkout API', `Attempting to send order ${orderId} to Bitrix...`)
 
   let crmSuccess = false
   try {
-    const response = await $fetch<BitrixLeadResponse>(`${bitrixUrl}crm.lead.add`, {
-      method: 'POST',
-      body: {
-        fields: {
-          TITLE: `Web Order: ${customer.firstName || 'Guest'} ${customer.lastName || ''} (${orderId})`,
-          NAME: customer.firstName || 'Guest',
-          LAST_NAME: customer.lastName || '',
-          EMAIL: [{ VALUE: customer.email, VALUE_TYPE: 'WORK' }],
-          PHONE: [{ VALUE: customer.phone || '0000000000', VALUE_TYPE: 'WORK' }],
-          ADDRESS: customer.address || '',
-          OPPORTUNITY: total,
-          CURRENCY_ID: 'NGN',
-          COMMENTS: crmComments,
-          SOURCE_ID: 'WEB',
-        },
-      },
+    // A sale is a Deal, not a Lead. See server/utils/orderDeal.ts.
+    const deal = await createOrderDeal({
+      orderId,
+      customer,
+      cart,
+      total,
+      branch,
+      paymentMethod,
+      userId: await resolveUserIdFromEvent(event),
     })
 
-    if (response.error) throw new Error(response.error_description)
-
     crmSuccess = true
-    logger.info('Checkout API', `✅ Successfully created Lead in Bitrix for order ${orderId}`, { orderId })
+    logger.info('Checkout API', `✅ Created Deal in Bitrix for order ${orderId}`, {
+      orderId,
+      dealId: deal.dealId,
+    })
   } catch (error: unknown) {
     const err = error as { data?: unknown }
     logger.error('Checkout API', 'Bitrix order submission failed', { error: err.data || error, orderId })

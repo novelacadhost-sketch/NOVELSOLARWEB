@@ -1,10 +1,15 @@
-import type { FailedOrder, FailedQuote, FailedContact, FailedBooking } from '../types/database'
+import type { FailedQuote, FailedContact, FailedBooking } from '../types/database'
 import type { SubmissionType } from '../types/bitrix'
 
 // TITLE prefixes used by the submit endpoints. These also drive classifyLeadByTitle()
 // when reading leads back from Bitrix. If a submit endpoint changes its TITLE format,
 // update the corresponding prefix here.
 export const LEAD_TITLE_PREFIXES = {
+  /**
+   * Orders are filed as Deals now (2026-09-18), not Leads, so nothing writes
+   * this prefix any more. It stays because classifyLeadByTitle() still reads
+   * back the leads created before that change.
+   */
   order: 'Web Order:',
   quote: 'Website Quote Request:',
   contact: 'General Web Inquiry:',
@@ -21,40 +26,6 @@ export function classifyLeadByTitle(title: string | undefined): SubmissionType {
 }
 
 type LeadFields = Record<string, unknown>
-
-/**
- * Rebuild the crm.lead.add payload for a failed order. The stored FailedOrder only
- * keeps cart items as {id, quantity} — names/prices were resolved from Bitrix at the
- * original checkout and aren't persisted. Retry produces a leaner COMMENTS block
- * than the live checkout, but the OPPORTUNITY total is preserved.
- */
-export function buildOrderLeadPayload(order: FailedOrder): { fields: LeadFields } {
-  const { customer, cart, total, branch, paymentMethod, orderId } = order
-  const itemLines = cart.map((item) => `- ${item.quantity}x product #${item.id ?? item.ID ?? 'unknown'}`).join('\n')
-  return {
-    fields: {
-      TITLE: `${LEAD_TITLE_PREFIXES.order} ${customer.firstName || 'Guest'} ${customer.lastName || ''} (${orderId}) [RECOVERED]`,
-      NAME: customer.firstName || 'Guest',
-      LAST_NAME: customer.lastName || '',
-      EMAIL: [{ VALUE: customer.email, VALUE_TYPE: 'WORK' }],
-      PHONE: [{ VALUE: customer.phone || '0000000000', VALUE_TYPE: 'WORK' }],
-      ADDRESS: customer.address || '',
-      OPPORTUNITY: total,
-      CURRENCY_ID: 'NGN',
-      COMMENTS: [
-        `RECOVERED WEB ORDER (${orderId})`,
-        `Fulfillment: ${paymentMethod === 'pickup' ? 'Store Pickup' : 'Delivery'}`,
-        `Branch: ${branch?.address || 'N/A'}`,
-        `Payment: ${paymentMethod || 'Bank Transfer'}`,
-        `Notes: ${customer.note || 'None'}`,
-        '',
-        'ITEMS:',
-        itemLines,
-      ].join('\n'),
-      SOURCE_ID: 'WEB',
-    },
-  }
-}
 
 export function buildQuoteLeadPayload(quote: FailedQuote): { fields: LeadFields; params: Record<string, string> } {
   return {

@@ -28,6 +28,37 @@ export const BITRIX_PROPERTY = {
 } as const
 
 /**
+ * Deal fields for web orders.
+ *
+ * An order is a sale, so it is a Deal, not a Lead. Leads stay for the
+ * enquiry forms (contact / quote / service booking) where there is no
+ * committed purchase yet.
+ *
+ * Verified against `crm.category.list` (entityTypeId 2), `crm.status.list`
+ * and `crm.deal.fields` on the live portal (2026-09-18). These are ids, not
+ * names, so a pipeline rename in the CRM will not break them — but a deleted
+ * pipeline will, and `crm.deal.add` fails loudly in that case rather than
+ * filing the order somewhere wrong.
+ */
+export const BITRIX_DEAL = {
+  /**
+   * "Product Sales". NOT the portal default, which is "Installation Sales"
+   * (id 0) and is the wrong book for a shop order. Omitting CATEGORY_ID
+   * would silently file every web order there.
+   */
+  CATEGORY_ID: 4,
+  /** "New Product Sales" — the entry stage of category 4. */
+  STAGE_ID: 'C4:NEW',
+  /**
+   * "Branch" — an iblock_element field bound to IBLOCK_ID 28, the same branch
+   * registry `app/utils/locations.ts` carries `bitrixId` from. The value is
+   * the element id, so the branch the customer picked at checkout lands on
+   * the deal and the right store sees it.
+   */
+  BRANCH_FIELD: 'UF_CRM_1781105708',
+} as const
+
+/**
  * Parse a Bitrix price property value.
  *
  * Values are usually "45000.00", but at least one product stores

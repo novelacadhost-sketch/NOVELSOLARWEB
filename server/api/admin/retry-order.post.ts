@@ -1,9 +1,7 @@
 import { z } from 'zod'
-import { bitrixFetch } from '../../utils/bitrixAuth'
-import { buildOrderLeadPayload } from '../../utils/leadPayloads'
+import { createOrderDeal } from '../../utils/orderDeal'
 import { logger } from '../../utils/logger'
 import type { FailedOrder } from '../../types/database'
-import type { BitrixLeadResponse } from '../../types/bitrix'
 
 const bodySchema = z.object({
   orderId: z.string().trim().min(1).max(120),
@@ -23,39 +21,37 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const response = await bitrixFetch<BitrixLeadResponse>('crm.lead.add', {
-      method: 'POST',
-      body: buildOrderLeadPayload(stored),
+    // A sale is a Deal, not a Lead. See server/utils/orderDeal.ts.
+    // The stored FailedOrder keeps cart items as {id, quantity} only — names
+    // and prices were resolved from Bitrix at the original checkout and are
+    // not persisted — so the recovered deal gets no product rows, just the
+    // preserved total.
+    const deal = await createOrderDeal({
+      orderId: stored.orderId,
+      customer: stored.customer,
+      cart: stored.cart,
+      total: stored.total,
+      branch: stored.branch,
+      paymentMethod: stored.paymentMethod,
+      recovered: true,
     })
-
-    if (response.error) {
-      logger.error('Retry Order', 'Bitrix error response', {
-        error: response.error,
-        error_description: response.error_description,
-        orderId,
-      })
-      throw createError({
-        statusCode: 502,
-        statusMessage: response.error_description || 'Bitrix rejected the retry.',
-      })
-    }
 
     try {
       await storage.removeItem(orderId)
     } catch (cleanupError) {
       logger.error(
         'Retry Order',
-        '[CRITICAL] Lead created but failed to remove from queue — possible duplicate on next retry',
+        '[CRITICAL] Deal created but failed to remove from queue — possible duplicate on next retry',
         {
           error: cleanupError,
           orderId,
-          leadId: response.result,
+          dealId: deal.dealId,
         },
       )
     }
 
-    logger.info('Retry Order', `✅ Recovered order ${orderId}`, { orderId, leadId: response.result })
-    return { success: true, leadId: response.result }
+    logger.info('Retry Order', `✅ Recovered order ${orderId}`, { orderId, dealId: deal.dealId })
+    return { success: true, dealId: deal.dealId }
   } catch (error: unknown) {
     const err = error as { statusCode?: number; data?: unknown }
     if (err.statusCode) throw error

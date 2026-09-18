@@ -1,7 +1,6 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
-import { bitrixFetch } from '../../utils/bitrixAuth'
 import { logger } from '../../utils/logger'
-import type { BitrixLeadResponse } from '../../types/bitrix'
+import { createOrderDeal } from '../../utils/orderDeal'
 
 /**
  * Deliver queued orders to Bitrix.
@@ -26,7 +25,8 @@ type OutboxRow = {
   payload: {
     orderId?: string
     customer?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string }
-    branch?: { address?: string } | null
+    // Whatever the client sent. A bitrixId here puts the deal on that branch.
+    branch?: Record<string, unknown> | null
     paymentMethod?: string
     fulfillment?: string
     total?: number
@@ -41,36 +41,6 @@ type OutboxUpdate = {
   last_error?: string | null
   next_retry_at?: string | null
   updated_at: string
-}
-
-function buildLeadFields(payload: OutboxRow['payload']) {
-  const customer = payload.customer || {}
-  const cart = Array.isArray(payload.cart) ? payload.cart : []
-
-  const items = cart
-    .map((item) => `- ${item.quantity}x ${item.name} (₦${Number(item.price || 0).toLocaleString()})`)
-    .join('\n')
-
-  return {
-    TITLE: `Web Order: ${customer.firstName || 'Customer'} ${customer.lastName || ''} (${payload.orderId})`,
-    NAME: customer.firstName || 'Customer',
-    LAST_NAME: customer.lastName || '',
-    EMAIL: [{ VALUE: customer.email || '', VALUE_TYPE: 'WORK' }],
-    PHONE: [{ VALUE: customer.phone || '0000000000', VALUE_TYPE: 'WORK' }],
-    ADDRESS: customer.address || '',
-    OPPORTUNITY: payload.total || 0,
-    CURRENCY_ID: 'NGN',
-    SOURCE_ID: 'WEB',
-    COMMENTS: [
-      `NEW MOBILE ORDER (${payload.orderId})`,
-      `Fulfillment: ${payload.fulfillment === 'pickup' ? 'Store Pickup' : 'Delivery'}`,
-      `Branch: ${payload.branch?.address || 'N/A'}`,
-      `Payment: ${payload.paymentMethod || 'N/A'}`,
-      '',
-      'ITEMS:',
-      items,
-    ].join('\n'),
-  }
 }
 
 export default defineEventHandler(async (event) => {
@@ -109,12 +79,27 @@ export default defineEventHandler(async (event) => {
         continue
       }
 
-      const response = await bitrixFetch<BitrixLeadResponse>('crm.lead.add', {
-        method: 'POST',
-        body: { fields: buildLeadFields(row.payload) },
+      // A sale is a Deal, not a Lead. See server/utils/orderDeal.ts.
+      const deal = await createOrderDeal({
+        orderId: row.payload.orderId || `outbox-${row.id}`,
+        customer: {
+          firstName: row.payload.customer?.firstName,
+          lastName: row.payload.customer?.lastName,
+          email: row.payload.customer?.email || '',
+          phone: row.payload.customer?.phone,
+          address: row.payload.customer?.address,
+        },
+        cart: (row.payload.cart ?? []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity ?? 1,
+        })),
+        total: row.payload.total ?? 0,
+        branch: row.payload.branch,
+        paymentMethod: row.payload.paymentMethod,
+        fulfillment: row.payload.fulfillment,
       })
-
-      if (response.error) throw new Error(response.error_description || String(response.error))
 
       const update: OutboxUpdate = { status: 'sent', last_error: null, updated_at: new Date().toISOString() }
       await supabase.from('crm_outbox').update(update as never).eq('id', row.id)
@@ -128,7 +113,7 @@ export default defineEventHandler(async (event) => {
       logger.info('CrmOutbox', 'Delivered order to Bitrix', {
         outboxId: row.id,
         orderId: row.payload.orderId,
-        leadId: response.result,
+        dealId: deal.dealId,
       })
     } catch (err) {
       const attempts = (row.attempts || 0) + 1
