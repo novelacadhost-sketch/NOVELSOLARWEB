@@ -1,0 +1,102 @@
+name: Deliver queued orders to Bitrix
+
+# Orders placed from the mobile app go through place_order_from_cart(), a
+# Postgres function — and a Postgres function cannot make an outbound HTTP
+# call. So the order is written to Supabase and queued in crm_outbox, and this
+# is what actually delivers it to the CRM.
+#
+# Nothing else calls the drain. Without this workflow an order placed from the
+# app exists in Supabase and nowhere the business looks.
+#
+# Runs here rather than on Vercel for the same reasons as sync-products.yml:
+# the Vercel cron never fired once on this project, and the Hobby plan keeps
+# only an hour of runtime logs, so a missed run leaves no evidence.
+
+on:
+  schedule:
+    # Every 10 minutes. GitHub delays scheduled runs under load — sometimes by
+    # several minutes — so treat this as "within ~15 minutes", not a guarantee.
+    # An order is not time-critical, but a customer expects a callback the same
+    # day, so hourly would be too slow.
+    - cron: '*/10 * * * *'
+  # So a stuck queue can be flushed from the Actions tab without a deploy.
+  workflow_dispatch:
+
+concurrency:
+  # Two drains at once would both claim the same pending rows and create
+  # duplicate leads: the endpoint selects pending rows and updates them one by
+  # one, with no row-level claim. Queueing runs is what prevents that, so do
+  # NOT set cancel-in-progress.
+  #
+  # This does not protect against someone POSTing to the endpoint by hand while
+  # a run is in flight. Low risk at this order volume, and a duplicate lead is
+  # recoverable, but it is the reason to be careful about manual drains.
+  group: drain-crm-outbox
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Drain the CRM outbox
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DRAIN_URL: ${{ vars.DRAIN_URL || 'https://novelsolarweb.vercel.app/api/admin/drain-crm-outbox' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::CRON_SECRET repository secret is not set — the endpoint will answer 401."
+            exit 1
+          fi
+
+          # The endpoint takes up to 25 rows and makes one Bitrix call each.
+          body=$(mktemp)
+          status=$(curl -sS -o "$body" -w '%{http_code}' --max-time 180 \
+            -X POST "$DRAIN_URL" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H 'Content-Type: application/json' \
+            -d '{}')
+
+          echo "HTTP $status"
+          cat "$body"
+          echo
+
+          if [ "$status" != "200" ]; then
+            echo "::error::Drain endpoint returned HTTP $status"
+            exit 1
+          fi
+
+          # Same lesson as the product sync: a 200 alone means the handler ran,
+          # not that it worked. The envelope is what carries the outcome.
+          if ! grep -q '"success":true' "$body"; then
+            echo "::error::Drain endpoint returned 200 but not success:true"
+            exit 1
+          fi
+
+          claimed=$(sed -n 's/.*"claimed":\([0-9]*\).*/\1/p' "$body")
+          sent=$(sed -n 's/.*"sent":\([0-9]*\).*/\1/p' "$body")
+          failed=$(sed -n 's/.*"failed":\([0-9]*\).*/\1/p' "$body")
+
+          # An empty queue is the normal case, not a failure — unlike the
+          # product sync, where zero synced means something broke.
+          if [ "${claimed:-0}" -eq 0 ]; then
+            echo "::notice::Queue empty — nothing to deliver."
+            exit 0
+          fi
+
+          echo "::notice::Claimed ${claimed}, delivered ${sent}, failed ${failed:-0}."
+
+          # Individual failures are retried with backoff and parked after five
+          # attempts, so one failure is not worth failing the run over. Every
+          # row failing is different: that is Bitrix down, or the webhook
+          # credentials rejected, and it will not fix itself.
+          if [ "${failed:-0}" -gt 0 ] && [ "${sent:-0}" -eq 0 ]; then
+            echo "::error::Every delivery failed (${failed}). Check the Bitrix webhook and the last_error column in crm_outbox."
+            exit 1
+          fi
+
+          if [ "${failed:-0}" -gt 0 ]; then
+            echo "::warning::${failed} delivery(s) failed and will be retried. Rows are parked as failed after 5 attempts."
+          fi
