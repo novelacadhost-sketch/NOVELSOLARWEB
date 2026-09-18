@@ -3,10 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { getMailTransporter } from '../utils/mailer'
 import { generateOrderReceiptHtml } from '../utils/emailTemplate'
 import { bitrixFetch } from '../utils/bitrixAuth'
-import { serverSupabaseUser, serverSupabaseServiceRole } from '#supabase/server'
+import { serverSupabaseServiceRole } from '#supabase/server'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { parseBitrixPrice } from '../utils/bitrixProperties'
-import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
+import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
 import type { BitrixLeadResponse } from '../types/bitrix'
 import { logger } from '../utils/logger'
 
@@ -180,6 +180,128 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
   return { cart: trustedCart, total }
 }
 
+type CheckoutCustomer = z.infer<typeof checkoutSchema>['customer']
+
+// Supabase admin client carries no Database generic, so insert payloads resolve
+// to `never`. Local interfaces plus `as never` at the call site is the house
+// pattern — see server/api/bitrix/handler.ts.
+type OrderRow = {
+  user_id: string | null
+  customer_email: string
+  customer_first_name: string
+  customer_last_name: string
+  customer_phone: string
+  shipping_address: string
+  fulfillment: string
+  branch: Record<string, unknown>
+  payment_method: string
+  subtotal: number
+  shipping: number
+  total: number
+  status: string
+  client_order_ref: string
+}
+
+type OrderItemRow = {
+  order_id: string
+  bitrix_product_id: string
+  name: string
+  unit_price: number
+  quantity: number
+  image_url: string
+}
+
+/**
+ * Mirror the order into Supabase so the customer can look it up later.
+ *
+ * Every money value written here comes from resolveTrustedCart(), which reads
+ * prices from Bitrix and applies the dealer gate server-side. Nothing the
+ * client submitted reaches these columns. That is the whole reason the mobile
+ * app inserts nothing directly: RLS (20260918140000) gives it read-only access
+ * to its own rows and no write path at all.
+ *
+ * Never throws. A mirror failure must not cost the customer their order — the
+ * CRM lead and the receipt are what actually matter, and the existing
+ * failed-orders queue already covers a Bitrix outage.
+ */
+async function persistOrder(
+  event: H3Event,
+  order: {
+    orderId: string
+    customer: CheckoutCustomer
+    cart: TrustedCartItem[]
+    total: number
+    branch: Record<string, unknown>
+    paymentMethod: string
+  },
+): Promise<string | null> {
+  try {
+    const supabase = serverSupabaseServiceRole(event)
+    const userId = await resolveUserIdFromEvent(event)
+
+    const orderRow: OrderRow = {
+      user_id: userId,
+      customer_email: order.customer.email,
+      customer_first_name: order.customer.firstName,
+      customer_last_name: order.customer.lastName,
+      customer_phone: order.customer.phone,
+      shipping_address: order.customer.address,
+      fulfillment: order.paymentMethod === 'pickup' ? 'pickup' : 'delivery',
+      branch: order.branch,
+      payment_method: order.paymentMethod,
+      subtotal: order.total,
+      shipping: 0,
+      total: order.total,
+      status: 'pending',
+      client_order_ref: order.orderId,
+    }
+
+    const { data, error } = (await supabase
+      .from('orders')
+      .insert(orderRow as never)
+      .select('id')
+      .single()) as { data: { id: string } | null; error: { message: string } | null }
+
+    if (error || !data) {
+      logger.error('Checkout API', 'Failed to mirror order to Supabase', {
+        error: error?.message,
+        orderId: order.orderId,
+      })
+      return null
+    }
+
+    const itemRows: OrderItemRow[] = order.cart.map((item) => ({
+      order_id: data.id,
+      bitrix_product_id: String(item.id),
+      name: item.name,
+      unit_price: item.price,
+      quantity: item.quantity,
+      image_url: item.image,
+    }))
+
+    const { error: itemsError } = (await supabase.from('order_items').insert(itemRows as never)) as {
+      error: { message: string } | null
+    }
+
+    if (itemsError) {
+      // The order header is already written. Leaving it is better than a silent
+      // rollback: admin can still see the order exists and reconcile from Bitrix.
+      logger.error('Checkout API', 'Order mirrored but line items failed', {
+        error: itemsError.message,
+        orderId: order.orderId,
+      })
+    }
+
+    return data.id
+  } catch (err) {
+    logger.error('Checkout API', 'Order mirror threw', {
+      error: err instanceof Error ? err.message : String(err),
+      orderId: order.orderId,
+    })
+    return null
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const rawBody = await readBody(event)
   const parsedBody = checkoutSchema.safeParse(rawBody)
@@ -222,6 +344,16 @@ export default defineEventHandler(async (event) => {
     timestamp: new Date().toISOString(),
     status: 'pending',
   }
+
+  // Mirrored before the CRM call, so a Bitrix outage cannot lose the record.
+  const orderRecordId = await persistOrder(event, {
+    orderId,
+    customer,
+    cart,
+    total,
+    branch,
+    paymentMethod,
+  })
 
   // 1. FORMAT CART FOR CRM
   const orderDetailsList = cart
@@ -331,6 +463,9 @@ export default defineEventHandler(async (event) => {
   return {
     success: true,
     orderId,
+    // The public.orders uuid, for clients that want to read the order back.
+    // Null when the mirror failed; the order itself still went through.
+    orderRecordId,
     crmSuccess,
     message: crmSuccess ? 'Order processed successfully.' : 'Order received. (Saved locally for retry)',
   }

@@ -14,7 +14,7 @@ import { logger } from './logger'
  * is put there by `server/middleware/0.bearer-auth.ts`; the cookie user by
  * the Supabase module's own middleware.
  */
-async function resolveUserId(event: H3Event): Promise<string | null> {
+export async function resolveUserIdFromEvent(event: H3Event): Promise<string | null> {
   // Cookie session first — the common path, and it costs no network call.
   try {
     const user = await serverSupabaseUser(event)
@@ -33,7 +33,7 @@ async function resolveUserId(event: H3Event): Promise<string | null> {
 
 export async function resolveIsDealerFromEvent(event: H3Event): Promise<boolean> {
   try {
-    const userId = await resolveUserId(event)
+    const userId = await resolveUserIdFromEvent(event)
     if (!userId) return false
 
     const supabase = await serverSupabaseServiceRole(event)
