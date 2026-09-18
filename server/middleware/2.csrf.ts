@@ -12,6 +12,20 @@ export default defineEventHandler((event) => {
   )
     return
 
+  // Scheduled jobs. They run from GitHub Actions with a Bearer cron secret and
+  // no cookie jar, so the token dance is impossible for them — and pointless:
+  // CSRF defends ambient credentials a browser attaches on its own, and a
+  // secret held deliberately by the caller is the opposite of ambient.
+  //
+  // A header check rather than another hardcoded path. The path above exempts
+  // /api/admin/trigger-sync for EVERY caller; this exempts only a caller that
+  // already holds the secret, which adminGuard then treats as admin anyway —
+  // so it grants nothing that the secret did not already grant. New cron
+  // endpoints are covered without editing this list, which is what the drain
+  // needed: it was answering 403 here before ever reaching adminGuard.
+  const { cronSecret } = useRuntimeConfig()
+  if (cronSecret && getHeader(event, 'authorization') === `Bearer ${cronSecret}`) return
+
   const method = event.method.toUpperCase()
 
   if (method === 'GET' || method === 'HEAD') {
