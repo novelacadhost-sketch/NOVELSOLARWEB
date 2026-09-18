@@ -113,7 +113,7 @@
                 </div>
                 <div class="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2">
                   <div class="font-black text-slate-900 text-lg">
-                    ₦{{ order.total_amount ? order.total_amount.toLocaleString() : '0' }}
+                    ₦{{ order.total ? order.total.toLocaleString() : '0' }}
                   </div>
                   <span
                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize"

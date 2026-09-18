@@ -256,8 +256,16 @@ const filteredBranches = computed(() => {
   )
 })
 
-let map = null
-let marker = null
+// Leaflet is pulled from a CDN <script> at runtime, not bundled, so there is no
+// package to take types from. Upgrade path is devDependency @types/leaflet plus
+// `typeof import('leaflet')` here.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const L: any
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let map: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let marker: any = null
 
 const selectBranch = (branch) => {
   selectedBranch.value = branch

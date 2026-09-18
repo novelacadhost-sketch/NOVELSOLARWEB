@@ -44,6 +44,12 @@ jobs:
       # nuxi typecheck exits non-zero when there are errors.
       # Baseline reflects the CI environment (Node 22), which generates
       # different auto-import types than local dev.
+      #
+      # 2026-09-18: local went 309 -> 264, so this dropped 388 -> 343 by the
+      # same delta. CI has historically counted ~48 more than local, and that
+      # slack is dead weight — a regression that size passes unnoticed. Set
+      # this to the actual CI count from a green run to make the gate mean
+      # something.
       - name: Run typecheck (baseline-gated)
         run: |
           set +e
@@ -52,7 +58,7 @@ jobs:
           set -e
 
           ERROR_COUNT=$(grep -c 'error TS' typecheck.log || true)
-          BASELINE=388
+          BASELINE=343
 
           echo "::notice ::Typecheck errors: ${ERROR_COUNT} (baseline: ${BASELINE})"
 
