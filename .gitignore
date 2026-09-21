@@ -52,3 +52,6 @@ server/scratch
 
 # one-off migration scripts (image upload) — kept locally, not tracked
 .migrate-*.tmp.mjs
+
+# Built plugin bundle — regenerate from wordpress/novelsolar-bitrix-sync/
+wordpress/*.zip
