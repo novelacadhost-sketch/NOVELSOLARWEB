@@ -2,6 +2,7 @@ import { logger } from './logger'
 import { bitrixFetch } from './bitrixAuth'
 import { BITRIX_DEAL } from './bitrixProperties'
 import { findOrCreateBitrixContact, resolveBitrixContactId } from './bitrixContact'
+import { notifyBranchManagerOfOrder } from './branchManagerNotify'
 
 /**
  * Files a web order in Bitrix as a DEAL.
@@ -58,6 +59,7 @@ export interface OrderDealResult {
   dealId: string
   contactId: string | null
   productRowsSet: boolean
+  branchManagerNotified: boolean
 }
 
 function productIdOf(item: OrderDealCartItem): string | null {
@@ -214,13 +216,20 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
   const dealId = String(response.result)
   const productRowsSet = await setProductRows(dealId, order)
 
+  // The warehouse on a product row cannot be set over REST, so the branch
+  // manager is told to pick it. Never fatal; see branchManagerNotify.ts.
+  const branchManagerNotified = branchId
+    ? await notifyBranchManagerOfOrder({ branchElementId: branchId, dealId, orderId: order.orderId, total: order.total })
+    : false
+
   logger.info('OrderDeal', 'Created deal in Bitrix', {
     orderId: order.orderId,
     dealId,
     contactId,
     branchId,
     productRowsSet,
+    branchManagerNotified,
   })
 
-  return { dealId, contactId, productRowsSet }
+  return { dealId, contactId, productRowsSet, branchManagerNotified }
 }
