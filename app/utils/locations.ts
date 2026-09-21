@@ -553,3 +553,26 @@ export const nigerianStates = [
   { name: 'Yobe', coords: [12.2939, 11.439] },
   { name: 'Zamfara', coords: [12.1222, 6.2236] },
 ]
+
+/**
+ * The branches actually in a state, matched on the structured `state` field.
+ *
+ * Do NOT reintroduce a substring match against `address`. Checkout used to do
+ * `address.toLowerCase().includes(state)` as a fallback, and free text collides
+ * with state names in five places: "Ekotedo" contains "Edo", "Nigeria" contains
+ * "Niger", "Osuntokun" contains "Osun", and Benin 1's "Lagos express" put a
+ * Benin branch in front of every Lagos customer.
+ *
+ * `state` is clean on all 37 branches and every value matches a `nigerianStates`
+ * entry except FCT, which the dropdown labels "FCT - Abuja".
+ */
+const STATE_LABEL_TO_BRANCH_STATE: Record<string, string> = {
+  'fct - abuja': 'fct',
+}
+
+export function branchesInState(stateLabel: string) {
+  if (!stateLabel) return []
+  const key = stateLabel.toLowerCase().trim()
+  const target = STATE_LABEL_TO_BRANCH_STATE[key] ?? key
+  return branches.filter((b) => b.state?.toLowerCase() === target)
+}

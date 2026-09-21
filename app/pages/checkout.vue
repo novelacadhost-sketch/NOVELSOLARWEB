@@ -28,22 +28,9 @@ const suggestedBranches = computed(() => {
   return sorted.slice(0, 3)
 })
 
-const exactMatches = computed(() => {
-  if (!selectedState.value) return []
-
-  // Handle the FCT edge case where the state dropdown says 'FCT - Abuja' but the branch state is 'FCT'
-  if (selectedState.value === 'FCT - Abuja') {
-    return branches.filter((b) => b.state === 'FCT' || (b.address && b.address.toLowerCase().includes('abuja')))
-  }
-
-  const searchState = selectedState.value.toLowerCase()
-
-  return branches.filter(
-    (b) =>
-      (b.state && b.state.toLowerCase() === searchState) ||
-      (b.address && b.address.toLowerCase().includes(searchState)),
-  )
-})
+// Matched on the `state` field only — see branchesInState(). The old address
+// substring fallback showed a Benin branch to Lagos customers, among others.
+const exactMatches = computed(() => branchesInState(selectedState.value))
 
 // Form state
 const isSubmitting = ref(false)
