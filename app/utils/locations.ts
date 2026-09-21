@@ -5,6 +5,9 @@
 // distinguishes a shop that takes payment from a warehouse or an internal store.
 // Abuja Warehouse shares an address with Nyanya Branch and is excluded on that rule;
 // Oke-Ado and OYO Warehouse are built but not yet open.
+// Kaduna Branch (iblock 28 element 12802) closed down and was removed 2026-09-21.
+// It still exists in Bitrix as a branch record and as catalog store 86 — retiring
+// those is a CRM decision, not a website one — so do not re-add it from that list.
 //
 // `bitrixId` is the iblock 28 element id. It is the same key the Lead and Deal
 // `Branch` fields point at, so use it — not the name — for anything CRM-facing.
@@ -484,19 +487,6 @@ export const branches = [
     coords: [5.4897, 7.0342],
     coordinates: [5.4897, 7.0342],
     bitrixId: '9364',
-    approxCoords: true,
-  },
-  {
-    name: 'Kaduna Branch',
-    city: 'Kaduna',
-    state: 'Kaduna',
-    address: 'Starcade Plaza, Plot 67202 Kacha Road, Kakuri, Kaduna',
-    contactPerson: 'Branch Manager',
-    phone: '09154288143',
-    email1: 'novelkaduna@gmail.com',
-    coords: [10.4545, 7.4079],
-    coordinates: [10.4545, 7.4079],
-    bitrixId: '12802',
     approxCoords: true,
   },
   {
