@@ -131,32 +131,41 @@ const submitOrder = async () => {
       },
     })
 
-    cart.value = []
-
     // Pay now: open Paystack over the page rather than navigating away.
     // resumeTransaction uses the access code the server got when it fixed the
     // amount, so nothing here can change what is charged.
+    //
+    // The cart is NOT cleared first. The page stays visible behind the
+    // overlay, so emptying it here shows "Your cart is empty" through the
+    // popup, and anyone who dismisses the popup is left with nothing to retry.
     if (response?.paymentAccessCode && response?.paymentReference && response?.paymentUrl) {
       const completed = await payWithPopup({
         accessCode: response.paymentAccessCode,
         reference: response.paymentReference,
         fallbackUrl: response.paymentUrl,
+        onPaid: () => {
+          cart.value = []
+        },
       })
 
-      // Dismissed. The order exists and is pending, so say so and leave them
-      // here — silently doing nothing would look like the button broke.
+      // Dismissed. The order exists and is pending, and the cart is intact so
+      // they can try again — saying nothing would look like the button broke.
       if (!completed) {
-        addToast('Payment cancelled', 'Your order is saved. You can pay from the link we emailed you.', 'info')
+        addToast('Payment cancelled', 'Your order is saved. You can try paying again.', 'info')
         isSubmitting.value = false
       }
       return
     }
 
-    // No access code — the popup cannot be used, so use the hosted page.
+    // No access code — the popup cannot be used, so use the hosted page. We
+    // are leaving the site, so the cart goes now.
     if (response?.paymentUrl) {
+      cart.value = []
       window.location.href = response.paymentUrl
       return
     }
+
+    cart.value = []
 
     // The order is placed and in the CRM, but the payment could not be opened.
     // Saying "order placed" alone would leave them expecting a payment screen

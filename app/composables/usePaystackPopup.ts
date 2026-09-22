@@ -70,7 +70,14 @@ export interface PaystackPopupArgs {
   reference: string
   /** Used when the popup cannot open at all. */
   fallbackUrl: string
-  onCancel?: () => void
+  /**
+   * Runs after the customer completes payment, before leaving the page.
+   * The cart is emptied here rather than before the popup opens: the page is
+   * still visible behind the overlay, so clearing it early renders "Your cart
+   * is empty" underneath — and strands anyone who dismisses the popup with
+   * nothing to retry.
+   */
+  onPaid?: () => void
 }
 
 export function usePaystackPopup() {
@@ -89,6 +96,7 @@ export function usePaystackPopup() {
 
     return new Promise<boolean>((resolve) => {
       const done = () => {
+        args.onPaid?.()
         // Our own endpoint, not a client-side "paid" assumption: it verifies
         // with Paystack and redirects to /thank-you with the real outcome.
         window.location.href = `/api/payments/paystack/callback?reference=${encodeURIComponent(args.reference)}`
@@ -98,10 +106,7 @@ export function usePaystackPopup() {
       try {
         new window.PaystackPop!().resumeTransaction(args.accessCode, {
           onSuccess: done,
-          onCancel: () => {
-            args.onCancel?.()
-            resolve(false)
-          },
+          onCancel: () => resolve(false),
           // An error inside the widget is not a failed payment — one may still
           // have gone through — so this takes the same verified route out.
           onError: done,
