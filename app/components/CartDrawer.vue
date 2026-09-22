@@ -129,7 +129,6 @@ const { cart, isCartOpen, toggleCart, removeFromCart, updateQuantity, cartTotalA
             <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Estimated Total</span>
             <span class="text-2xl font-black text-slate-900">₦{{ Number(cartTotalAmount).toLocaleString() }}</span>
           </div>
-          <div class="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded">Free Shipping Included</div>
         </div>
 
         <NuxtLink
