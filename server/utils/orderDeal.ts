@@ -3,6 +3,7 @@ import { bitrixFetch } from './bitrixAuth'
 import { BITRIX_DEAL } from './bitrixProperties'
 import { findOrCreateBitrixContact, resolveBitrixContactId } from './bitrixContact'
 import { notifyBranchManagerOfOrder } from './branchManagerNotify'
+import { describeFulfillment, describePaymentMethod } from './paymentMethod'
 
 /**
  * Files a web order in Bitrix as a DEAL.
@@ -98,16 +99,18 @@ function buildComments(order: OrderDealInput): string {
 
   const isPickup = (order.fulfillment || order.paymentMethod) === 'pickup'
 
-  return [
+  const lines = [
     `${order.recovered ? 'RECOVERED WEB ORDER' : 'WEB ORDER'} (${order.orderId})`,
-    `Fulfillment: ${isPickup ? 'Store Pickup' : 'Delivery'}`,
+    `Fulfillment: ${describeFulfillment(isPickup)}`,
     `Branch: ${branchLabel}`,
-    `Payment: ${order.paymentMethod || 'Bank Transfer'}`,
-    `Notes: ${order.customer.note || 'None'}`,
-    '',
-    'ITEMS:',
-    items,
-  ].join('\n')
+    `Payment: ${describePaymentMethod(order.paymentMethod, isPickup)}`,
+  ]
+
+  // The customer was told an agent would call about the cost, so whoever works
+  // the deal needs to know the total excludes it.
+  if (!isPickup) lines.push('Delivery cost: NOT quoted - agent to contact the customer')
+
+  return [...lines, `Notes: ${order.customer.note || 'None'}`, '', 'ITEMS:', items].join('\n')
 }
 
 /**

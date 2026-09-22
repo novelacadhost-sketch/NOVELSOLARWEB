@@ -42,7 +42,32 @@ const form = reactive({
   address: '',
   note: '',
 })
-const paymentMethod = ref('Cash on Delivery')
+// Pay-now checkout, off until Paystack can actually charge. The new step
+// offers Paystack as the only delivery option, so shipping it early would
+// leave delivery uncheckoutable. See nuxt.config.ts.
+const newCheckout = useRuntimeConfig().public.newCheckout
+
+const paymentMethod = ref(newCheckout ? 'paystack' : 'Cash on Delivery')
+
+// Delivery can only be paid online, because the cost is not known yet and an
+// agent settles it afterwards — there is no counter at which to pay.
+const paymentOptions = computed(() =>
+  selectedFulfillment.value === 'pickup'
+    ? [
+        { value: 'paystack', label: 'Pay Now', hint: 'Card or transfer via Paystack', icon: 'credit_card' },
+        { value: 'pay_at_store', label: 'Pay at Store', hint: 'Pay when you collect your items', icon: 'storefront' },
+      ]
+    : [{ value: 'paystack', label: 'Pay Now', hint: 'Card or transfer via Paystack', icon: 'credit_card' }],
+)
+
+// Switching to delivery while "Pay at Store" is selected would otherwise
+// submit a payment method that is not on offer.
+watch(selectedFulfillment, () => {
+  if (!newCheckout) return
+  if (!paymentOptions.value.some((o) => o.value === paymentMethod.value)) {
+    paymentMethod.value = 'paystack'
+  }
+})
 
 const formErrors = reactive({
   firstName: '',
@@ -94,6 +119,9 @@ const submitOrder = async () => {
         })),
         branch: selectedBranch.value,
         paymentMethod: paymentMethod.value,
+        // Was never sent before 2026-09-22, so the server guessed it from
+        // paymentMethod and every store pickup was recorded as a delivery.
+        fulfillment: selectedFulfillment.value,
       },
     })
 
@@ -380,8 +408,59 @@ onMounted(async () => {
           </div>
         </section>
 
+        <!-- Payment Options (pay-now checkout) -->
+        <section v-if="newCheckout" class="space-y-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span
+              class="w-8 h-8 rounded-full bg-[#002888] text-white flex items-center justify-center text-sm font-bold"
+              >4</span
+            >
+            <h2 class="text-xl font-bold text-slate-900">Payment</h2>
+          </div>
+
+          <div
+            v-if="selectedFulfillment === 'delivery'"
+            class="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4"
+          >
+            <span class="material-symbols-outlined text-amber-600 text-xl">local_shipping</span>
+            <div class="text-sm text-amber-900">
+              <p class="font-bold">Delivery cost is not included</p>
+              <p class="text-xs mt-0.5 text-amber-800">
+                You are paying for the items now. Our agent will contact you to confirm the delivery cost for your
+                address before dispatch.
+              </p>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <label
+              v-for="(option, index) in paymentOptions"
+              :key="option.value"
+              class="flex items-center gap-4 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+              :class="index < paymentOptions.length - 1 ? 'border-b border-gray-100' : ''"
+            >
+              <input
+                v-model="paymentMethod"
+                type="radio"
+                :value="option.value"
+                class="w-5 h-5 text-[#002888] border-gray-300 focus:ring-[#002888]"
+              />
+              <div class="flex-1">
+                <p class="font-bold text-slate-900 uppercase text-sm tracking-wide">{{ option.label }}</p>
+                <p class="text-xs text-slate-500">{{ option.hint }}</p>
+              </div>
+              <span class="material-symbols-outlined text-gray-400">{{ option.icon }}</span>
+            </label>
+          </div>
+
+          <p v-if="selectedFulfillment === 'pickup'" class="text-xs text-slate-500 px-1">
+            Paying at the store holds nothing in reserve. Items are sold on a first-come basis until collected.
+          </p>
+        </section>
+
+
         <!-- Payment Options -->
-        <section class="space-y-4">
+        <section v-if="!newCheckout" class="space-y-4">
           <div class="flex items-center gap-2 mb-2">
             <span
               class="w-8 h-8 rounded-full bg-[#002888] text-white flex items-center justify-center text-sm font-bold"
@@ -503,9 +582,14 @@ onMounted(async () => {
                 <span>₦{{ Number(cartTotalAmount).toLocaleString() }}</span>
               </div>
               <div class="flex justify-between text-sm text-slate-600 font-medium">
-                <span>Shipping</span>
-                <span class="text-green-600 font-bold uppercase text-[10px] bg-green-50 px-2 py-0.5 rounded"
-                  >Calculated at next step</span
+                <span>{{ selectedFulfillment === 'pickup' ? 'Collection' : 'Delivery' }}</span>
+                <span
+                  v-if="selectedFulfillment === 'pickup'"
+                  class="text-green-600 font-bold uppercase text-[10px] bg-green-50 px-2 py-0.5 rounded"
+                  >Free</span
+                >
+                <span v-else class="text-amber-700 font-bold uppercase text-[10px] bg-amber-50 px-2 py-0.5 rounded"
+                  >Agent will contact you</span
                 >
               </div>
               <div class="flex justify-between items-end pt-4 border-t border-gray-100">
@@ -514,7 +598,9 @@ onMounted(async () => {
                   <span class="text-3xl font-black text-[#002888]"
                     >₦{{ Number(cartTotalAmount).toLocaleString() }}</span
                   >
-                  <span class="text-[10px] text-slate-400 font-bold uppercase mt-1">Inclusive of all taxes</span>
+                  <span class="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                    {{ selectedFulfillment === 'pickup' ? 'Inclusive of all taxes' : 'Items only — excludes delivery' }}
+                  </span>
                 </div>
               </div>
             </div>

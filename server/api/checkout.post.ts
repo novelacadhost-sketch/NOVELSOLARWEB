@@ -8,6 +8,7 @@ import { normalizeProperty } from '../utils/normalizeProperty'
 import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
 import { createOrderDeal } from '../utils/orderDeal'
+import { describePaymentMethod } from '../utils/paymentMethod'
 import { logger } from '../utils/logger'
 
 import type { H3Event } from 'h3'
@@ -62,6 +63,11 @@ const checkoutSchema = z.object({
     .optional()
     .default({}),
   paymentMethod: z.string().trim().min(2).max(80).optional().default('Bank Transfer'),
+  // Sent by the client since 2026-09-22. Before that it was derived from
+  // paymentMethod === 'pickup', which the website never sent — so every store
+  // pickup was recorded, filed and receipted as a delivery. Optional so an
+  // older cached client still checks out; absent falls back to the old guess.
+  fulfillment: z.enum(['pickup', 'delivery']).optional(),
 })
 
 type BitrixProductResult = {
@@ -233,6 +239,7 @@ async function persistOrder(
     total: number
     branch: Record<string, unknown>
     paymentMethod: string
+    fulfillment: 'pickup' | 'delivery'
   },
 ): Promise<string | null> {
   try {
@@ -246,7 +253,7 @@ async function persistOrder(
       customer_last_name: order.customer.lastName,
       customer_phone: order.customer.phone,
       shipping_address: order.customer.address,
-      fulfillment: order.paymentMethod === 'pickup' ? 'pickup' : 'delivery',
+      fulfillment: order.fulfillment,
       branch: order.branch,
       payment_method: order.paymentMethod,
       subtotal: order.total,
@@ -322,6 +329,8 @@ export default defineEventHandler(async (event) => {
   const { cart, total } = await resolveTrustedCart(event, body.cart || [])
   const branch = body.branch || {}
   const paymentMethod = body.paymentMethod || 'Bank Transfer'
+  const fulfillment = body.fulfillment ?? (paymentMethod === 'pickup' ? 'pickup' : 'delivery')
+  const isPickup = fulfillment === 'pickup'
 
   if (!isValidEmail(customer.email)) {
     throw createError({
@@ -353,6 +362,7 @@ export default defineEventHandler(async (event) => {
     total,
     branch,
     paymentMethod,
+    fulfillment,
   })
 
   logger.info('Checkout API', `Attempting to send order ${orderId} to Bitrix...`)
@@ -367,6 +377,7 @@ export default defineEventHandler(async (event) => {
       total,
       branch,
       paymentMethod,
+      fulfillment,
       userId: await resolveUserIdFromEvent(event),
     })
 
@@ -398,7 +409,7 @@ export default defineEventHandler(async (event) => {
   const orderData = {
     orderNumber: generatedOrderNumber,
     orderDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    paymentMethod: paymentMethod === 'pickup' ? 'Store Pickup' : 'Bank Transfer',
+    paymentMethod: describePaymentMethod(paymentMethod, isPickup),
     branchName: branch?.address || 'N/A',
     subtotal: total,
     shipping: 0,

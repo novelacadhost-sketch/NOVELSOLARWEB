@@ -116,12 +116,20 @@ export default defineNuxtConfig({
     blogGithubOwner: process.env.BLOG_GITHUB_OWNER || 'dev-davies',
     blogGithubRepo: process.env.BLOG_GITHUB_REPO || 'NovelSolar',
     blogGithubBranch: process.env.BLOG_GITHUB_BRANCH || 'master',
+    paystackSecretKey: process.env.PAYSTACK_SECRET_KEY,
     public: {
+      // Safe to ship: Paystack's public key is designed for the browser.
+      // The SECRET key must never appear here.
+      paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY || '',
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || '2348022119908',
       whatsappNumberFormatted: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER_FORMATTED || '+234 802 211 9908',
       baseUrl: SITE_URL,
       supabaseUrl: SUPABASE_URL,
       supabaseAnonKey: SUPABASE_KEY,
+      // Pay-now checkout. Off until Paystack is wired: the new payment step
+      // offers Paystack as the only delivery option, so shipping it before
+      // Paystack can charge would leave delivery uncheckoutable.
+      newCheckout: process.env.NUXT_PUBLIC_NEW_CHECKOUT === 'true',
     },
   },
   supabase: {
