@@ -471,6 +471,7 @@ export default defineEventHandler(async (event) => {
   // `reference` is the ORD- id, which is also orders.client_order_ref, so the
   // webhook and the callback can both find this order again.
   let paymentUrl: string | null = null
+  let paymentAccessCode: string | null = null
   let paymentError: string | null = null
 
   if (paymentMethod === 'paystack') {
@@ -488,6 +489,11 @@ export default defineEventHandler(async (event) => {
         },
       })
       paymentUrl = transaction.authorization_url
+      // Drives the inline popup. The amount is already fixed against this
+      // access code server-side, so the browser cannot alter what is charged
+      // — which is the whole reason the popup resumes a transaction rather
+      // than calling PaystackPop.setup() with an amount of its own.
+      paymentAccessCode = transaction.access_code
     } catch (error: unknown) {
       // The order exists and is in the CRM; only the payment could not be
       // opened. Say so rather than sending the customer to a dead end.
@@ -503,9 +509,12 @@ export default defineEventHandler(async (event) => {
     // Null when the mirror failed; the order itself still went through.
     orderRecordId,
     crmSuccess,
-    // Present only for pay-now orders. The client must redirect here; the
-    // order stays pending until Paystack confirms it.
+    // Present only for pay-now orders. The order stays pending until Paystack
+    // confirms it. The client prefers the popup and keeps the url as a
+    // fallback for when the Paystack script cannot load.
     paymentUrl,
+    paymentAccessCode,
+    paymentReference: paymentUrl ? orderId : null,
     paymentPending: paymentMethod === 'paystack' && !paymentUrl,
     message: crmSuccess ? 'Order processed successfully.' : 'Order received. (Saved locally for retry)',
   }

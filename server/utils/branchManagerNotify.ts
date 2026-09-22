@@ -102,6 +102,33 @@ export interface BranchOrderNotification {
 }
 
 /**
+ * Put the same instruction on the deal's timeline.
+ *
+ * The IM is a private notification: if the `im` scope is missing, or the
+ * manager has left, or they simply miss it, the instruction is gone and the
+ * only symptom is a deal that never gets its warehouse set — which is exactly
+ * what happened. A timeline comment is visible to anyone who opens the deal,
+ * needs only the `crm` scope this integration already depends on, and
+ * survives a handover.
+ */
+async function commentOnDeal(dealId: string, message: string): Promise<boolean> {
+  try {
+    const response = await bitrixFetch<{ error?: string; error_description?: string }>('crm.timeline.comment.add', {
+      method: 'POST',
+      body: { fields: { ENTITY_ID: Number(dealId), ENTITY_TYPE: 'deal', COMMENT: message } },
+    })
+    if (response.error) throw new Error(response.error_description || String(response.error))
+    return true
+  } catch (err) {
+    logger.warn('BranchNotify', 'Could not comment on deal', {
+      error: err instanceof Error ? err.message : String(err),
+      dealId,
+    })
+    return false
+  }
+}
+
+/**
  * Never throws. A missed notification must not cost the order — the deal is
  * already filed by the time this runs, and the branch is on it either way.
  */
@@ -170,16 +197,31 @@ export async function notifyBranchManagerOfOrder(notification: BranchOrderNotifi
       }
     }
 
-    logger.info('BranchNotify', 'Notified branch manager(s) of web order', {
-      orderId,
-      dealId,
-      branchName,
-      storeId: store?.id ?? null,
-      managerIds,
-      delivered,
-    })
+    // Always, not only when the IM failed — the deal is where someone will
+    // actually be looking when they wonder which warehouse to pick.
+    const commented = await commentOnDeal(dealId, message)
 
-    return delivered > 0
+    if (delivered === 0) {
+      logger.error('BranchNotify', 'No branch manager was notified; instruction is on the deal only', {
+        orderId,
+        dealId,
+        branchName,
+        managerIds,
+        commented,
+      })
+    } else {
+      logger.info('BranchNotify', 'Notified branch manager(s) of web order', {
+        orderId,
+        dealId,
+        branchName,
+        storeId: store?.id ?? null,
+        managerIds,
+        delivered,
+        commented,
+      })
+    }
+
+    return delivered > 0 || commented
   } catch (err) {
     logger.warn('BranchNotify', 'Branch manager notification failed', {
       error: err instanceof Error ? err.message : String(err),

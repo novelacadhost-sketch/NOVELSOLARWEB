@@ -2,6 +2,7 @@
 import { z } from 'zod'
 const { cart, cartTotalAmount } = useCart()
 const { addToast } = useToast()
+const { payWithPopup } = usePaystackPopup()
 
 const selectedFulfillment = ref('delivery') // 'delivery' or 'pickup'
 const selectedState = ref('')
@@ -109,7 +110,12 @@ const submitOrder = async () => {
 
   isSubmitting.value = true
   try {
-    const response = await useNuxtApp().$apiFetch<{ paymentUrl?: string | null; paymentPending?: boolean }>('/api/checkout', {
+    const response = await useNuxtApp().$apiFetch<{
+      paymentUrl?: string | null
+      paymentAccessCode?: string | null
+      paymentReference?: string | null
+      paymentPending?: boolean
+    }>('/api/checkout', {
       method: 'POST',
       body: {
         customer: form,
@@ -127,8 +133,26 @@ const submitOrder = async () => {
 
     cart.value = []
 
-    // Pay now: hand the customer to Paystack. A full page navigation, not
-    // navigateTo — the destination is off-site.
+    // Pay now: open Paystack over the page rather than navigating away.
+    // resumeTransaction uses the access code the server got when it fixed the
+    // amount, so nothing here can change what is charged.
+    if (response?.paymentAccessCode && response?.paymentReference && response?.paymentUrl) {
+      const completed = await payWithPopup({
+        accessCode: response.paymentAccessCode,
+        reference: response.paymentReference,
+        fallbackUrl: response.paymentUrl,
+      })
+
+      // Dismissed. The order exists and is pending, so say so and leave them
+      // here — silently doing nothing would look like the button broke.
+      if (!completed) {
+        addToast('Payment cancelled', 'Your order is saved. You can pay from the link we emailed you.', 'info')
+        isSubmitting.value = false
+      }
+      return
+    }
+
+    // No access code — the popup cannot be used, so use the hosted page.
     if (response?.paymentUrl) {
       window.location.href = response.paymentUrl
       return
