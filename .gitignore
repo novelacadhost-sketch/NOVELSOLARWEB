@@ -55,3 +55,9 @@ server/scratch
 
 # Built plugin bundle — regenerate from wordpress/novelsolar-bitrix-sync/
 wordpress/*.zip
+
+# Kilo agent scaffolding. It creates git worktrees under .kilo/worktrees/,
+# which git hides from status only while they are registered — once one is
+# removed or left behind it shows up as untracked clutter, and ESLint scans
+# it as a second copy of the whole repo (525 warnings instead of 264).
+.kilo/

@@ -5,6 +5,13 @@ export default createConfigForNuxt({
     tooling: true,
   },
 })
+  // Flat config does not read .gitignore, so this has to be said twice. The
+  // Kilo agent checks out git worktrees under .kilo/worktrees/ — a second full
+  // copy of the repo, which doubled the warning count (525 vs 264) and every
+  // finding with it.
+  .append({
+    ignores: ['.kilo/**', 'wordpress/**'],
+  })
   .override('nuxt/typescript/rules', {
     rules: {
       // Align with CLAUDE.md: "no any" is the goal, but many files still have
