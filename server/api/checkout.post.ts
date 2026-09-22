@@ -366,41 +366,53 @@ export default defineEventHandler(async (event) => {
     fulfillment,
   })
 
-  logger.info('Checkout API', `Attempting to send order ${orderId} to Bitrix...`)
+  // A pay-now order does NOT get a deal yet.
+  //
+  // The deal is the sales pipeline, and an abandoned card form would otherwise
+  // leave a "New Product Sales" deal nobody ever paid for. Payment creates it
+  // instead — see recordPaystackPayment(). Pay-at-store is the opposite case:
+  // there is no online payment to wait for, so the deal is created now and
+  // sits until the customer walks in.
+  const deferDealUntilPaid = paymentMethod === 'paystack'
 
   let crmSuccess = false
-  try {
-    // A sale is a Deal, not a Lead. See server/utils/orderDeal.ts.
-    const deal = await createOrderDeal({
-      orderId,
-      customer,
-      cart,
-      total,
-      branch,
-      paymentMethod,
-      fulfillment,
-      userId: await resolveUserIdFromEvent(event),
-    })
-
-    crmSuccess = true
-    logger.info('Checkout API', `✅ Created Deal in Bitrix for order ${orderId}`, {
-      orderId,
-      dealId: deal.dealId,
-    })
-  } catch (error: unknown) {
-    const err = error as { data?: unknown }
-    logger.error('Checkout API', 'Bitrix order submission failed', { error: err.data || error, orderId })
-
-    // SAFETY NET: persist the order so it isn't lost while Bitrix is down.
+  if (deferDealUntilPaid) {
+    logger.info('Checkout API', `Order ${orderId} awaiting payment; deal deferred`, { orderId })
+  } else {
+    logger.info('Checkout API', `Attempting to send order ${orderId} to Bitrix...`)
     try {
-      const storage = useStorage('data:failed-orders')
-      await storage.setItem(orderId, orderPayload)
-      logger.info('Checkout API', `Order ${orderId} saved to fallback queue.`)
-    } catch (storageError) {
-      logger.error('Checkout API', '[CRITICAL] Failed to save order to fallback storage', {
-        error: storageError,
+      // A sale is a Deal, not a Lead. See server/utils/orderDeal.ts.
+      const deal = await createOrderDeal({
         orderId,
+        customer,
+        cart,
+        total,
+        branch,
+        paymentMethod,
+        fulfillment,
+        userId: await resolveUserIdFromEvent(event),
       })
+
+      crmSuccess = true
+      logger.info('Checkout API', `✅ Created Deal in Bitrix for order ${orderId}`, {
+        orderId,
+        dealId: deal.dealId,
+      })
+    } catch (error: unknown) {
+      const err = error as { data?: unknown }
+      logger.error('Checkout API', 'Bitrix order submission failed', { error: err.data || error, orderId })
+
+      // SAFETY NET: persist the order so it isn't lost while Bitrix is down.
+      try {
+        const storage = useStorage('data:failed-orders')
+        await storage.setItem(orderId, orderPayload)
+        logger.info('Checkout API', `Order ${orderId} saved to fallback queue.`)
+      } catch (storageError) {
+        logger.error('Checkout API', '[CRITICAL] Failed to save order to fallback storage', {
+          error: storageError,
+          orderId,
+        })
+      }
     }
   }
 
@@ -410,7 +422,9 @@ export default defineEventHandler(async (event) => {
   const orderData = {
     orderNumber: generatedOrderNumber,
     orderDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    paymentMethod: describePaymentMethod(paymentMethod, isPickup),
+    // Not paid yet when the deal was deferred — that is exactly what deferring
+    // it means.
+    paymentMethod: describePaymentMethod(paymentMethod, isPickup, !deferDealUntilPaid),
     branchName: branch?.address || 'N/A',
     subtotal: total,
     shipping: 0,

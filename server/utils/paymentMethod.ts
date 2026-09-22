@@ -24,7 +24,14 @@ const LABELS: Record<string, string> = {
  * separate facts, and conflating them is what made every store pickup read as
  * a delivery until 2026-09-22.
  */
-export function describePaymentMethod(method: string | undefined, isPickup: boolean): string {
+export function describePaymentMethod(method: string | undefined, isPickup: boolean, paid = true): string {
+  // The receipt goes out at checkout, before the customer has been anywhere
+  // near Paystack. Calling that "Paid online" would be a false record of
+  // payment on the one document the customer keeps.
+  if (!paid && String(method ?? '').toLowerCase() === PAYMENT_METHOD.PAYSTACK) {
+    return 'Awaiting payment (Paystack)'
+  }
+
   const raw = String(method ?? '').trim()
   if (!raw) return isPickup ? 'Pay at store on collection' : 'Bank Transfer'
 

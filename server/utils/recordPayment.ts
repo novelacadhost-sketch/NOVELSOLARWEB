@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from './logger'
 import { fromKobo, type PaystackTransaction } from './paystack'
+import { createOrderDeal } from './orderDeal'
 
 /**
  * Marks an order paid, from either the webhook or the browser callback.
@@ -21,6 +22,22 @@ interface OrderRow {
   status: string
   total: number | null
   client_order_ref: string | null
+  user_id: string | null
+  customer_email: string | null
+  customer_first_name: string | null
+  customer_last_name: string | null
+  customer_phone: string | null
+  shipping_address: string | null
+  fulfillment: string | null
+  branch: Record<string, unknown> | null
+  payment_method: string | null
+}
+
+interface OrderItemRow {
+  bitrix_product_id: string | null
+  name: string
+  unit_price: number
+  quantity: number
 }
 
 interface OrderEventInsert {
@@ -53,7 +70,10 @@ export async function recordPaystackPayment(
 
     const { data, error } = await supabase
       .from('orders')
-      .select('id, status, total, client_order_ref')
+      .select(
+        'id, status, total, client_order_ref, user_id, customer_email, customer_first_name, ' +
+          'customer_last_name, customer_phone, shipping_address, fulfillment, branch, payment_method',
+      )
       .eq('client_order_ref', reference)
       .maybeSingle<OrderRow>()
 
@@ -119,10 +139,123 @@ export async function recordPaystackPayment(
     }
 
     logger.info('Paystack', 'Order confirmed by payment', { reference, orderId: data.id, amount: paid })
+
+    // The deal is created HERE, not at checkout, for pay-now orders — payment
+    // is what makes it a sale. Non-fatal: the money is already taken and the
+    // order is confirmed, so a CRM outage must not undo any of that. The
+    // outbox picks it up instead.
+    await createDealForPaidOrder(event, data, reference)
+
     return { result: 'confirmed', orderId: data.id }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('Paystack', 'Could not record payment', { reference, error: message })
     return { result: 'error', message }
+  }
+}
+
+/**
+ * Rebuild the order from what was persisted at checkout and file the deal.
+ *
+ * Everything needed is already in Supabase — persistOrder() writes the
+ * customer and branch onto `orders` and the line items onto `order_items` —
+ * so nothing has to be carried through Paystack and back.
+ *
+ * Only for orders whose deal was deferred. A pay-at-store order already has
+ * one from checkout, and creating a second would duplicate it in the pipeline.
+ */
+async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference: string): Promise<void> {
+  if (order.payment_method !== 'paystack') return
+
+  try {
+    const supabase = serverSupabaseServiceRole(event)
+    const { data: items, error } = await supabase
+      .from('order_items')
+      .select('bitrix_product_id, name, unit_price, quantity')
+      .eq('order_id', order.id)
+      .returns<OrderItemRow[]>()
+
+    if (error) throw error
+
+    const deal = await createOrderDeal({
+      orderId: reference,
+      customer: {
+        firstName: order.customer_first_name ?? undefined,
+        lastName: order.customer_last_name ?? undefined,
+        email: order.customer_email ?? '',
+        phone: order.customer_phone ?? undefined,
+        address: order.shipping_address ?? undefined,
+      },
+      cart: (items ?? []).map((item) => ({
+        id: item.bitrix_product_id ?? undefined,
+        name: item.name,
+        price: Number(item.unit_price),
+        quantity: item.quantity,
+      })),
+      total: Number(order.total ?? 0),
+      branch: order.branch,
+      paymentMethod: order.payment_method ?? undefined,
+      fulfillment: order.fulfillment ?? undefined,
+      userId: order.user_id,
+    })
+
+    logger.info('Paystack', 'Created deal for paid order', { reference, dealId: deal.dealId })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // Queue it for the existing drain rather than losing it. The customer has
+    // paid; the deal turning up ten minutes late is a far smaller problem than
+    // a paid order the CRM never hears about.
+    logger.error('Paystack', 'Deal creation failed for paid order; queueing', { reference, error: message })
+    await queueDealForRetry(event, order, reference)
+  }
+}
+
+/**
+ * Hand the order to `crm_outbox`, which the drain already knows how to turn
+ * into a deal (see /api/admin/drain-crm-outbox). Same payload shape the
+ * place_order_from_cart RPC writes, so the drain needs no special case.
+ */
+async function queueDealForRetry(event: H3Event, order: OrderRow, reference: string): Promise<void> {
+  try {
+    const supabase = serverSupabaseServiceRole(event)
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('bitrix_product_id, name, unit_price, quantity')
+      .eq('order_id', order.id)
+      .returns<OrderItemRow[]>()
+
+    const row = {
+      event_type: 'order.created',
+      source_table: 'orders',
+      source_id: order.id,
+      payload: {
+        orderId: reference,
+        customer: {
+          firstName: order.customer_first_name,
+          lastName: order.customer_last_name,
+          email: order.customer_email,
+          phone: order.customer_phone,
+          address: order.shipping_address,
+        },
+        branch: order.branch ?? {},
+        paymentMethod: order.payment_method,
+        fulfillment: order.fulfillment,
+        total: Number(order.total ?? 0),
+        cart: (items ?? []).map((item) => ({
+          id: item.bitrix_product_id,
+          name: item.name,
+          price: Number(item.unit_price),
+          quantity: item.quantity,
+        })),
+      },
+    }
+
+    const { error } = await supabase.from('crm_outbox').insert(row as never)
+    if (error) throw error
+  } catch (err) {
+    logger.error('Paystack', '[CRITICAL] Paid order has no deal and could not be queued', {
+      reference,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 }
