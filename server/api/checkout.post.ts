@@ -9,6 +9,7 @@ import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
 import { createOrderDeal } from '../utils/orderDeal'
 import { describePaymentMethod } from '../utils/paymentMethod'
+import { initialiseTransaction } from '../utils/paystack'
 import { logger } from '../utils/logger'
 
 import type { H3Event } from 'h3'
@@ -449,6 +450,38 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Pay now: open the Paystack transaction here, with the total this handler
+  // derived from Bitrix. Deliberately not a separate endpoint taking an
+  // amount — that would let the browser name its own price.
+  //
+  // `reference` is the ORD- id, which is also orders.client_order_ref, so the
+  // webhook and the callback can both find this order again.
+  let paymentUrl: string | null = null
+  let paymentError: string | null = null
+
+  if (paymentMethod === 'paystack') {
+    try {
+      const transaction = await initialiseTransaction({
+        reference: orderId,
+        amount: total,
+        email: customer.email,
+        callbackUrl: `${String(config.public.baseUrl).replace(/\/$/, '')}/api/payments/paystack/callback`,
+        metadata: {
+          orderId,
+          orderRecordId,
+          fulfillment,
+          branch: (branch?.name as string | undefined) ?? null,
+        },
+      })
+      paymentUrl = transaction.authorization_url
+    } catch (error: unknown) {
+      // The order exists and is in the CRM; only the payment could not be
+      // opened. Say so rather than sending the customer to a dead end.
+      paymentError = error instanceof Error ? error.message : String(error)
+      logger.error('Checkout API', 'Could not initialise Paystack transaction', { orderId, error: paymentError })
+    }
+  }
+
   return {
     success: true,
     orderId,
@@ -456,6 +489,10 @@ export default defineEventHandler(async (event) => {
     // Null when the mirror failed; the order itself still went through.
     orderRecordId,
     crmSuccess,
+    // Present only for pay-now orders. The client must redirect here; the
+    // order stays pending until Paystack confirms it.
+    paymentUrl,
+    paymentPending: paymentMethod === 'paystack' && !paymentUrl,
     message: crmSuccess ? 'Order processed successfully.' : 'Order received. (Saved locally for retry)',
   }
 })

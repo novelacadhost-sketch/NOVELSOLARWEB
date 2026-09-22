@@ -109,7 +109,7 @@ const submitOrder = async () => {
 
   isSubmitting.value = true
   try {
-    await useNuxtApp().$apiFetch('/api/checkout', {
+    const response = await useNuxtApp().$apiFetch<{ paymentUrl?: string | null; paymentPending?: boolean }>('/api/checkout', {
       method: 'POST',
       body: {
         customer: form,
@@ -125,10 +125,26 @@ const submitOrder = async () => {
       },
     })
 
-    // Clear cart and redirect
     cart.value = []
+
+    // Pay now: hand the customer to Paystack. A full page navigation, not
+    // navigateTo — the destination is off-site.
+    if (response?.paymentUrl) {
+      window.location.href = response.paymentUrl
+      return
+    }
+
+    // The order is placed and in the CRM, but the payment could not be opened.
+    // Saying "order placed" alone would leave them expecting a payment screen
+    // that never comes.
+    if (response?.paymentPending) {
+      addToast('Order Placed', 'We could not start the payment. Our team will contact you to complete it.', 'info')
+      navigateTo('/thank-you?payment=pending')
+      return
+    }
+
     addToast('Order Placed', 'Your order was successfully sent to NovelSolar!', 'success')
-    navigateTo('/thank-you') // Assuming you'll make a quick thank-you page next!
+    navigateTo('/thank-you')
   } catch (error) {
     addToast('Order Error', 'There was an issue processing your order. Please try again.', 'error')
   } finally {

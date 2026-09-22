@@ -98,3 +98,50 @@ export async function verifyTransaction(reference: string): Promise<PaystackTran
  * status — abandoned, failed, ongoing, pending, reversed — is not payment.
  */
 export const isPaid = (transaction: Pick<PaystackTransaction, 'status'>) => transaction.status === 'success'
+
+export interface InitialisedTransaction {
+  authorization_url: string
+  access_code: string
+  reference: string
+}
+
+export interface InitialiseArgs {
+  /** The ORD-… id. Becomes orders.client_order_ref, which is how a payment finds its order. */
+  reference: string
+  /** Naira. Converted to kobo here so no caller has to remember. */
+  amount: number
+  email: string
+  callbackUrl: string
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Open a transaction and get the URL to send the customer to.
+ *
+ * THE AMOUNT MUST BE SERVER-DERIVED. This is called from /api/checkout with
+ * the total that resolveTrustedCart() computed from Bitrix with the dealer
+ * gate applied — never with a number the browser sent, or the customer picks
+ * their own price.
+ *
+ * Throws. A caller that cannot open a transaction has to tell the customer,
+ * not quietly hand them an order they have no way to pay for.
+ */
+export async function initialiseTransaction(args: InitialiseArgs): Promise<InitialisedTransaction> {
+  const response = await $fetch<PaystackEnvelope<InitialisedTransaction>>(`${PAYSTACK_API}/transaction/initialize`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getPaystackSecret()}` },
+    body: {
+      reference: args.reference,
+      amount: toKobo(args.amount),
+      email: args.email,
+      callback_url: args.callbackUrl,
+      currency: 'NGN',
+      metadata: args.metadata ?? {},
+    },
+  })
+
+  if (!response.status || !response.data?.authorization_url) {
+    throw new Error(response.message || 'Paystack did not return an authorization url')
+  }
+  return response.data
+}
