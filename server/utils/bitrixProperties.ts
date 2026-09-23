@@ -68,6 +68,19 @@ export const BITRIX_DEAL = {
 } as const
 
 /**
+ * CRM source ids, verified against `crm.status.list` (ENTITY_ID 'SOURCE') on
+ * 2026-09-23. These are opaque codes, not names — "WEB" reads like a sensible
+ * default but is literally "Website Contact Form" on this portal, which is
+ * wrong for someone who has just bought something.
+ */
+export const BITRIX_SOURCE = {
+  /** "Website Sale" — a customer created by an actual purchase. */
+  WEBSITE_SALE: 'UC_WXJIAR',
+  /** "Website Contact Form" — the enquiry forms, and the default elsewhere. */
+  WEBSITE_FORM: 'WEB',
+} as const
+
+/**
  * Parse a Bitrix price property value.
  *
  * Values are usually "45000.00", but at least one product stores

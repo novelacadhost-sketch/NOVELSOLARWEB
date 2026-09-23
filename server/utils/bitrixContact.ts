@@ -1,6 +1,7 @@
 import { logger } from './logger'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { bitrixFetch } from './bitrixAuth'
+import { BITRIX_SOURCE } from './bitrixProperties'
 
 /**
  * Resolves the Bitrix24 CRM contact that belongs to a Supabase user.
@@ -36,6 +37,11 @@ interface ContactDetails {
   firstName?: string
   lastName?: string
   phone?: string
+  /**
+   * Only applied when the contact is CREATED. Buyers get "Website Sale";
+   * everyone else keeps the default, which is the contact-form source.
+   */
+  source?: string
 }
 
 /**
@@ -64,7 +70,7 @@ export async function findOrCreateBitrixContact(email: string, details: ContactD
     NAME: details.firstName || email.split('@')[0],
     EMAIL: [{ VALUE: email, VALUE_TYPE: 'WORK' }],
     TYPE_ID: 'CLIENT',
-    SOURCE_ID: 'WEB',
+    SOURCE_ID: details.source || BITRIX_SOURCE.WEBSITE_FORM,
   }
   if (details.lastName) fields.LAST_NAME = details.lastName
   if (details.phone) fields.PHONE = [{ VALUE: details.phone, VALUE_TYPE: 'WORK' }]
@@ -83,7 +89,11 @@ export async function findOrCreateBitrixContact(email: string, details: ContactD
  * profile row on first sign-in. Throws if Bitrix is unreachable — callers
  * decide whether that is fatal, since the next request retries cleanly.
  */
-export async function resolveBitrixContactId(userId: string, email: string): Promise<string> {
+export async function resolveBitrixContactId(
+  userId: string,
+  email: string,
+  details: ContactDetails = {},
+): Promise<string> {
   const supabase = getSupabaseAdminClient()
 
   const { data, error } = await supabase
@@ -99,7 +109,7 @@ export async function resolveBitrixContactId(userId: string, email: string): Pro
   const existing = (data as ProfileContactRow | null)?.bitrix_contact_id
   if (existing) return existing
 
-  const contactId = await findOrCreateBitrixContact(email)
+  const contactId = await findOrCreateBitrixContact(email, details)
 
   // Update when the row already exists rather than upserting the whole
   // payload: an approved dealer has a profile here, and its `role`,

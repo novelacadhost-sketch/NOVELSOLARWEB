@@ -1,6 +1,6 @@
 import { logger } from './logger'
 import { bitrixFetch } from './bitrixAuth'
-import { BITRIX_DEAL } from './bitrixProperties'
+import { BITRIX_DEAL, BITRIX_SOURCE } from './bitrixProperties'
 import { findOrCreateBitrixContact, resolveBitrixContactId } from './bitrixContact'
 import { notifyBranchManagerOfOrder } from './branchManagerNotify'
 import { describeFulfillment, describePaymentMethod } from './paymentMethod'
@@ -124,16 +124,23 @@ async function resolveContact(order: OrderDealInput): Promise<string | null> {
   const email = order.customer.email?.trim()
   if (!email) return null
 
+  // Applied only if the contact does not exist yet. Someone whose first
+  // appearance in the CRM is a purchase came from a website sale, not from
+  // the contact form that 'WEB' actually denotes on this portal. An existing
+  // contact keeps whatever source sales gave it.
+  const details = {
+    firstName: order.customer.firstName,
+    lastName: order.customer.lastName,
+    phone: order.customer.phone,
+    source: BITRIX_SOURCE.WEBSITE_SALE,
+  }
+
   try {
     if (order.userId) {
       // Also caches the link on profiles.bitrix_contact_id.
-      return await resolveBitrixContactId(order.userId, email)
+      return await resolveBitrixContactId(order.userId, email, details)
     }
-    return await findOrCreateBitrixContact(email, {
-      firstName: order.customer.firstName,
-      lastName: order.customer.lastName,
-      phone: order.customer.phone,
-    })
+    return await findOrCreateBitrixContact(email, details)
   } catch (err) {
     logger.warn('OrderDeal', 'Contact resolution failed; filing deal without a contact', {
       error: err instanceof Error ? err.message : String(err),
