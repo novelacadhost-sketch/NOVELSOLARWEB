@@ -196,8 +196,9 @@ Content-Type: application/json
     "note":      ""          // optional, ≤1000
   },
   "cart": [ { "id": "1234", "quantity": 2 } ],   // 1–50 items, quantity 1–99
-  "branch": { "name": "...", "address": "...", "state": "..." },
-  "paymentMethod": "Bank Transfer"               // or "pickup"
+  "branch": { "name": "...", "address": "...", "state": "...", "bitrixId": "9356" },
+  "fulfillment": "pickup",        // "pickup" | "delivery"
+  "paymentMethod": "paystack"     // "paystack" | "pay_at_store"
 }
 ```
 
@@ -205,16 +206,87 @@ Content-Type: application/json
 server-side and dealer pricing is applied from your token, so a tampered cart cannot set its own
 total. Any price you send is ignored.
 
+**Always send `branch.bitrixId`.** It is the branch's id in the Bitrix branch list, and it is what
+files the order against the right store and messages that branch's manager. Without it the order
+still goes through, but lands with no branch and nobody is told. Every branch in the list carries
+one — see [Branches](#7-branches).
+
+**Payment rules** — the same as the website:
+
+| `fulfillment` | allowed `paymentMethod` |
+| --- | --- |
+| `pickup` | `paystack` or `pay_at_store` |
+| `delivery` | `paystack` only — the delivery cost is quoted later by an agent, so tell the customer the total is for the items only |
+
 Response:
 
 ```jsonc
-{ "success": true, "orderId": "ORD-...", "crmSuccess": true, "message": "..." }
+{
+  "success": true,
+  "orderId": "ORD-...",            // also the Paystack reference
+  "orderRecordId": "uuid",         // the row in public.orders
+  "crmSuccess": true,
+  "paymentUrl": "https://checkout.paystack.com/...",   // paystack only
+  "paymentAccessCode": "...",                          // paystack only
+  "paymentReference": "ORD-...",                       // paystack only
+  "paymentPending": false,         // true = order saved but payment could not be opened
+  "message": "..."
+}
 ```
 
-`crmSuccess: false` with `success: true` means the order was captured and queued but did not
-reach the CRM — still show the customer a confirmation. They also get a receipt email either way.
+### Taking the payment inside the app
 
-For `branch`, use the live branch list — see [Branches](#7-branches).
+**Open `paymentUrl` in an in-app WebView, not the system browser.** `url_launcher` (or anything
+that hands off to Chrome/Safari) takes the customer out of the app, and after paying they finish on
+the *website's* thank-you page with no way back. That is the current behaviour, and the reason for
+this section.
+
+Load `paymentUrl` in a `webview_flutter` WebView and watch its navigation:
+
+- **Let `/api/payments/paystack/callback` load.** That request is where the server verifies the
+  payment with Paystack. Do not block it.
+- **Intercept the redirect to `/thank-you`.** The callback sends the WebView to
+  `/thank-you?payment=<status>&ref=ORD-...`. When you see that URL, cancel the navigation, close
+  the WebView and show your own screen.
+
+```dart
+NavigationDelegate(
+  onNavigationRequest: (request) {
+    final uri = Uri.parse(request.url);
+    if (uri.path == '/thank-you') {
+      final status = uri.queryParameters['payment'] ?? 'unknown';
+      Navigator.of(context).pop(status);   // close the WebView, hand back the result
+      return NavigationDecision.prevent;
+    }
+    return NavigationDecision.navigate;
+  },
+)
+```
+
+`payment` is one of:
+
+| value | meaning | what to show |
+| --- | --- | --- |
+| `success` | Paystack confirmed the payment | order confirmed |
+| `failed` | not paid | order saved, unpaid — offer to try again |
+| `pending` | could not confirm right now | **not a failure** — they may have paid; it will be matched |
+| `review` | amount did not match the order | the team will be in touch |
+
+**If the customer closes the WebView without paying**, the order stays `pending` and no CRM deal is
+created. **Keep their cart** until you get `success` — clearing it before payment strands anyone who
+backs out, which is the bug the website had.
+
+**The source of truth is the order row, not the URL.** For anything that matters, read
+`public.orders` by `orderRecordId` — you can read your own orders — and check `status` is
+`confirmed`. The Paystack webhook usually confirms it before the customer is back in the app.
+
+`pay_at_store` returns no `paymentUrl`: the order is placed immediately and paid on collection.
+
+`paymentPending: true` means the order was saved but Paystack could not be opened — tell the
+customer the team will contact them to complete payment.
+
+`crmSuccess: false` with `success: true` means the order was captured and queued but did not
+reach the CRM — still show the customer a confirmation.
 
 ---
 
@@ -236,7 +308,7 @@ safe to show.
 
 ## 7. Branches
 
-38 selling branches, in `app/utils/locations.ts` in the web repo. There's no endpoint for them
+37 selling branches, in `app/utils/locations.ts` in the web repo. There's no endpoint for them
 yet — ask Davies for the current list, or scrape it from `/branch-outlets`.
 
 Each has `name`, `city`, `state`, `address`, `phone`, `email1`, `coords`, and `bitrixId`.
