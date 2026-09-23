@@ -95,7 +95,20 @@ await supabase.from('products')
 > nuisance.
 
 Columns on `public_products`: `id`, `name`, `price`, `description`, `specs`, `gallery_urls`,
-`image_url`, `quantity`.
+`image_url`, `quantity`, `section_id`, `section_name`.
+
+**Stock: read it from `products`, not `public_products`.** `public_products.quantity` is always
+`null` on purpose — it keeps the WordPress shop from switching on stock tracking. Real stock is on
+the base table:
+
+```dart
+final stock = await supabase.from('products').select('id, quantity');
+```
+
+`quantity` is the company-wide total across all warehouses, refreshed nightly. It is `null` for
+services and for the few products the catalog does not track — treat `null` as "not limited", not
+as zero. Checkout re-checks stock live when an order is placed, so a stale number can never let an
+order through that should not go.
 
 ---
 
