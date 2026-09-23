@@ -29,11 +29,33 @@ interface CatalogProductRow {
 interface CatalogListResponse {
   result?: { products?: CatalogProductRow[] }
   next?: number
+  total?: number
+  error?: string
+  error_description?: string
+}
+
+interface BatchResponse {
+  result?: {
+    result?: Record<string, { products?: CatalogProductRow[] }>
+    result_error?: Record<string, unknown> | unknown[]
+  }
   error?: string
   error_description?: string
 }
 
 const PAGE_SIZE = 50
+/** Bitrix accepts at most 50 commands per batch call. */
+const BATCH_LIMIT = 50
+const SELECT = ['id', 'iblockId', 'name', 'type', 'quantity']
+
+/**
+ * The value the product mirror stores. Services and products the catalog
+ * tracks no number for store null, which every reader — the app, and the
+ * place_order_from_cart RPC — treats as "not stock-limited".
+ */
+export function mirrorQuantity(stock: CatalogStock | undefined): number | null {
+  return stock && !stock.isService ? stock.quantity : null
+}
 
 function toStock(row: CatalogProductRow): CatalogStock {
   const raw = row.quantity
@@ -65,7 +87,7 @@ export async function fetchCatalogStock(ids?: Array<string | number>): Promise<M
   for (;;) {
     const response = await bitrixFetch<CatalogListResponse>('catalog.product.list', {
       method: 'POST',
-      body: { select: ['id', 'iblockId', 'name', 'type', 'quantity'], filter, start },
+      body: { select: SELECT, filter, start },
     })
     if (response.error) throw new Error(response.error_description || String(response.error))
 
@@ -76,5 +98,65 @@ export async function fetchCatalogStock(ids?: Array<string | number>): Promise<M
     start = response.next
   }
 
+  return stock
+}
+
+function listCommand(start: number): string {
+  const query = new URLSearchParams()
+  for (const field of SELECT) query.append('select[]', field)
+  query.append('filter[iblockId]', String(BITRIX_CATALOG.IBLOCK_ID))
+  query.append('start', String(start))
+  return `catalog.product.list?${query.toString()}`
+}
+
+/**
+ * Stock for the WHOLE catalog, for the mirror sync.
+ *
+ * Paging one call at a time takes about 10 seconds for ~1160 products, which
+ * the sync cannot spare inside a 60-second function that also runs image
+ * discovery. So: one call for the first page, which reports the total, then
+ * every remaining page in a single `batch` request — two round trips in all.
+ *
+ * All or nothing. If any page fails this throws rather than returning a partial
+ * map, because the sync writes a quantity for every row it has, and a product
+ * missing from a partial map would have its stock overwritten with null.
+ */
+export async function fetchAllCatalogStock(): Promise<Map<string, CatalogStock>> {
+  const first = await bitrixFetch<CatalogListResponse>('catalog.product.list', {
+    method: 'POST',
+    body: { select: SELECT, filter: { iblockId: BITRIX_CATALOG.IBLOCK_ID }, start: 0 },
+  })
+  if (first.error) throw new Error(first.error_description || String(first.error))
+
+  const stock = new Map<string, CatalogStock>()
+  for (const row of first.result?.products ?? []) stock.set(String(row.id), toStock(row))
+
+  const total = Number(first.total ?? 0)
+  const starts: number[] = []
+  for (let start = PAGE_SIZE; start < total; start += PAGE_SIZE) starts.push(start)
+
+  for (let i = 0; i < starts.length; i += BATCH_LIMIT) {
+    const chunk = starts.slice(i, i + BATCH_LIMIT)
+    const cmd: Record<string, string> = {}
+    chunk.forEach((start, index) => {
+      cmd[`p${index}`] = listCommand(start)
+    })
+
+    const response = await bitrixFetch<BatchResponse>('batch', { method: 'POST', body: { halt: 1, cmd } })
+    if (response.error) throw new Error(response.error_description || String(response.error))
+
+    const errors = response.result?.result_error
+    const failed = Array.isArray(errors) ? errors.length : Object.keys(errors ?? {}).length
+    if (failed) throw new Error(`${failed} catalog page(s) failed in batch`)
+
+    const results = response.result?.result ?? {}
+    chunk.forEach((_, index) => {
+      for (const row of results[`p${index}`]?.products ?? []) stock.set(String(row.id), toStock(row))
+    })
+  }
+
+  if (total && stock.size < total) {
+    throw new Error(`Catalog returned ${stock.size} of ${total} products`)
+  }
   return stock
 }

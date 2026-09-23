@@ -3,12 +3,53 @@ import { getSupabaseAdminClient } from './supabaseAdmin'
 import { normalizeBitrixProduct, type BitrixProduct } from './normalizeBitrixProduct'
 import { getSectionMap } from './bitrixSections'
 import { mirrorPrimaryImage, isProxiedBitrixImage, discoverProductsWithImages } from './bitrixProductImages'
+import { fetchAllCatalogStock, mirrorQuantity } from './catalogStock'
 
 export interface ProductSyncResult {
   synced: number
   deleted: number
   /** Absent when the image step could not run at all. */
   images?: MirrorReport
+  stock: StockReport
+}
+
+export interface StockReport {
+  applied: boolean
+  /** Rows that got a real stock number (products, not services). */
+  tracked: number
+  skipped?: string
+}
+
+/**
+ * Real stock into products.quantity.
+ *
+ * crm.product.list — the call this sync pages through — never returns
+ * QUANTITY, so until 2026-09-23 the column was null on every row. Stock lives
+ * in the catalog module and is read in one batched pass.
+ *
+ * IF THAT READ FAILS, THE COLUMN IS LEFT ALONE. This sync upserts whole rows,
+ * so writing null would wipe every product's stock over one bad request.
+ * Dropping the key from every row makes the upsert leave `quantity` as it was.
+ *
+ * public_products deliberately reports quantity as null (20260923120000), so
+ * this reaches the app and checkout but not WordPress.
+ */
+async function applyStock(mapped: { id: string; quantity?: number | null }[]): Promise<StockReport> {
+  try {
+    const stock = await fetchAllCatalogStock()
+    let tracked = 0
+    for (const product of mapped) {
+      product.quantity = mirrorQuantity(stock.get(product.id))
+      if (product.quantity !== null) tracked++
+    }
+    logger.info('ProductSync', 'Stock applied', { tracked })
+    return { applied: true, tracked }
+  } catch (error) {
+    for (const product of mapped) delete product.quantity
+    const message = error instanceof Error ? error.message : String(error)
+    logger.warn('ProductSync', 'Stock lookup failed; existing quantities kept', { error: message })
+    return { applied: false, tracked: 0, skipped: message }
+  }
 }
 
 /**
@@ -251,6 +292,7 @@ export async function syncAllProducts(): Promise<ProductSyncResult> {
     const supabase = getSupabaseAdminClient()
 
     const images = await applyMirroredImages(supabase, mappedProducts)
+    const stock = await applyStock(mappedProducts)
 
     if (mappedProducts.length > 0) {
       const { error: upsertError } = await supabase
@@ -288,8 +330,12 @@ export async function syncAllProducts(): Promise<ProductSyncResult> {
       .upsert({ key: 'products_last_synced', value: new Date().toISOString() } as never, { onConflict: 'key' })
     if (metaError) throw metaError
 
-    logger.info('ProductSync', 'Sync complete', { synced: mappedProducts.length, deleted: deletedCount })
-    return { synced: mappedProducts.length, deleted: deletedCount, images }
+    logger.info('ProductSync', 'Sync complete', {
+      synced: mappedProducts.length,
+      deleted: deletedCount,
+      stockTracked: stock.tracked,
+    })
+    return { synced: mappedProducts.length, deleted: deletedCount, images, stock }
   } catch (error) {
     if (abortController.signal.aborted) {
       const timeoutErr = new Error('Bitrix catalog fetch timed out after 30s')

@@ -3,6 +3,7 @@ import { getSupabaseAdminClient } from './supabaseAdmin'
 import { normalizeBitrixProduct, type BitrixProduct } from './normalizeBitrixProduct'
 import { getSectionMap } from './bitrixSections'
 import { mirrorPrimaryImage, isProxiedBitrixImage } from './bitrixProductImages'
+import { fetchCatalogStock, mirrorQuantity } from './catalogStock'
 
 export async function syncSingleProduct(productId: string, config: ReturnType<typeof useRuntimeConfig>): Promise<void> {
   try {
@@ -57,6 +58,18 @@ export async function syncSingleProduct(productId: string, config: ReturnType<ty
         mappedProduct.image_url = result.url
         mappedProduct.bitrix_image_id = result.imageId
       }
+    }
+
+    // crm.product.get has no QUANTITY; the catalog does. A failed lookup drops
+    // the key so the upsert keeps the stored stock instead of nulling it.
+    try {
+      const stock = await fetchCatalogStock([productId])
+      mappedProduct.quantity = mirrorQuantity(stock.get(String(productId)))
+    } catch (stockError) {
+      delete (mappedProduct as { quantity?: number | null }).quantity
+      logger.warn('ProductSync', `Stock lookup failed for ${productId}; stored quantity kept`, {
+        error: stockError instanceof Error ? stockError.message : String(stockError),
+      })
     }
 
     const { error: upsertError } = await supabase.from('products').upsert(mappedProduct, { onConflict: 'id' })
