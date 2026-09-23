@@ -198,7 +198,8 @@ Content-Type: application/json
   "cart": [ { "id": "1234", "quantity": 2 } ],   // 1–50 items, quantity 1–99
   "branch": { "name": "...", "address": "...", "state": "...", "bitrixId": "9356" },
   "fulfillment": "pickup",        // "pickup" | "delivery"
-  "paymentMethod": "paystack"     // "paystack" | "pay_at_store"
+  "paymentMethod": "paystack",    // "paystack" | "pay_at_store"
+  "client": "app"                 // ALWAYS send this from the app — see below
 }
 ```
 
@@ -236,26 +237,49 @@ Response:
 
 ### Taking the payment inside the app
 
-**Open `paymentUrl` in an in-app WebView, not the system browser.** `url_launcher` (or anything
-that hands off to Chrome/Safari) takes the customer out of the app, and after paying they finish on
-the *website's* thank-you page with no way back. That is the current behaviour, and the reason for
-this section.
+**Open `paymentUrl` in an in-app WebView, not the system browser**, and **send `"client": "app"`**
+in the checkout body. `url_launcher` (or anything that hands off to Chrome/Safari) takes the
+customer out of the app, and without `client: "app"` they finish on the *website's* thank-you page.
 
-Load `paymentUrl` in a `webview_flutter` WebView and watch its navigation:
+What happens after they pay:
 
-- **Let `/api/payments/paystack/callback` load.** That request is where the server verifies the
-  payment with Paystack. Do not block it.
-- **Intercept the redirect to `/thank-you`.** The callback sends the WebView to
-  `/thank-you?payment=<status>&ref=ORD-...`. When you see that URL, cancel the navigation, close
-  the WebView and show your own screen.
+1. Paystack sends the WebView to `/api/payments/paystack/callback`. **Let it load** — that is where
+   the server verifies the payment with Paystack.
+2. The server sees the order came from the app and redirects to
+   **`/payment-complete.html?payment=<status>&ref=ORD-...`**, a small bridge page.
+3. The bridge page hands the result to the app, in this order:
+   - **JavaScript channel** — if the WebView registered one named `CheckoutBridge`, it calls
+     `CheckoutBridge.postMessage('{"status":"success","reference":"ORD-..."}')`
+   - **Deep link** — otherwise it opens
+     `nsecormerce://checkout?status=<status>&reference=ORD-...`, with a tap-to-return button in
+     case the browser blocks the automatic hop
+
+Register the channel on the WebView:
+
+```dart
+controller.addJavaScriptChannel(
+  'CheckoutBridge',
+  onMessageReceived: (message) {
+    final data = jsonDecode(message.message) as Map<String, dynamic>;
+    Navigator.of(context).pop(data['status']);   // close the WebView, hand back the result
+  },
+);
+```
+
+**The scheme is `nsecormerce` exactly as spelled** — it must match what is registered in
+`AndroidManifest.xml` and `Info.plist`, character for character. If it is meant to be
+`nsecommerce`, change both the app and `public/payment-complete.html` together.
+
+**Keep a `/thank-you` intercept as a fallback.** If the server cannot reach Paystack to verify, it
+cannot tell the order came from the app and sends the WebView to `/thank-you?payment=pending`
+instead:
 
 ```dart
 NavigationDelegate(
   onNavigationRequest: (request) {
     final uri = Uri.parse(request.url);
     if (uri.path == '/thank-you') {
-      final status = uri.queryParameters['payment'] ?? 'unknown';
-      Navigator.of(context).pop(status);   // close the WebView, hand back the result
+      Navigator.of(context).pop(uri.queryParameters['payment'] ?? 'unknown');
       return NavigationDecision.prevent;
     }
     return NavigationDecision.navigate;
@@ -263,7 +287,7 @@ NavigationDelegate(
 )
 ```
 
-`payment` is one of:
+`status` is one of:
 
 | value | meaning | what to show |
 | --- | --- | --- |
@@ -271,14 +295,16 @@ NavigationDelegate(
 | `failed` | not paid | order saved, unpaid — offer to try again |
 | `pending` | could not confirm right now | **not a failure** — they may have paid; it will be matched |
 | `review` | amount did not match the order | the team will be in touch |
+| `unknown` | the page could not read a result | check the order row |
+
+**Never treat the status as proof of payment.** Anyone can open the bridge page or the deep link
+with `status=success` typed in. It is a signal to close the WebView — then read `public.orders`
+by `orderRecordId` (you can read your own orders) and check `status` is `confirmed`. The Paystack
+webhook usually confirms it before the customer is back in the app.
 
 **If the customer closes the WebView without paying**, the order stays `pending` and no CRM deal is
-created. **Keep their cart** until you get `success` — clearing it before payment strands anyone who
-backs out, which is the bug the website had.
-
-**The source of truth is the order row, not the URL.** For anything that matters, read
-`public.orders` by `orderRecordId` — you can read your own orders — and check `status` is
-`confirmed`. The Paystack webhook usually confirms it before the customer is back in the app.
+created. **Keep their cart** until you see a confirmed order — clearing it before payment strands
+anyone who backs out, which is the bug the website had.
 
 `pay_at_store` returns no `paymentUrl`: the order is placed immediately and paid on collection.
 

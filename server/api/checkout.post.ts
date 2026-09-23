@@ -69,6 +69,10 @@ const checkoutSchema = z.object({
   // pickup was recorded, filed and receipted as a delivery. Optional so an
   // older cached client still checks out; absent falls back to the old guess.
   fulfillment: z.enum(['pickup', 'delivery']).optional(),
+  // Which surface placed the order. Decides only where the payment callback
+  // sends the customer afterwards — the app's bridge page or the website's
+  // thank-you page. Nothing about the order or its price depends on it.
+  client: z.enum(['web', 'app']).optional().default('web'),
 })
 
 type BitrixProductResult = {
@@ -486,6 +490,10 @@ export default defineEventHandler(async (event) => {
           orderRecordId,
           fulfillment,
           branch: (branch?.name as string | undefined) ?? null,
+          // Read back by the callback from Paystack's verify response, not
+          // from the query string, so it cannot be spoofed by editing the
+          // redirect URL.
+          client: body.client,
         },
       })
       paymentUrl = transaction.authorization_url
