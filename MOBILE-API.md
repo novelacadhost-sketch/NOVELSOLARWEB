@@ -247,14 +247,15 @@ What happens after they pay:
    the server verifies the payment with Paystack.
 2. The server sees the order came from the app and redirects to
    **`/payment-complete.html?payment=<status>&ref=ORD-...`**, a small bridge page.
-3. The bridge page hands the result to the app, in this order:
-   - **JavaScript channel** — if the WebView registered one named `CheckoutBridge`, it calls
-     `CheckoutBridge.postMessage('{"status":"success","reference":"ORD-..."}')`
-   - **Deep link** — otherwise it opens
-     `nsecormerce://checkout?status=<status>&reference=ORD-...`, with a tap-to-return button in
-     case the browser blocks the automatic hop
+3. The bridge page hands the result to the app over a **JavaScript channel named
+   `CheckoutBridge`**, calling
+   `CheckoutBridge.postMessage('{"status":"success","reference":"ORD-..."}')`.
 
-Register the channel on the WebView:
+**This only works inside a WebView that registers the channel.** There is no deep link — opened in
+the system browser, the page just shows the result and stops. So the WebView is required, not
+optional.
+
+Register the channel before loading `paymentUrl`:
 
 ```dart
 controller.addJavaScriptChannel(
@@ -266,19 +267,16 @@ controller.addJavaScriptChannel(
 );
 ```
 
-**The scheme is `nsecormerce` exactly as spelled** — it must match what is registered in
-`AndroidManifest.xml` and `Info.plist`, character for character. If it is meant to be
-`nsecommerce`, change both the app and `public/payment-complete.html` together.
-
-**Keep a `/thank-you` intercept as a fallback.** If the server cannot reach Paystack to verify, it
-cannot tell the order came from the app and sends the WebView to `/thank-you?payment=pending`
-instead:
+**Also intercept the navigation, as a fallback.** Both result pages carry the outcome in the URL,
+so catching them in the `NavigationDelegate` works even if the channel message never arrives. It
+also covers the one case the bridge page cannot: if the server fails to reach Paystack, it cannot
+tell the order came from the app and sends the WebView to `/thank-you?payment=pending` instead.
 
 ```dart
 NavigationDelegate(
   onNavigationRequest: (request) {
     final uri = Uri.parse(request.url);
-    if (uri.path == '/thank-you') {
+    if (uri.path == '/payment-complete.html' || uri.path == '/thank-you') {
       Navigator.of(context).pop(uri.queryParameters['payment'] ?? 'unknown');
       return NavigationDecision.prevent;
     }
@@ -297,8 +295,8 @@ NavigationDelegate(
 | `review` | amount did not match the order | the team will be in touch |
 | `unknown` | the page could not read a result | check the order row |
 
-**Never treat the status as proof of payment.** Anyone can open the bridge page or the deep link
-with `status=success` typed in. It is a signal to close the WebView — then read `public.orders`
+**Never treat the status as proof of payment.** Anyone can open the bridge page with
+`payment=success` typed in. It is a signal to close the WebView — then read `public.orders`
 by `orderRecordId` (you can read your own orders) and check `status` is `confirmed`. The Paystack
 webhook usually confirms it before the customer is back in the app.
 

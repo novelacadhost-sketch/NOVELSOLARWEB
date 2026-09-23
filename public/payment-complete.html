@@ -1,83 +1,92 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Payment Complete</title>
-  <style>
-    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #0f172a;
-           display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 24px;
-           box-sizing: border-box; text-align: center; }
-    .card { max-width: 360px; }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    p { font-size: 14px; color: #475569; margin: 0 0 20px; }
-    a { display: inline-block; background: #002888; color: #fff; text-decoration: none; padding: 12px 20px;
-        border-radius: 10px; font-weight: 600; }
-  </style>
-</head>
-<body>
-  <!--
-    Mobile-app bridge. /api/payments/paystack/callback sends app customers here
-    AFTER it has verified the payment with Paystack, as
-    /payment-complete.html?payment=<status>&ref=ORD-...
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Payment Complete | NovelSolar</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        background-color: #f8fafc;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .container {
+        padding: 2rem;
+        max-width: 400px;
+      }
+      h1 {
+        color: #0f172a;
+        margin: 0 0 16px;
+        font-size: 24px;
+        font-weight: 900;
+      }
+      p {
+        color: #64748b;
+        margin: 0;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Mobile-app bridge. /api/payments/paystack/callback sends app orders here
+      after verifying the payment with Paystack, as
+      /payment-complete.html?payment=<status>&ref=ORD-...
 
-    `payment` is therefore the server's verified verdict. It is NEVER defaulted
-    to "success": Paystack's own redirect carries no status at all, so a page
-    that assumed success would report every abandoned or failed payment as paid.
-    Anything missing or unrecognised is "unknown".
+      `payment` is the server's verified verdict, so it is read as-is but never
+      defaulted to "success": Paystack's own redirect carries no status, and a
+      page that assumed success would report every abandoned or failed payment
+      as paid. Anything missing or unrecognised is "unknown".
 
-    Even so, the app must not treat this as proof of payment — anyone can open
-    this URL. It is a signal to close the WebView and re-check public.orders.
-  -->
-  <div class="card">
-    <h1 id="title">Returning to the app…</h1>
-    <p id="detail">If nothing happens, tap the button below.</p>
-    <a id="back" href="#">Return to the app</a>
-  </div>
+      The app still must not treat this as proof of payment — anyone can open
+      this URL. It is the signal to close the WebView and re-read public.orders.
+    -->
+    <div class="container">
+      <h1 id="title">Returning to the app…</h1>
+      <p id="detail"></p>
+    </div>
 
-  <script>
-    (function () {
-      var KNOWN = ['success', 'failed', 'pending', 'review'];
-      var params = new URLSearchParams(location.search);
-      var raw = params.get('payment') || '';
-      var status = KNOWN.indexOf(raw) === -1 ? 'unknown' : raw;
-      var reference = params.get('ref') || '';
-
-      var COPY = {
-        success: ['Payment received', 'Your order is confirmed.'],
-        failed: ['Payment not completed', 'Your order is saved. You can try paying again in the app.'],
-        pending: ['Confirming your payment', 'If money left your account, it will be matched shortly.'],
-        review: ['Payment needs review', 'The amount did not match. Our team will contact you.'],
-        unknown: ['Order received', 'Return to the app to check your order.'],
-      };
-      document.getElementById('title').textContent = COPY[status][0];
-      document.getElementById('detail').textContent = COPY[status][1];
-
-      var deepLink =
-        'nsecormerce://checkout?status=' + encodeURIComponent(status) +
-        '&reference=' + encodeURIComponent(reference);
-      document.getElementById('back').setAttribute('href', deepLink);
-
-      // Inside the app's WebView: hand the result over the JavaScript channel.
-      try {
-        if (window.CheckoutBridge && typeof window.CheckoutBridge.postMessage === 'function') {
-          window.CheckoutBridge.postMessage(JSON.stringify({ status: status, reference: reference }));
-          return;
+    <script>
+      {
+        const STATUSES = ['success', 'failed', 'pending', 'review']
+        const COPY = {
+          success: ['Payment received', 'Your order is confirmed.'],
+          failed: ['Payment not completed', 'Your order is saved. You can try paying again in the app.'],
+          pending: ['Confirming your payment', 'If money left your account, it will be matched shortly.'],
+          review: ['Payment needs review', 'The amount did not match your order. Our team will contact you.'],
+          unknown: ['Order received', 'Return to the app to check your order.'],
         }
-      } catch (e) {
-        // fall through to the deep link
-      }
 
-      // Outside it (system browser, Custom Tab): open the app. Some browsers
-      // refuse a custom-scheme navigation without a tap, which is what the
-      // button above is for.
-      try {
-        window.location.href = deepLink;
-      } catch (e) {
-        // the button remains
+        const params = new URLSearchParams(location.search)
+        const raw = params.get('payment') || ''
+        const status = STATUSES.includes(raw) ? raw : 'unknown'
+        const reference = params.get('ref') || ''
+
+        document.getElementById('title').textContent = COPY[status][0]
+        document.getElementById('detail').textContent = COPY[status][1]
+
+        try {
+          if (window.CheckoutBridge && typeof window.CheckoutBridge.postMessage === 'function') {
+            window.CheckoutBridge.postMessage(JSON.stringify({ status, reference }))
+          }
+        } catch {
+          // Outside the app's WebView there is no channel; the text above stands.
+        }
       }
-    })();
-  </script>
-</body>
+    </script>
+  </body>
 </html>
