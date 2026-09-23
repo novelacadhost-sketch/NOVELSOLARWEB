@@ -262,9 +262,9 @@ export default defineCachedEventHandler(
       // Without the visibility version a product stays in the cached page for
       // five minutes after being hidden.
       const vis = await getVisibilityVersion()
-      // v6: responses gained `lowStock`. Bumped so cached v5 bodies without it
-      // are not served after deploy.
-      return `inventory-v6:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
+      // v7: the low-stock threshold dropped from 10 to 3. Bumped so cached
+      // bodies flagging the old half of the catalogue are not served on.
+      return `inventory-v7:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than

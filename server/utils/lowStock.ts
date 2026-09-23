@@ -9,16 +9,16 @@ import { getSupabaseAdminClient } from './supabaseAdmin'
  * fills nightly from the Bitrix catalog, because the Bitrix calls the product
  * pages use carry no stock at all.
  *
- * THE THRESHOLD IS THE WHOLE POLICY. At 10, measured 2026-09-23, 540 of the
- * 1102 products with stock qualify — about half the catalogue, much of it
- * items that are simply stocked in small numbers. Lower it here if the badge
- * turns out to be on too much to mean anything (under 5 was 397, under 3 was
- * 266).
+ * THE THRESHOLD IS THE WHOLE POLICY. Started at 10, but measured 2026-09-23
+ * that flagged 540 of the 1102 products with stock — about half the
+ * catalogue, much of it items simply stocked in small numbers, so the badge
+ * meant nothing. Davies set it to 3: fewer than 3 on hand, i.e. 1 or 2, which
+ * was 266 products (under 5 was 397).
  *
  * Zero is not "low": nothing active is at zero today, and a product that runs
  * out is refused at checkout with an offer to call the customer back.
  */
-export const LOW_STOCK_THRESHOLD = 10
+export const LOW_STOCK_THRESHOLD = 3
 
 /** For a caller that already has the row's quantity in hand. */
 export function isLowStock(quantity: number | null | undefined): boolean {
