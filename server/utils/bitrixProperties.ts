@@ -88,6 +88,23 @@ export const BITRIX_CATALOG = {
 } as const
 
 /**
+ * Staff told when a customer asks for stock checkout could not fill.
+ *
+ * Verified against user.get on 2026-09-23. Bitrix stores Mayowa's name
+ * surname-first ("Ekun Mayowa"); #450 Mayowa Ogunnubi and #48 Akindele
+ * Yetunde are different people who also match a name search.
+ *
+ * Override with STOCK_REQUEST_NOTIFY_USER_IDS (comma-separated) when someone
+ * moves role, rather than editing this.
+ */
+export const BITRIX_STAFF = {
+  /** #44 Ekun Mayowa — Procurement Manager. Arranges the supply. */
+  PROCUREMENT: 44,
+  /** #26 Yetunde Oni — Head of Pre-Sales (Audit & Sales Support). Calls the customer. */
+  SALES_SUPPORT: 26,
+} as const
+
+/**
  * CRM source ids, verified against `crm.status.list` (ENTITY_ID 'SOURCE') on
  * 2026-09-23. These are opaque codes, not names — "WEB" reads like a sensible
  * default but is literally "Website Contact Form" on this portal, which is

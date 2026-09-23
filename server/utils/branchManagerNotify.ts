@@ -1,5 +1,6 @@
 import { logger } from './logger'
 import { bitrixFetch } from './bitrixAuth'
+import { messageStaff } from './staffMessage'
 
 /**
  * Tells the branch manager that a web order has landed and needs its warehouse
@@ -129,45 +130,6 @@ async function commentOnDeal(dealId: string, message: string): Promise<boolean> 
 }
 
 /**
- * Send both a notification and a chat message.
- *
- * They are different things in Bitrix and land in different places.
- * `im.notify.personal.add` puts an entry in the bell/Notifications tab;
- * `im.message.add` with the user id as DIALOG_ID opens a real DM that sits in
- * Messenger until it is read. Managers were getting the notification and
- * reasonably reporting "no message", because there was none.
- *
- * Both are sent on purpose rather than one as a fallback: this is the only
- * prompt telling someone to set a warehouse that nothing else can set, and the
- * order does not clear internal control until they do.
- *
- * Counts as reached if either lands.
- */
-async function sendToManager(userId: number, message: string): Promise<boolean> {
-  const attempt = async (method: string, body: Record<string, unknown>): Promise<boolean> => {
-    try {
-      const response = await bitrixFetch<{ result?: number; error?: string; error_description?: string }>(method, {
-        method: 'POST',
-        body,
-      })
-      if (response.error) throw new Error(response.error_description || String(response.error))
-      return true
-    } catch (err) {
-      logger.warn('BranchNotify', `${method} failed`, {
-        error: err instanceof Error ? err.message : String(err),
-        userId,
-      })
-      return false
-    }
-  }
-
-  const notified = await attempt('im.notify.personal.add', { USER_ID: userId, MESSAGE: message })
-  const messaged = await attempt('im.message.add', { DIALOG_ID: userId, MESSAGE: message })
-
-  return notified || messaged
-}
-
-/**
  * Never throws. A missed message must not cost the order — the deal is
  * already filed by the time this runs, and the branch is on it either way.
  */
@@ -219,7 +181,7 @@ export async function notifyBranchManagerOfOrder(notification: BranchOrderNotifi
 
     let delivered = 0
     for (const userId of managerIds) {
-      const sent = await sendToManager(userId, message)
+      const sent = await messageStaff(userId, message)
       if (sent) delivered++
       else {
         logger.warn('BranchNotify', 'Could not reach one branch manager', { userId, branchName, orderId })

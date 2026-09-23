@@ -65,7 +65,7 @@ export default defineEventHandler((event) => {
     // POST can be made directly with curl, and always could: a script need only
     // GET one page to be handed a csrf-token cookie and echo it back.
     //
-    // Narrow on purpose. It applies to four lead-capture paths, and only when
+    // Narrow on purpose. It applies to five lead-capture paths, and only when
     // the request has no credentials at all. /api/checkout is the reason for
     // that second condition: forcing a signed-in dealer's browser to place an
     // order IS a real CSRF target, so anything cookie-bearing keeps the full

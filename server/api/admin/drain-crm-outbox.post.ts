@@ -1,6 +1,7 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from '../../utils/logger'
 import { createOrderDeal } from '../../utils/orderDeal'
+import { STOCK_REQUEST_EVENT, deliverStockRequest, type StockRequestPayload } from '../../utils/stockRequest'
 
 /**
  * Deliver queued orders to Bitrix.
@@ -10,6 +11,9 @@ import { createOrderDeal } from '../../utils/orderDeal'
  * function writes a `crm_outbox` row instead and this drains it. Without this
  * running, an order placed from the mobile app exists in Supabase and nowhere
  * else, which is the exact failure the endpoint-based flow avoids.
+ *
+ * It also retries stock requests (`stock.requested`) whose first delivery
+ * from /api/stock-request failed — see server/utils/stockRequest.ts.
  *
  * Guarded by `adminGuard`, so it takes either an admin session or
  * `Authorization: Bearer $CRON_SECRET`.
@@ -66,6 +70,17 @@ export default defineEventHandler(async (event) => {
 
   for (const row of rows) {
     try {
+      if (row.event_type === STOCK_REQUEST_EVENT) {
+        // The payload was built and verified by /api/stock-request; deliver it
+        // exactly as that endpoint would have.
+        const { leadId } = await deliverStockRequest(row.payload as unknown as StockRequestPayload)
+        const update: OutboxUpdate = { status: 'sent', last_error: null, updated_at: new Date().toISOString() }
+        await supabase.from('crm_outbox').update(update as never).eq('id', row.id)
+        sent++
+        logger.info('CrmOutbox', 'Delivered stock request to Bitrix', { outboxId: row.id, leadId })
+        continue
+      }
+
       if (row.event_type !== 'order.created') {
         // Not something this drain knows how to deliver. Park it rather than
         // retrying forever.

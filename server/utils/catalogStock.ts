@@ -11,6 +11,7 @@ import { BITRIX_CATALOG } from './bitrixProperties'
  */
 
 export interface CatalogStock {
+  name: string | null
   /** Total on hand across all warehouses. Null when the catalog tracks none. */
   quantity: number | null
   /** Services are never stock-limited; see BITRIX_CATALOG.TYPE_SERVICE. */
@@ -20,6 +21,7 @@ export interface CatalogStock {
 interface CatalogProductRow {
   id: number
   iblockId: number
+  name?: string | null
   type?: number
   quantity?: number | string | null
 }
@@ -37,6 +39,7 @@ function toStock(row: CatalogProductRow): CatalogStock {
   const raw = row.quantity
   const quantity = raw === null || raw === undefined || raw === '' ? null : Number(raw)
   return {
+    name: row.name ? String(row.name).trim() : null,
     quantity: quantity !== null && Number.isFinite(quantity) ? quantity : null,
     isService: Number(row.type) === BITRIX_CATALOG.TYPE_SERVICE,
   }
@@ -62,7 +65,7 @@ export async function fetchCatalogStock(ids?: Array<string | number>): Promise<M
   for (;;) {
     const response = await bitrixFetch<CatalogListResponse>('catalog.product.list', {
       method: 'POST',
-      body: { select: ['id', 'iblockId', 'type', 'quantity'], filter, start },
+      body: { select: ['id', 'iblockId', 'name', 'type', 'quantity'], filter, start },
     })
     if (response.error) throw new Error(response.error_description || String(response.error))
 

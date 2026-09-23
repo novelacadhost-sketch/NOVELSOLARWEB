@@ -18,7 +18,7 @@ function getClientIp(event: any) {
 function getRateLimitConfig(path: string, isAnonymous: boolean) {
   if (path.startsWith('/api/admin/auth/')) return { maxRequests: 20, windowSizeInSeconds: 60, bucket: 'admin-auth' }
   if (path.startsWith('/api/auth/')) return { maxRequests: 20, windowSizeInSeconds: 60, bucket: 'auth' }
-  if (['/api/checkout', '/api/contact', '/api/quote', '/api/book-service'].includes(path)) {
+  if (['/api/checkout', '/api/contact', '/api/quote', '/api/book-service', '/api/stock-request'].includes(path)) {
     // Credential-less callers skip the CSRF check (see 2.csrf.ts) so that the
     // mobile app can take guest enquiries and guest orders. Nothing else stands
     // between them and the CRM, so they get a tighter budget than the website:

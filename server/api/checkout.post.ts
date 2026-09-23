@@ -22,6 +22,13 @@ type SubmittedCartItem = {
   image?: string
 }
 
+type StockShortage = {
+  id: string
+  name: string
+  requested: number
+  available: number
+}
+
 type TrustedCartItem = {
   id: string | number
   name: string
@@ -62,7 +69,10 @@ const checkoutSchema = z.object({
       name: z.string().trim().max(160).optional(),
     })
     .passthrough()
-    .optional()
+    // nullish, not optional: the website sent branch: null whenever no branch
+    // was picked, and optional() rejects null with "expected object, received
+    // null" — a 400 the customer only ever saw as "There was an issue".
+    .nullish()
     .default({}),
   paymentMethod: z.string().trim().min(2).max(80).optional().default('Bank Transfer'),
   // Sent by the client since 2026-09-22. Before that it was derived from
@@ -139,6 +149,11 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
     })
   }
 
+  // Every item that cannot be filled, collected rather than thrown on the first
+  // so the customer sees the whole list at once and a stock request covers all
+  // of it. See the 409 below and /api/stock-request.
+  const shortages: StockShortage[] = []
+
   const trustedCart: TrustedCartItem[] = responses.map((response, index) => {
     const { productId, quantity } = validatedItems[index]!
     const product = response?.result
@@ -155,19 +170,13 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
     // catalog tracks no number for stays unlimited, as before.
     const itemStock = stock.get(String(productId))
     const availableQty = itemStock && !itemStock.isService ? itemStock.quantity : null
-    if (availableQty !== null) {
-      if (availableQty <= 0) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: `Sorry, "${product.NAME || `Product ${productId}`}" is currently out of stock.`,
-        })
-      }
-      if (availableQty < quantity) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: `Sorry, only ${availableQty} unit(s) of "${product.NAME || `Product ${productId}`}" are available.`,
-        })
-      }
+    if (availableQty !== null && availableQty < quantity) {
+      shortages.push({
+        id: String(product.ID || productId),
+        name: product.NAME || `Product ${productId}`,
+        requested: quantity,
+        available: Math.max(0, availableQty),
+      })
     }
 
     let price = Number(product.PRICE)
@@ -203,6 +212,22 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
       quantity,
     }
   })
+
+  if (shortages.length > 0) {
+    // Logged whether or not the customer goes on to leave their number: it is
+    // demand the business could not meet, and the only trace of it if they
+    // simply close the popup.
+    logger.info('Checkout API', 'Order refused: insufficient stock', { shortages })
+
+    // 409, with a machine-readable body, so a client can tell "we are out of
+    // this" apart from any other failure and offer a stock request instead of
+    // a dead end. The quantities come from the catalog, never from the client.
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Some items are not available in the quantity requested.',
+      data: { code: 'INSUFFICIENT_STOCK', items: shortages },
+    })
+  }
 
   const total = trustedCart.reduce((sum, item) => sum + item.price * item.quantity, 0)
 

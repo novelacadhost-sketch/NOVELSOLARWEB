@@ -117,6 +117,9 @@ export default defineNuxtConfig({
     blogGithubRepo: process.env.BLOG_GITHUB_REPO || 'NovelSolar',
     blogGithubBranch: process.env.BLOG_GITHUB_BRANCH || 'master',
     paystackSecretKey: process.env.PAYSTACK_SECRET_KEY,
+    // Comma-separated Bitrix user ids for stock requests. Unset = procurement
+    // and sales support, as recorded in BITRIX_STAFF.
+    stockRequestNotifyUserIds: process.env.STOCK_REQUEST_NOTIFY_USER_IDS || '',
     public: {
       // Safe to ship: Paystack's public key is designed for the browser.
       // The SECRET key must never appear here.

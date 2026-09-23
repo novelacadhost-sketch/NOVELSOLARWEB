@@ -304,6 +304,51 @@ webhook usually confirms it before the customer is back in the app.
 created. **Keep their cart** until you see a confirmed order — clearing it before payment strands
 anyone who backs out, which is the bug the website had.
 
+### When there is not enough stock
+
+Checkout checks stock before taking any money. If an item is short it refuses the order with
+**`409`** and a body that says exactly what:
+
+```jsonc
+{
+  "statusCode": 409,
+  "statusMessage": "Some items are not available in the quantity requested.",
+  "data": {
+    "code": "INSUFFICIENT_STOCK",
+    "items": [
+      { "id": "19736", "name": "19 INCHES BLUEGATE TV", "requested": 3, "available": 1 }
+    ]
+  }
+}
+```
+
+Nothing is created — no order, no payment, no deal — and the cart should be left alone. Instead of
+an error, show the customer the items and offer a call back, like the website does: *"We don't have
+enough of this in stock yet. Leave your number and our team will call you to arrange the supply."*
+
+If they accept, send:
+
+```http
+POST /api/stock-request
+Content-Type: application/json
+```
+
+```jsonc
+{
+  "customer": { "firstName": "Ada", "lastName": "Obi", "phone": "080...", "email": "a@b.com" },
+  "items": [ { "id": "19736", "quantity": 3 } ],        // the short items, with the quantity they wanted
+  "branch": { "name": "...", "bitrixId": "9356" },
+  "client": "app"
+}
+```
+
+It answers `{ "success": true }` once the request is safely recorded. That files a CRM lead and
+messages procurement and sales support, who call the customer about supply. It is a guest write like
+the enquiry forms: no token needed, and it is rate-limited the same way.
+
+Stock is the company-wide total, not the chosen branch's — a short branch is restocked by transfer.
+Services are never stock-limited.
+
 `pay_at_store` returns no `paymentUrl`: the order is placed immediately and paid on collection.
 
 `paymentPending: true` means the order was saved but Paystack could not be opened — tell the

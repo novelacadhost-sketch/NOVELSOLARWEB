@@ -6,7 +6,7 @@ const { payWithPopup } = usePaystackPopup()
 
 const selectedFulfillment = ref('delivery') // 'delivery' or 'pickup'
 const selectedState = ref('')
-const selectedBranch = ref(null)
+const selectedBranch = ref<(typeof branches)[number] | null>(null)
 
 const suggestedBranches = computed(() => {
   if (!selectedState.value) return []
@@ -108,6 +108,15 @@ const submitOrder = async () => {
     return
   }
 
+  // Every order is fulfilled from a branch — deliveries ship from one too — and
+  // the branch is what routes the deal and messages its manager. Without this
+  // the page sent branch: null, the server rejected it with an unreadable
+  // validation error, and the customer saw only "There was an issue".
+  if (!selectedBranch.value) {
+    addToast('Choose a branch', 'Please select your state and a branch for your order.', 'error')
+    return
+  }
+
   isSubmitting.value = true
   try {
     const response = await useNuxtApp().$apiFetch<{
@@ -179,9 +188,76 @@ const submitOrder = async () => {
     addToast('Order Placed', 'Your order was successfully sent to NovelSolar!', 'success')
     navigateTo('/thank-you')
   } catch (error) {
-    addToast('Order Error', 'There was an issue processing your order. Please try again.', 'error')
+    // Out of stock is not a failure to apologise for — it is a customer we can
+    // still serve. /api/checkout answers 409 INSUFFICIENT_STOCK with the short
+    // items, and the popup below turns that into a call-back request.
+    const shortage = readStockShortage(error)
+    if (shortage) {
+      stockShortage.value = shortage
+      stockRequestPhone.value = form.phone
+      stockRequestState.value = 'asking'
+    } else {
+      addToast('Order Error', 'There was an issue processing your order. Please try again.', 'error')
+    }
   } finally {
     isSubmitting.value = false
+  }
+}
+
+interface StockShortageItem {
+  id: string
+  name: string
+  requested: number
+  available: number
+}
+
+const stockShortage = ref<StockShortageItem[] | null>(null)
+const stockRequestPhone = ref('')
+const stockRequestState = ref<'asking' | 'sending' | 'sent'>('asking')
+const stockRequestError = ref('')
+
+function readStockShortage(error: unknown): StockShortageItem[] | null {
+  const body = (error as { data?: { data?: { code?: string; items?: StockShortageItem[] } } })?.data?.data
+  return body?.code === 'INSUFFICIENT_STOCK' && Array.isArray(body.items) && body.items.length ? body.items : null
+}
+
+function closeStockShortage() {
+  // The cart is left exactly as it was: nothing was ordered.
+  stockShortage.value = null
+  stockRequestError.value = ''
+}
+
+async function submitStockRequest() {
+  if (!stockShortage.value) return
+  const phone = stockRequestPhone.value.trim()
+  if (phone.length < 7) {
+    stockRequestError.value = 'Please enter a phone number we can reach you on.'
+    return
+  }
+
+  stockRequestError.value = ''
+  stockRequestState.value = 'sending'
+  try {
+    await useNuxtApp().$apiFetch('/api/stock-request', {
+      method: 'POST',
+      body: {
+        customer: {
+          firstName: form.firstName || 'Customer',
+          lastName: form.lastName,
+          phone,
+          email: form.email,
+        },
+        items: stockShortage.value.map((item) => ({ id: item.id, quantity: item.requested })),
+        branch: selectedBranch.value
+          ? { name: selectedBranch.value.name, bitrixId: selectedBranch.value.bitrixId }
+          : undefined,
+        client: 'web',
+      },
+    })
+    stockRequestState.value = 'sent'
+  } catch {
+    stockRequestState.value = 'asking'
+    stockRequestError.value = 'We could not send your request. Please try again, or call us.'
   }
 }
 
@@ -669,6 +745,90 @@ onMounted(async () => {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Out of stock: offer a call back instead of a dead end. -->
+    <div
+      v-if="stockShortage"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stock-shortage-title"
+    >
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <template v-if="stockRequestState !== 'sent'">
+          <div class="flex items-start gap-3 mb-4">
+            <span class="material-symbols-outlined text-amber-600 text-2xl">inventory_2</span>
+            <div>
+              <h2 id="stock-shortage-title" class="text-lg font-bold text-slate-900">
+                We don't have enough of this in stock yet
+              </h2>
+              <p class="text-sm text-slate-500 mt-1">
+                Leave your number and our team will call you to arrange the supply.
+              </p>
+            </div>
+          </div>
+
+          <ul class="mb-5 space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <li v-for="item in stockShortage" :key="item.id" class="text-sm">
+              <p class="font-bold text-slate-900">{{ item.name }}</p>
+              <p class="text-xs text-slate-500">
+                You asked for {{ item.requested }} —
+                {{ item.available > 0 ? `we have ${item.available} right now` : 'currently out of stock' }}
+              </p>
+            </li>
+          </ul>
+
+          <label class="block text-sm font-semibold text-slate-700 mb-2" for="stock-request-phone">
+            Your phone number
+          </label>
+          <input
+            id="stock-request-phone"
+            v-model="stockRequestPhone"
+            type="tel"
+            autocomplete="tel"
+            class="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-[#002888] focus:ring-[#002888]"
+            placeholder="080..."
+          />
+          <p v-if="stockRequestError" class="mt-2 text-xs text-red-600">{{ stockRequestError }}</p>
+
+          <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              class="rounded-xl border border-gray-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-gray-50"
+              @click="closeStockShortage"
+            >
+              Change my order
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-[#002888] px-5 py-3 text-sm font-bold text-white hover:bg-blue-900 disabled:opacity-60"
+              :disabled="stockRequestState === 'sending'"
+              @click="submitStockRequest"
+            >
+              {{ stockRequestState === 'sending' ? 'Sending…' : 'Call me about supply' }}
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="text-center">
+            <span class="material-symbols-outlined text-green-600 text-4xl">check_circle</span>
+            <h2 class="text-lg font-bold text-slate-900 mt-2">Thank you — we'll be in touch</h2>
+            <p class="text-sm text-slate-500 mt-1">
+              Our team will call you on {{ stockRequestPhone }} about when your items will be available. Your cart
+              has been kept.
+            </p>
+            <button
+              type="button"
+              class="mt-6 rounded-xl bg-[#002888] px-5 py-3 text-sm font-bold text-white hover:bg-blue-900"
+              @click="closeStockShortage"
+            >
+              Close
+            </button>
+          </div>
+        </template>
       </div>
     </div>
   </main>

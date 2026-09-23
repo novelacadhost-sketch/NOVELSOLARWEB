@@ -27,7 +27,7 @@ export function hasAmbientCredentials(event: H3Event): boolean {
 /**
  * Endpoints a guest may POST to without a session of any kind.
  *
- * All four are lead capture: they create a CRM record from the body and act on
+ * All five are lead capture: they create a CRM record from the body and act on
  * nobody's behalf. Requiring a CSRF token here blocked native clients — which
  * have no cookie jar — while stopping no attack, since an anonymous POST has no
  * ambient credentials to abuse.
@@ -42,4 +42,7 @@ export const ANONYMOUS_WRITE_PATHS = new Set([
   '/api/quote',
   '/api/book-service',
   '/api/checkout',
+  // A customer asking to be called about stock checkout could not fill. Same
+  // shape as the enquiry forms: it creates a lead and acts on nobody's behalf.
+  '/api/stock-request',
 ])
