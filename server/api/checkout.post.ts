@@ -10,6 +10,7 @@ import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/deale
 import { createOrderDeal } from '../utils/orderDeal'
 import { describePaymentMethod } from '../utils/paymentMethod'
 import { initialiseTransaction } from '../utils/paystack'
+import { fetchCatalogStock, type CatalogStock } from '../utils/catalogStock'
 import { logger } from '../utils/logger'
 
 import type { H3Event } from 'h3'
@@ -86,7 +87,6 @@ type BitrixProductResult = {
     PROPERTY_44?: unknown
     PREVIEW_PICTURE?: unknown
     DETAIL_PICTURE?: unknown
-    QUANTITY?: string | number
     [key: string]: unknown
   }
 }
@@ -123,6 +123,22 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
     ),
   )
 
+  // Stock comes from the catalog module in one call. crm.product.get never
+  // returns QUANTITY, so the check below read an absent field and never ran —
+  // any quantity of anything could be ordered and paid for.
+  //
+  // Fails open: if the catalog is unreachable the order goes through, as every
+  // order did before this check existed. A missed stock check is recoverable by
+  // a transfer or a call; a lost sale to a flaky endpoint is not.
+  let stock = new Map<string, CatalogStock>()
+  try {
+    stock = await fetchCatalogStock(validatedItems.map(({ productId }) => productId))
+  } catch (error: unknown) {
+    logger.warn('Checkout API', 'Stock lookup failed; checkout continues without a stock check', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   const trustedCart: TrustedCartItem[] = responses.map((response, index) => {
     const { productId, quantity } = validatedItems[index]!
     const product = response?.result
@@ -134,21 +150,23 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
       })
     }
 
-    if (product.QUANTITY !== undefined && product.QUANTITY !== null && product.QUANTITY !== '') {
-      const availableQty = Number(product.QUANTITY)
-      if (!Number.isNaN(availableQty)) {
-        if (availableQty <= 0) {
-          throw createError({
-            statusCode: 400,
-            statusMessage: `Sorry, "${product.NAME || `Product ${productId}`}" is currently out of stock.`,
-          })
-        }
-        if (availableQty < quantity) {
-          throw createError({
-            statusCode: 400,
-            statusMessage: `Sorry, only ${availableQty} unit(s) of "${product.NAME || `Product ${productId}`}" are available.`,
-          })
-        }
+    // Total across all warehouses, not the chosen branch: a short branch is
+    // restocked by transfer. Services are never limited, and a product the
+    // catalog tracks no number for stays unlimited, as before.
+    const itemStock = stock.get(String(productId))
+    const availableQty = itemStock && !itemStock.isService ? itemStock.quantity : null
+    if (availableQty !== null) {
+      if (availableQty <= 0) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: `Sorry, "${product.NAME || `Product ${productId}`}" is currently out of stock.`,
+        })
+      }
+      if (availableQty < quantity) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: `Sorry, only ${availableQty} unit(s) of "${product.NAME || `Product ${productId}`}" are available.`,
+        })
       }
     }
 

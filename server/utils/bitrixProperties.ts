@@ -68,6 +68,26 @@ export const BITRIX_DEAL = {
 } as const
 
 /**
+ * The product catalog, where stock actually lives.
+ *
+ * `crm.product.list` and `crm.product.get` never return QUANTITY on this
+ * portal — the field is silently absent however it is selected — so every
+ * stock check that read it was dead code. `catalog.product.list` has it.
+ * Verified 2026-09-23: 1156 active products in iblock 14, matching the mirror.
+ * `iblockId` must be in the select as well as the filter, or the call errors.
+ */
+export const BITRIX_CATALOG = {
+  /** "CRM Product Catalog". 16 is its offers/SKU catalog, unused here. */
+  IBLOCK_ID: 14,
+  /**
+   * Catalog product type for a service. Services carry a quantity too —
+   * installation and maintenance read as 1 — so stock-checking them would
+   * cap every booking at a single unit.
+   */
+  TYPE_SERVICE: 7,
+} as const
+
+/**
  * CRM source ids, verified against `crm.status.list` (ENTITY_ID 'SOURCE') on
  * 2026-09-23. These are opaque codes, not names — "WEB" reads like a sensible
  * default but is literally "Website Contact Form" on this portal, which is
