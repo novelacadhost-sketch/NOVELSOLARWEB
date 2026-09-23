@@ -1,6 +1,11 @@
 /** Product as returned from Bitrix24 CRM /api/inventory */
 export interface BitrixProduct {
   ID: string
+  /**
+   * Fewer than LOW_STOCK_THRESHOLD units company-wide (server/utils/lowStock.ts).
+   * A flag only — the count is never sent to the browser.
+   */
+  lowStock?: boolean
   id?: string
   NAME: string
   name?: string

@@ -22,6 +22,12 @@ const displayPrice = computed(() => {
     <!-- Image Container -->
     <div class="relative aspect-square bg-gray-50 flex items-center justify-center p-6 border-b border-gray-50">
       <span
+        v-if="product.lowStock"
+        class="absolute top-4 left-4 bg-amber-50 text-amber-700 text-xs font-extrabold px-3 py-1 rounded-md tracking-wide z-10"
+        >LOW STOCK</span
+      >
+      <span
+        v-else
         class="absolute top-4 left-4 bg-green-50 text-green-600 text-xs font-extrabold px-3 py-1 rounded-md tracking-wide z-10"
         >IN STOCK</span
       >

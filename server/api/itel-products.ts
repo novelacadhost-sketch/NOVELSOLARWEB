@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger'
 import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
+import { getLowStockIds } from '../utils/lowStock'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -65,6 +66,7 @@ export default defineEventHandler(async (event) => {
   // ─── Normalize properties and return ───
   // PROPERTY_102 contains Cloudinary image URLs directly from crm.product.list,
   // so no secondary batch fetch is needed.
+  const lowStock = await getLowStockIds()
   return itelProducts.map((product) => {
     const productObj: any = {
       ...product,
@@ -75,6 +77,7 @@ export default defineEventHandler(async (event) => {
       PROPERTY_102: normalizeProperty(product.PROPERTY_102),
       PROPERTY_104: normalizeProperty(product.PROPERTY_104),
       PROPERTY_112: normalizeProperty(product.PROPERTY_112),
+      lowStock: lowStock.has(String(product.ID)),
     }
 
     if (isDealer) {

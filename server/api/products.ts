@@ -5,6 +5,7 @@ import { bitrixFetch } from '../utils/bitrixAuth'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { getSectionMap } from '../utils/bitrixSections'
 import { getHiddenProductIds } from '../utils/productVisibility'
+import { getLowStockIds } from '../utils/lowStock'
 
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
@@ -15,6 +16,7 @@ export default defineEventHandler(async (event) => {
   // inventory.get.ts for why the old keyword filter was unreliable.
   const includeServices = String(query.includeServices ?? '') === '1'
   const hidden = await getHiddenProductIds()
+  const lowStock = await getLowStockIds()
   const searchTerm = ((query.q as string) || '').trim().toLowerCase()
   const brandFilter = ((query.brand as string) || '').trim()
   const parsedStart = Number.parseInt((query.start as string) || '0', 10)
@@ -29,7 +31,10 @@ export default defineEventHandler(async (event) => {
     PRICE?: string | number
     CURRENCY_ID?: string
     DESCRIPTION: string
-    QUANTITY?: string | number
+    // A flag, not a count. QUANTITY used to be returned here; it was always
+    // empty until the mirror started holding real stock, and on the Supabase
+    // fallback path it would then have shipped the live count to the browser.
+    lowStock: boolean
     ACTIVE?: string
     imageUrl: string
     sectionId: string | null
@@ -72,7 +77,7 @@ export default defineEventHandler(async (event) => {
 
   const mapProduct = (p: any, fromDb = true): MappedProduct => {
     let raw: any
-    let id, name, price, active, quantity, description, currency
+    let id, name, price, active, description, currency
 
     if (fromDb) {
       raw = p.raw || {}
@@ -80,7 +85,6 @@ export default defineEventHandler(async (event) => {
       name = p.name
       price = p.price
       active = p.active ? 'Y' : 'N'
-      quantity = p.quantity
       description = p.description
       currency = raw.CURRENCY_ID
     } else {
@@ -89,7 +93,6 @@ export default defineEventHandler(async (event) => {
       name = p.NAME
       price = p.PRICE
       active = p.ACTIVE
-      quantity = p.QUANTITY
       description = normalizeProperty(p.DESCRIPTION)
       currency = p.CURRENCY_ID
     }
@@ -114,7 +117,7 @@ export default defineEventHandler(async (event) => {
       PRICE: price,
       CURRENCY_ID: currency,
       DESCRIPTION: String(description || ''),
-      QUANTITY: quantity,
+      lowStock: lowStock.has(String(id)),
       ACTIVE: active,
       imageUrl: imageUrl || '/images/placeholder.png',
       sectionId: sectionIdOf(p, raw),

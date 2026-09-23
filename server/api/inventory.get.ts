@@ -6,6 +6,7 @@ import { fetchAllBitrixProducts } from '../utils/fetchAllBitrixProducts'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { getSectionMap } from '../utils/bitrixSections'
 import { getHiddenProductIds, getVisibilityVersion } from '../utils/productVisibility'
+import { getLowStockIds } from '../utils/lowStock'
 
 export default defineCachedEventHandler(
   async (event) => {
@@ -35,6 +36,8 @@ export default defineCachedEventHandler(
 
     // Hidden by an admin on the website only; Bitrix still lists them.
     const hidden = await getHiddenProductIds()
+    // A flag per product, never the count — see server/utils/lowStock.ts.
+    const lowStock = await getLowStockIds()
 
     const sectionFilter = new Set(
       String(queryParams.sections ?? '')
@@ -45,6 +48,7 @@ export default defineCachedEventHandler(
 
     interface MappedProduct {
       ID: string | number
+      lowStock: boolean
       NAME: string | undefined
       PRICE: string | number | undefined
       imageUrl: string | null
@@ -108,6 +112,7 @@ export default defineCachedEventHandler(
         NAME: name,
         PRICE: price,
         ACTIVE: active,
+        lowStock: lowStock.has(String(id)),
         DETAIL_PICTURE: raw.DETAIL_PICTURE || null,
         PREVIEW_PICTURE: raw.PREVIEW_PICTURE || null,
         // The mirrored Cloudinary URL. Previously hardcoded null, which meant
@@ -257,7 +262,9 @@ export default defineCachedEventHandler(
       // Without the visibility version a product stays in the cached page for
       // five minutes after being hidden.
       const vis = await getVisibilityVersion()
-      return `inventory-v5:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
+      // v6: responses gained `lowStock`. Bumped so cached v5 bodies without it
+      // are not served after deploy.
+      return `inventory-v6:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than

@@ -187,6 +187,12 @@ useHead({
         <div class="flex flex-col">
           <div class="mb-6">
             <span
+              v-if="product?.lowStock"
+              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-50 text-amber-700 mb-3 border border-amber-100"
+              >Low Stock</span
+            >
+            <span
+              v-else
               class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-green-50 text-green-700 mb-3 border border-green-100"
               >In Stock</span
             >
@@ -208,6 +214,14 @@ useHead({
 
           <!-- Purchase Controls -->
           <div class="space-y-6">
+            <!-- Urgency without the number: the count stays internal. -->
+            <p
+              v-if="product?.lowStock"
+              class="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800"
+            >
+              <span class="material-symbols-outlined text-amber-600">schedule</span>
+              Low stock — order soon to secure yours.
+            </p>
             <div class="flex flex-col sm:flex-row gap-4">
               <!-- Quantity Selector -->
               <div class="flex items-center border-2 border-slate-100 rounded-2xl overflow-hidden bg-slate-50 h-16">

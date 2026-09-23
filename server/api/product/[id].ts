@@ -2,6 +2,7 @@ import { logger } from '../../utils/logger'
 import { resolveIsDealerFromEvent } from '../../utils/dealerCheck'
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { getHiddenProductIds } from '../../utils/productVisibility'
+import { isLowStock } from '../../utils/lowStock'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -46,13 +47,21 @@ export default defineEventHandler(async (event) => {
       // The mirrored Cloudinary URL, which the Bitrix payload knows nothing
       // about. Without this the detail page falls all the way through to the
       // placeholder for any product whose picture only exists in the mirror.
+      //
+      // Stock rides the same query: the flag goes out, the count does not.
+      product.lowStock = false
       try {
         const supabase = getSupabaseAdminClient()
-        const { data } = await supabase.from('products').select('image_url').eq('id', String(id)).maybeSingle()
-        const mirrored = (data as { image_url?: string | null } | null)?.image_url
-        if (mirrored) product.imageUrl = mirrored
+        const { data } = await supabase
+          .from('products')
+          .select('image_url, quantity')
+          .eq('id', String(id))
+          .maybeSingle()
+        const row = data as { image_url?: string | null; quantity?: number | null } | null
+        if (row?.image_url) product.imageUrl = row.image_url
+        product.lowStock = isLowStock(row?.quantity)
       } catch {
-        // A missing picture is a worse page, not a broken one.
+        // A missing picture or badge is a worse page, not a broken one.
       }
 
       // Always strip the raw PROPERTY_184 so it doesn't leak

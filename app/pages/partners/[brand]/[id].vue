@@ -61,6 +61,14 @@ useHead({
 
           <div class="text-3xl font-black text-[#002888] mb-6">₦{{ Number(product.PRICE).toLocaleString() }}</div>
 
+          <p
+            v-if="product.lowStock"
+            class="mb-6 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800"
+          >
+            <span class="material-symbols-outlined text-amber-600">schedule</span>
+            Low stock — order soon to secure yours.
+          </p>
+
           <p class="text-slate-600 mb-8 leading-relaxed">
             High-efficiency solar equipment designed for uninterrupted 24/7 power. Includes intelligent battery
             management and seamless indoor integration.
