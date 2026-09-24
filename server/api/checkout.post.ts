@@ -369,6 +369,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = parsedBody.data
+
+  // The app requires an account at checkout; the website keeps guest
+  // checkout. `client` is self-declared, so this is not a security boundary.
+  // It stops an app bug, such as an expired token that was not refreshed,
+  // from quietly filing the order as a guest's. Checked before the cart is
+  // priced so a refusal costs no Bitrix calls.
+  if (body.client === 'app' && !(await resolveUserIdFromEvent(event))) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Please sign in to place your order.',
+      data: { code: 'SIGN_IN_REQUIRED' },
+    })
+  }
+
   const config = useRuntimeConfig()
   const bitrixUrl = config.bitrixWebhookUrl
 

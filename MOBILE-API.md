@@ -225,6 +225,22 @@ files the order against the right store and messages that branch's manager. With
 still goes through, but lands with no branch and nobody is told. Every branch in the list carries
 one — see [Branches](#7-branches).
 
+**The customer must be signed in.** A request with `"client": "app"` and no valid Bearer token is
+refused with `401` and `data.code: "SIGN_IN_REQUIRED"`, before anything is charged or filed. The
+website still allows guest checkout; the app does not. Most often this means the token expired and
+was not refreshed. Refresh the session and retry, or send the customer to sign in. Never drop
+`client` to get round it: the order would then be filed as a guest's and would not appear in their
+account.
+
+Email confirmation is **on**, so `signUp` gives no session until the customer taps the link in the
+confirmation email. If you register people at checkout, pass `emailRedirectTo` with the app's deep
+link. Otherwise the link opens the website's `/confirm` page and signs them in on the web instead
+of the app. The deep link must also be in Supabase's allowed redirect URLs (Authentication → URL
+Configuration). A magic link (`signInWithOtp`) needs the same redirect, and asks for no password.
+
+Guest orders placed earlier with the same email (on the website, say) are attached to the account
+automatically once it is confirmed, the next time the profile is loaded.
+
 **Payment rules** — the same as the website:
 
 | `fulfillment` | allowed `paymentMethod` |
@@ -457,6 +473,7 @@ Everything else still requires authentication. Unavailable:
 | `403` on a POST | CSRF. You sent *some* credential but not a valid pair — e.g. a cookie without the matching `x-csrf-token` header. Send either a clean anonymous request or a Bearer token, not a half-set. |
 | `200` but no `dealerPrice` | Not an approved dealer, **or the token didn't arrive**. See Failing closed. |
 | `401` on `/api/user/profile` | No valid Supabase session on the request. |
+| `401` `SIGN_IN_REQUIRED` on `/api/checkout` | App order with no valid Bearer token. Refresh the session or sign the customer in. |
 
 ---
 
