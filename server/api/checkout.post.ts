@@ -101,6 +101,15 @@ type BitrixProductResult = {
   }
 }
 
+/**
+ * "Product is not found." for a deleted product, "ID is not defined or
+ * invalid." for an id that could never exist. Either way it cannot be bought.
+ */
+function isBitrixNotFound(error: unknown): boolean {
+  const failure = error as { statusCode?: number; data?: { error_description?: unknown } }
+  return failure?.statusCode === 400 && /not found|invalid/i.test(String(failure.data?.error_description ?? ''))
+}
+
 async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartItem[]) {
   const isDealer = await resolveIsDealerFromEvent(event)
 
@@ -126,12 +135,40 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
     return { productId, quantity }
   })
 
-  // Fetch all products in parallel instead of serially
+  // Fetch all products in parallel instead of serially.
+  //
+  // Bitrix answers a deleted product with HTTP 400 "Product is not found.",
+  // which $fetch throws. Uncaught, that reached the customer as "Server Error"
+  // and never got to the unavailable-product check below, so a cart saved
+  // before a product was removed could not be checked out and did not say why.
+  // Any other failure is still thrown: Bitrix being down is not the product's fault.
   const responses = await Promise.all(
     validatedItems.map(({ productId }) =>
-      bitrixFetch<BitrixProductResult>(`crm.product.get?id=${encodeURIComponent(String(productId))}`),
+      bitrixFetch<BitrixProductResult>(`crm.product.get?id=${encodeURIComponent(String(productId))}`).catch(
+        (error: unknown) => {
+          if (isBitrixNotFound(error)) return null
+          throw error
+        },
+      ),
     ),
   )
+
+  // Every unavailable item at once, like the stock shortages below, so the
+  // customer is not sent back once per stale item. 409 with the ids so the
+  // client can remove them from the cart.
+  const unavailable = responses.flatMap((response, index) => {
+    const product = response?.result
+    if (product && product.ACTIVE !== 'N') return []
+    return [{ id: String(validatedItems[index]!.productId), name: product?.NAME || null }]
+  })
+  if (unavailable.length) {
+    logger.info('Checkout API', 'Order refused: cart holds unavailable products', { unavailable })
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Some items in your cart are no longer available.',
+      data: { code: 'PRODUCT_UNAVAILABLE', items: unavailable },
+    })
+  }
 
   // Stock comes from the catalog module in one call. crm.product.get never
   // returns QUANTITY, so the check below read an absent field and never ran —
@@ -376,6 +413,10 @@ export default defineEventHandler(async (event) => {
   // from quietly filing the order as a guest's. Checked before the cart is
   // priced so a refusal costs no Bitrix calls.
   if (body.client === 'app' && !(await resolveUserIdFromEvent(event))) {
+    // A header that was sent but refused is logged with its reason by bearerAuth.
+    logger.warn('Checkout API', 'App order refused: no signed-in user', {
+      authorizationHeader: Boolean(getHeader(event, 'authorization')),
+    })
     throw createError({
       statusCode: 401,
       statusMessage: 'Please sign in to place your order.',

@@ -38,9 +38,47 @@ export function getBearerToken(event: H3Event): string | null {
   return token
 }
 
+/**
+ * Why a token was refused, for the log only. The payload is decoded for
+ * diagnosis and trusted for nothing: GoTrue has already said no.
+ *
+ * Without this a refused token was silent, and endpoints that allow guests
+ * (checkout) simply carried on as a guest — which is how the app's orders all
+ * arrived with user_id null and nobody could see why.
+ */
+function describeRejectedToken(token: string): string {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as {
+      role?: string
+      exp?: number
+      sub?: string
+    }
+    if (payload.role === 'anon') return 'anon key sent as the Bearer token instead of the session access token'
+    if (payload.role === 'service_role') return 'service role key sent as the Bearer token'
+    if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) return 'access token expired'
+    if (!payload.sub) return 'token has no user (sub)'
+    return 'rejected by GoTrue'
+  } catch {
+    return 'not a readable JWT'
+  }
+}
+
+function describeHeader(header: string): string {
+  const value = header.slice(BEARER_PREFIX.length).trim()
+  if (!value || value === 'null' || value === 'undefined') return `empty Bearer value ("${value}")`
+  return `not a JWT (${value.split('.').length} part(s))`
+}
+
 export async function resolveBearerUser(event: H3Event): Promise<BearerUser | null> {
   const token = getBearerToken(event)
-  if (!token) return null
+  if (!token) {
+    const header = getHeader(event, 'authorization') || ''
+    // The cron secret is a Bearer on /api/admin/* and is expected not to be a JWT.
+    if (header && !event.path.startsWith('/api/admin/')) {
+      logger.warn('BearerAuth', 'Bearer header ignored', { path: event.path, reason: describeHeader(header) })
+    }
+    return null
+  }
 
   const config = useRuntimeConfig()
   const url = config.public.supabaseUrl as string
@@ -53,7 +91,14 @@ export async function resolveBearerUser(event: H3Event): Promise<BearerUser | nu
     })
     const { data, error } = await client.auth.getUser(token)
 
-    if (error || !data?.user?.id) return null
+    if (error || !data?.user?.id) {
+      logger.warn('BearerAuth', 'Bearer token rejected; request continues as anonymous', {
+        path: event.path,
+        reason: describeRejectedToken(token),
+        error: error?.message,
+      })
+      return null
+    }
     return { id: data.user.id, email: data.user.email ?? null }
   } catch (err) {
     logger.warn('BearerAuth', 'Token verification threw', {

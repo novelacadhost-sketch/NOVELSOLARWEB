@@ -192,10 +192,22 @@ const submitOrder = async () => {
     // still serve. /api/checkout answers 409 INSUFFICIENT_STOCK with the short
     // items, and the popup below turns that into a call-back request.
     const shortage = readStockShortage(error)
+    const unavailable = readUnavailable(error)
     if (shortage) {
       stockShortage.value = shortage
       stockRequestPhone.value = form.phone
       stockRequestState.value = 'asking'
+    } else if (unavailable) {
+      // Removed from the catalog since it went in the cart. It can never be
+      // bought, so leaving it there would refuse every retry the same way.
+      const gone = new Set(unavailable.map((item) => String(item.id)))
+      const names = cart.value.filter((item) => gone.has(String(item.id))).map((item) => item.name)
+      cart.value = cart.value.filter((item) => !gone.has(String(item.id)))
+      addToast(
+        'Items no longer available',
+        `We removed ${names.length ? names.join(', ') : 'some items'} from your cart. Please review your order and try again.`,
+        'error',
+      )
     } else {
       addToast('Order Error', 'There was an issue processing your order. Please try again.', 'error')
     }
@@ -219,6 +231,11 @@ const stockRequestError = ref('')
 function readStockShortage(error: unknown): StockShortageItem[] | null {
   const body = (error as { data?: { data?: { code?: string; items?: StockShortageItem[] } } })?.data?.data
   return body?.code === 'INSUFFICIENT_STOCK' && Array.isArray(body.items) && body.items.length ? body.items : null
+}
+
+function readUnavailable(error: unknown): { id: string }[] | null {
+  const body = (error as { data?: { data?: { code?: string; items?: { id: string }[] } } })?.data?.data
+  return body?.code === 'PRODUCT_UNAVAILABLE' && Array.isArray(body.items) && body.items.length ? body.items : null
 }
 
 function closeStockShortage() {

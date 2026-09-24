@@ -232,11 +232,17 @@ was not refreshed. Refresh the session and retry, or send the customer to sign i
 `client` to get round it: the order would then be filed as a guest's and would not appear in their
 account.
 
-Email confirmation is **on**, so `signUp` gives no session until the customer taps the link in the
-confirmation email. If you register people at checkout, pass `emailRedirectTo` with the app's deep
-link. Otherwise the link opens the website's `/confirm` page and signs them in on the web instead
-of the app. The deep link must also be in Supabase's allowed redirect URLs (Authentication → URL
-Configuration). A magic link (`signInWithOtp`) needs the same redirect, and asks for no password.
+The app asks a guest to register when they first tap **add to cart**, which fits the backend: the
+cart lives in `cart_items`, which only a signed-in user can write. Email confirmation is **on**,
+though, so `signUp` gives no session until the customer taps the link in the confirmation email:
+
+- Pass `emailRedirectTo` with the app's deep link, and add that link to Supabase's allowed redirect
+  URLs (Authentication → URL Configuration). Otherwise the email opens the website's `/confirm`
+  page and signs them in on the web instead of the app. A magic link (`signInWithOtp`) needs the
+  same redirect, and asks for no password.
+- Remember the product (and quantity) they tapped, and add it to `cart_items` once the session
+  arrives through the deep link. They are away from the app reading an email in between, and
+  coming back to an empty cart makes them find it again.
 
 Guest orders placed earlier with the same email (on the website, say) are attached to the account
 automatically once it is confirmed, the next time the profile is loaded.
@@ -474,6 +480,7 @@ Everything else still requires authentication. Unavailable:
 | `200` but no `dealerPrice` | Not an approved dealer, **or the token didn't arrive**. See Failing closed. |
 | `401` on `/api/user/profile` | No valid Supabase session on the request. |
 | `401` `SIGN_IN_REQUIRED` on `/api/checkout` | App order with no valid Bearer token. Refresh the session or sign the customer in. |
+| `409` `PRODUCT_UNAVAILABLE` on `/api/checkout` | The cart holds products removed from the catalog since they were added. `data.items` lists every one (`id`, `name` or null). Delete those rows from `cart_items`, tell the customer, and let them retry. |
 
 ---
 
