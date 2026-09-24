@@ -1,6 +1,8 @@
 import { serverSupabaseUser } from '#supabase/server'
 import { resolveBitrixContactId, cacheProfileName } from '../../utils/bitrixContact'
 import { getAuthUserId } from '../../utils/authUserId'
+import { claimGuestOrders } from '../../utils/claimGuestOrders'
+import type { BearerUser } from '../../utils/bearerAuth'
 import { bitrixFetch } from '../../utils/bitrixAuth'
 import { logger } from '../../utils/logger'
 
@@ -24,17 +26,25 @@ interface BitrixContact {
 }
 
 export default defineEventHandler(async (event) => {
-  const user = await serverSupabaseUser(event)
-  const userId = getAuthUserId(user)
+  // serverSupabaseUser reads the cookie only, so the mobile app's Bearer token
+  // got a 401 here. 0.bearer-auth.ts has already verified that token.
+  const user = await serverSupabaseUser(event).catch(() => null)
+  const bearer = event.context.bearerUser as BearerUser | undefined
+  const userId = getAuthUserId(user) ?? bearer?.id ?? null
 
-  if (!user || !userId) {
+  if (!userId) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Unauthorized. Please login.',
     })
   }
 
-  const email = user.email ?? ''
+  const email = (user ? user.email : bearer?.email) ?? ''
+
+  // Here as well as at sign-in: the mobile app signs in through supabase-js
+  // and never calls /api/auth/session, and a web customer who was already
+  // signed in before this shipped would otherwise never be checked.
+  await claimGuestOrders(userId, email)
 
   let contactId: string
   try {

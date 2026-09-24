@@ -1,6 +1,7 @@
 import { serverSupabaseUser } from '#supabase/server'
 import { resolveBitrixContactId } from '../../utils/bitrixContact'
 import { getAuthUserId } from '../../utils/authUserId'
+import { claimGuestOrders } from '../../utils/claimGuestOrders'
 import { logger } from '../../utils/logger'
 
 /**
@@ -30,6 +31,8 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'User email not found in Supabase session.',
     })
   }
+
+  await claimGuestOrders(userId, email)
 
   try {
     await resolveBitrixContactId(userId, email)
