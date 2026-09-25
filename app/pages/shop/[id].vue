@@ -196,16 +196,9 @@ useHead({
               class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-green-50 text-green-700 mb-3 border border-green-100"
               >In Stock</span
             >
-            <h1 class="text-3xl md:text-5xl font-bold text-slate-900 mb-3 leading-tight tracking-tight">
+            <h1 class="text-3xl md:text-5xl font-bold text-slate-900 mb-6 leading-tight tracking-tight">
               {{ product?.NAME || 'Loading...' }}
             </h1>
-
-            <div class="flex items-center gap-3 mb-6">
-              <div class="flex text-yellow-500 bg-yellow-50 px-2 py-1 rounded-lg">
-                <span v-for="i in 5" :key="i" class="material-symbols-outlined text-lg fill-current">star</span>
-              </div>
-              <span class="text-sm text-slate-400 font-bold border-l pl-3 border-slate-200">124 REVIEWS</span>
-            </div>
 
             <p class="text-4xl md:text-5xl font-black text-[#002888] tracking-tighter">
               ₦ {{ Number(product?.PRICE || 0).toLocaleString() }}
@@ -362,70 +355,6 @@ useHead({
           </div>
         </div>
       </div>
-
-      <!-- Customer Reviews Section -->
-      <section class="mb-16 pt-16 border-t border-slate-100">
-        <div class="flex items-center justify-between mb-10">
-          <div>
-            <h2 class="text-2xl md:text-3xl font-bold text-slate-900 mb-1">Customer Reviews</h2>
-            <p class="text-slate-500 text-sm font-medium">Real feedback from verified solar users.</p>
-          </div>
-          <button
-            class="hidden sm:block px-8 py-3 rounded-xl border-2 border-slate-100 font-black text-slate-700 hover:bg-slate-50 hover:border-slate-200 transition-all text-sm uppercase tracking-wider"
-          >
-            Write a Review
-          </button>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <!-- Summary Card -->
-          <div
-            class="bg-gradient-to-br from-[#002888] to-blue-900 p-10 rounded-3xl text-center flex flex-col justify-center text-white shadow-xl shadow-blue-900/10"
-          >
-            <p class="text-7xl font-black mb-2 tracking-tighter">4.8</p>
-            <div class="flex justify-center text-blue-200 mb-3">
-              <span v-for="i in 5" :key="i" class="material-symbols-outlined text-2xl fill-current">star</span>
-            </div>
-            <p class="text-blue-100 font-bold uppercase tracking-widest text-xs">Based on 124 ratings</p>
-          </div>
-
-          <!-- Reviews List -->
-          <div class="md:col-span-2 space-y-6">
-            <div
-              v-for="i in 2"
-              :key="i"
-              class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm transition-transform hover:scale-[1.01] duration-300"
-            >
-              <div class="flex justify-between items-start mb-4">
-                <div class="flex items-center gap-3">
-                  <div
-                    class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400"
-                  >
-                    V
-                  </div>
-                  <div>
-                    <h4 class="font-black text-slate-900 uppercase text-xs tracking-wider">Verified Buyer</h4>
-                    <div class="flex text-yellow-500 text-xs">
-                      <span v-for="s in 5" :key="s" class="material-symbols-outlined text-sm fill-current">star</span>
-                    </div>
-                  </div>
-                </div>
-                <span class="text-[10px] font-black text-slate-300 uppercase tracking-tighter">Recent Purchase</span>
-              </div>
-              <p class="text-slate-600 text-sm md:text-base leading-relaxed italic">
-                "Excellent product quality and fast delivery. Highly recommend for residential use in regions with
-                unstable grid power."
-              </p>
-            </div>
-
-            <button
-              class="w-full py-4 text-[#002888] font-black uppercase text-xs tracking-widest hover:bg-blue-50 rounded-2xl transition-all"
-            >
-              See All 124 Reviews &rarr;
-            </button>
-          </div>
-        </div>
-      </section>
     </div>
   </div>
 </template>
