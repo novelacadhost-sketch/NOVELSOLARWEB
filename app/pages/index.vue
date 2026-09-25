@@ -159,7 +159,11 @@
 
       <!-- Loading State -->
       <div v-if="pending" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-        <div v-for="i in 4" :key="i" class="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 animate-pulse">
+        <div
+          v-for="i in FEATURED_COUNT"
+          :key="i"
+          class="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 animate-pulse"
+        >
           <div class="aspect-square bg-gray-100 rounded-xl" />
           <div class="h-4 bg-gray-100 rounded w-3/4" />
           <div class="h-4 bg-gray-100 rounded w-1/2" />
@@ -319,6 +323,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { excludeServiceProducts } from '~/utils/productFilters'
+import type { BitrixProduct } from '~/types'
 import { useHead } from '#imports'
 
 useHead({
@@ -430,35 +435,71 @@ onUnmounted(() => {
   }
 })
 
-const ALLOWED_BRANDS = ['novelsolar', 'novel solar', 'novel']
-const FEATURED_PER_WEEK = 4
+const FEATURED_COUNT = 12
+// 39 of the 83 NovelSolar products are charge controllers. Without a cap a
+// week could be twelve near-identical controllers.
+const FEATURED_PER_SECTION = 3
+const INVENTORY_PAGE = 50
+
+const { getProductImage } = useProductImage()
+const PLACEHOLDER_IMAGE = '/images/placeholder.png'
+
+/** Same seed, same order — so every visitor sees the same 12 all week, and SSR matches hydration. */
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  const out = [...items]
+  let state = seed >>> 0
+  const next = () => {
+    state = (state + 0x6D2B79F5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1))
+    ;[out[i], out[j]] = [out[j]!, out[i]!]
+  }
+  return out
+}
+
+// Read once, here: a composable called after the first `await` below has lost
+// the Nuxt instance and throws, which blanked the whole section.
+const requestHeaders = useRequestHeaders(['cookie'])
 
 const { data: featuredProducts, pending } = await useAsyncData('home-featured-novelsolar', async () => {
-  const all = await $fetch<any[]>('/api/inventory', { headers: useRequestHeaders(['cookie']) })
-
-  const novelSolarPool = excludeServiceProducts(all || [])
-    .filter((p) => {
-      if (typeof p?.NAME !== 'string') return false
-      const lowerName = p.NAME.toLowerCase()
-      return ALLOWED_BRANDS.some((brand) => lowerName.includes(brand))
+  // Filtered by brand on the server BEFORE pagination. This page used to take
+  // the newest 50 products of any brand and look for NovelSolar among them,
+  // which found 1.
+  const pool: BitrixProduct[] = []
+  for (let start = 0; ; start += INVENTORY_PAGE) {
+    const page = await $fetch<BitrixProduct[]>('/api/inventory', {
+      query: { brand: 'novel', start },
+      headers: requestHeaders,
     })
-    // Sort by ID desc as a proxy for created_at desc — Bitrix IDs are monotonically increasing,
-    // so the newest products land at the top of the rotation pool.
-    .sort((a, b) => Number(b.ID) - Number(a.ID))
-
-  // Fewer than a full page → show everything, no rotation needed.
-  if (novelSolarPool.length <= FEATURED_PER_WEEK) {
-    return novelSolarPool
+    pool.push(...(page || []))
+    if (!page || page.length < INVENTORY_PAGE) break
   }
 
-  // Deterministic weekly rotation — same week → same slice for every visitor (SSR-safe).
-  const now = new Date()
-  const startOfYear = new Date(now.getFullYear(), 0, 1)
-  const weekNumber = Math.ceil(((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7)
+  // Week number since the epoch, so the rotation does not jump at New Year.
+  const week = Math.floor(Date.now() / (7 * 86400000))
+  const shuffled = seededShuffle(excludeServiceProducts(pool), week)
 
-  const totalPages = Math.ceil(novelSolarPool.length / FEATURED_PER_WEEK)
-  const startIndex = (weekNumber % totalPages) * FEATURED_PER_WEEK
-  return novelSolarPool.slice(startIndex, startIndex + FEATURED_PER_WEEK)
+  // Pictured products first: only 16 of the 83 have an image, and a row of
+  // placeholders is not a feature. The rest fill any gap.
+  const hasImage = (p: BitrixProduct) => getProductImage(p) !== PLACEHOLDER_IMAGE
+  const ordered = [...shuffled.filter(hasImage), ...shuffled.filter((p) => !hasImage(p))]
+
+  const perSection = new Map<string, number>()
+  const picked: BitrixProduct[] = []
+  for (const product of ordered) {
+    const section = String(product.sectionName ?? 'other')
+    const count = perSection.get(section) ?? 0
+    if (count >= FEATURED_PER_SECTION) continue
+    perSection.set(section, count + 1)
+    picked.push(product)
+    if (picked.length === FEATURED_COUNT) break
+  }
+  return picked
 })
 
 const { data: recentInsights } = await useAsyncData('home-insights', () => {
