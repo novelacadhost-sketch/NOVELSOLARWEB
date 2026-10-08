@@ -179,6 +179,17 @@ const cards = computed(() => [
     disabled: false,
   },
   {
+    to: '/admin/manage-promotions',
+    title: 'Promotions',
+    subtitle: 'Staff codes, the customer discount, and sales credited to each member of staff.',
+    icon: 'sell',
+    iconBg: 'bg-rose-100',
+    iconColor: 'text-rose-600',
+    decorClass: 'text-rose-500',
+    linkColor: 'text-rose-600',
+    disabled: false,
+  },
+  {
     to: '/admin/manage-dealers',
     title: 'Dealer Applications',
     subtitle: 'Review incoming dealer applications, manage wholesale pricing access, and track setup invitations.',

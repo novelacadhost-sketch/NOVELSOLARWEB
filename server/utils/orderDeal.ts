@@ -2,8 +2,10 @@ import { logger } from './logger'
 import { bitrixFetch } from './bitrixAuth'
 import { BITRIX_DEAL, BITRIX_SOURCE } from './bitrixProperties'
 import { findOrCreateBitrixContact, resolveBitrixContactId } from './bitrixContact'
-import { notifyBranchManagerOfOrder } from './branchManagerNotify'
+import { commentOnDeal, notifyBranchManagerOfOrder } from './branchManagerNotify'
 import { describeFulfillment, describePaymentMethod } from './paymentMethod'
+import { messageStaff } from './staffMessage'
+import { staffNameFor } from './staffCodes'
 
 /**
  * Files a web order in Bitrix as a DEAL.
@@ -23,8 +25,25 @@ export interface OrderDealCartItem {
   id?: string | number
   ID?: string | number
   name?: string
+  /** Before any staff-code discount. */
   price?: number
+  /** Staff-code discount per unit, in naira. */
+  discount?: number
   quantity: number
+}
+
+/** A staff code used on the order. See server/utils/promotions.ts. */
+export interface OrderReferral {
+  code: string
+  staffBitrixId: number
+  discountPercent: number
+  discountAmount: number
+  /** Before the discount; `total` on the order is after it. */
+  subtotal: number
+  /** Set when the staff member is credited but the customer got no discount. */
+  noDiscountReason?: 'dealer' | 'disabled' | 'below_minimum' | null
+  /** The cap, when the discount was scaled down to fit under it. */
+  cappedAt?: number | null
 }
 
 export interface OrderDealInput {
@@ -54,6 +73,7 @@ export interface OrderDealInput {
   userId?: string | null
   /** Marks a deal recreated from the failed-order queue. */
   recovered?: boolean
+  referral?: OrderReferral | null
 }
 
 export interface OrderDealResult {
@@ -61,6 +81,20 @@ export interface OrderDealResult {
   contactId: string | null
   productRowsSet: boolean
   branchManagerNotified: boolean
+  staffNotified: boolean
+}
+
+const PORTAL_URL = 'https://nisl.bitrix24.com'
+
+const naira = (amount: number) => `₦${Number(amount || 0).toLocaleString()}`
+
+function describeReferral(referral: OrderReferral): string {
+  if (referral.noDiscountReason === 'dealer') return 'dealer order, no discount on dealer pricing'
+  if (referral.noDiscountReason === 'disabled') return 'no discount running'
+  if (referral.noDiscountReason === 'below_minimum') return 'order below the minimum for a discount'
+  if (!(referral.discountAmount > 0)) return 'no discount applied'
+  const cap = referral.cappedAt ? `, capped at ${naira(referral.cappedAt)}` : ''
+  return `${referral.discountPercent}% staff-code discount${cap}, -${naira(referral.discountAmount)} on ${naira(referral.subtotal)}`
 }
 
 function productIdOf(item: OrderDealCartItem): string | null {
@@ -85,11 +119,12 @@ function branchElementId(branch: Record<string, unknown> | null | undefined): st
   return /^\d+$/.test(text) ? text : null
 }
 
-function buildComments(order: OrderDealInput): string {
+function buildComments(order: OrderDealInput, staffName: string | null): string {
   const items = order.cart
     .map((item) => {
       const label = item.name || `product #${productIdOf(item) ?? 'unknown'}`
-      const price = typeof item.price === 'number' ? ` (₦${item.price.toLocaleString()})` : ''
+      const discount = item.discount ? `, -${naira(item.discount)} each` : ''
+      const price = typeof item.price === 'number' ? ` (${naira(item.price)}${discount})` : ''
       return `- ${item.quantity}x ${label}${price}`
     })
     .join('\n')
@@ -109,6 +144,11 @@ function buildComments(order: OrderDealInput): string {
   // The customer was told an agent would call about the cost, so whoever works
   // the deal needs to know the total excludes it.
   if (!isPickup) lines.push('Delivery cost: NOT quoted - agent to contact the customer')
+
+  if (order.referral) {
+    const who = staffName ? ` (${staffName})` : ''
+    lines.push(`Staff code: ${order.referral.code}${who} - ${describeReferral(order.referral)}`)
+  }
 
   return [...lines, `Notes: ${order.customer.note || 'None'}`, '', 'ITEMS:', items].join('\n')
 }
@@ -165,11 +205,22 @@ async function resolveContact(order: OrderDealInput): Promise<string | null> {
 async function setProductRows(dealId: string, order: OrderDealInput): Promise<boolean> {
   const rows = order.cart
     .filter((item) => productIdOf(item) !== null && typeof item.price === 'number')
-    .map((item) => ({
-      PRODUCT_ID: productIdOf(item),
-      PRICE: item.price,
-      QUANTITY: item.quantity,
-    }))
+    .map((item) => {
+      const price = item.price as number
+      const discount = item.discount && item.discount > 0 ? item.discount : 0
+      if (!discount) return { PRODUCT_ID: productIdOf(item), PRICE: price, QUANTITY: item.quantity }
+      // PRICE is what the customer pays per unit; the discount is recorded as an
+      // absolute amount (type 1) so the line reads "price, less N" in Bitrix and
+      // the deal total matches what Paystack charged to the naira.
+      return {
+        PRODUCT_ID: productIdOf(item),
+        PRICE: price - discount,
+        QUANTITY: item.quantity,
+        DISCOUNT_TYPE_ID: 1,
+        DISCOUNT_SUM: discount,
+        DISCOUNT_RATE: Math.round((discount / price) * 10000) / 100,
+      }
+    })
 
   if (rows.length === 0) return false
 
@@ -196,21 +247,24 @@ async function setProductRows(dealId: string, order: OrderDealInput): Promise<bo
  */
 export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealResult> {
   const contactId = await resolveContact(order)
+  const staffName = order.referral ? await staffNameFor(order.referral.staffBitrixId) : null
 
   const name = `${order.customer.firstName || 'Guest'} ${order.customer.lastName || ''}`.trim()
+  const summary = buildComments(order, staffName)
   const fields: Record<string, unknown> = {
     TITLE: `Web Order: ${name} (${order.orderId})${order.recovered ? ' [RECOVERED]' : ''}`,
     CATEGORY_ID: BITRIX_DEAL.CATEGORY_ID,
     STAGE_ID: BITRIX_DEAL.STAGE_ID,
     OPPORTUNITY: order.total,
     CURRENCY_ID: 'NGN',
-    COMMENTS: buildComments(order),
+    COMMENTS: summary,
     SOURCE_ID: 'WEB',
     TYPE_ID: 'SALE',
     [BITRIX_DEAL.WEB_ORDER_FLAG]: BITRIX_DEAL.WEB_ORDER_FLAG_YES,
   }
 
   if (contactId) fields.CONTACT_ID = contactId
+  if (order.referral) fields[BITRIX_DEAL.REFERRED_BY_FIELD] = order.referral.staffBitrixId
 
   const branchId = branchElementId(order.branch)
   if (branchId) fields[BITRIX_DEAL.BRANCH_FIELD] = branchId
@@ -226,11 +280,20 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
   const dealId = String(response.result)
   const productRowsSet = await setProductRows(dealId, order)
 
+  // The same summary again as a timeline comment. A portal automation replaces
+  // COMMENTS on every new Product Sales deal with the source name ("Website
+  // Contact Form") about three seconds after creation — measured 2026-10-08 —
+  // which silently wiped the items, fulfilment, payment and staff code from
+  // every web order. Timeline comments are not touched by it. Never fatal.
+  const summaryOnTimeline = await commentOnDeal(dealId, summary)
+
   // The warehouse on a product row cannot be set over REST, so the branch
   // manager is told to pick it. Never fatal; see branchManagerNotify.ts.
   const branchManagerNotified = branchId
     ? await notifyBranchManagerOfOrder({ branchElementId: branchId, dealId, orderId: order.orderId, total: order.total })
     : false
+
+  const staffNotified = order.referral ? await notifyReferringStaff(order, dealId) : false
 
   logger.info('OrderDeal', 'Created deal in Bitrix', {
     orderId: order.orderId,
@@ -239,7 +302,40 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
     branchId,
     productRowsSet,
     branchManagerNotified,
+    staffCode: order.referral?.code ?? null,
+    staffNotified,
+    summaryOnTimeline,
   })
 
-  return { dealId, contactId, productRowsSet, branchManagerNotified }
+  return { dealId, contactId, productRowsSet, branchManagerNotified, staffNotified }
+}
+
+/**
+ * Tell the staff member their code was used.
+ *
+ * Sent from here, once the deal exists, rather than at checkout: a pay-now
+ * order only gets its deal after Paystack confirms payment, so nobody is told
+ * about a sale that was never paid for. Never fatal.
+ */
+async function notifyReferringStaff(order: OrderDealInput, dealId: string): Promise<boolean> {
+  const referral = order.referral!
+  const customer = [order.customer.firstName, order.customer.lastName?.charAt(0)].filter(Boolean).join(' ')
+  const message = [
+    `[B]Your staff code ${referral.code} was used.[/B]`,
+    '',
+    `Customer: ${customer || 'Guest'}${order.customer.lastName ? '.' : ''}`,
+    `Order: ${order.orderId}`,
+    `Value: ${naira(order.total)} (${describeReferral(referral)})`,
+    `Deal: [URL=${PORTAL_URL}/crm/deal/details/${dealId}/]#${dealId}[/URL]`,
+  ].join('\n')
+
+  const sent = await messageStaff(referral.staffBitrixId, message)
+  if (!sent) {
+    logger.warn('OrderDeal', 'Could not notify the staff member whose code was used', {
+      orderId: order.orderId,
+      dealId,
+      staffBitrixId: referral.staffBitrixId,
+    })
+  }
+  return sent
 }

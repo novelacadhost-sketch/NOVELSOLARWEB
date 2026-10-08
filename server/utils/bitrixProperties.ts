@@ -65,6 +65,14 @@ export const BITRIX_DEAL = {
   WEB_ORDER_FLAG: 'UF_CRM_1789747055987',
   /** Bitrix boolean userfields take 1/0, not true/false. */
   WEB_ORDER_FLAG_YES: 1,
+  /**
+   * "Referred by (staff code)" — an employee field, value is the Bitrix user
+   * id. Created by this app on 2026-10-08 for staff codes; filterable in the
+   * deal list, which is how sales are reported per staff member. Deliberately
+   * not ASSIGNED_BY_ID: the responsible person is what routes a deal to the
+   * branch, and a referral must not pull it away.
+   */
+  REFERRED_BY_FIELD: 'UF_CRM_REFERRED_BY',
 } as const
 
 /**

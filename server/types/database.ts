@@ -65,6 +65,9 @@ export interface FailedOrder {
   cart: Array<{
     id?: string | number
     ID?: string | number
+    name?: string
+    price?: number
+    discount?: number
     quantity: number
   }>
   total: number
@@ -74,6 +77,16 @@ export interface FailedOrder {
     name?: string
   }
   paymentMethod?: string
+  /** Absent on orders queued before staff codes existed. */
+  referral?: {
+    code: string
+    staffBitrixId: number
+    discountPercent: number
+    discountAmount: number
+    subtotal: number
+    noDiscountReason?: 'dealer' | 'disabled' | 'below_minimum' | null
+    cappedAt?: number | null
+  } | null
   timestamp: string
   status: string
 }
@@ -93,6 +106,8 @@ export interface OrderDetails {
   branchName: string
   subtotal: number
   shipping: number
+  /** A staff-code discount, shown as its own line between subtotal and total. */
+  discount?: { label: string; amount: number } | null
   total: number
   products: OrderProductItem[]
 }

@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from './logger'
 import { fromKobo, type PaystackTransaction } from './paystack'
-import { createOrderDeal } from './orderDeal'
+import { createOrderDeal, type OrderReferral } from './orderDeal'
 
 /**
  * Marks an order paid, from either the webhook or the browser callback.
@@ -31,14 +31,42 @@ interface OrderRow {
   fulfillment: string | null
   branch: Record<string, unknown> | null
   payment_method: string | null
+  subtotal: number | null
+  staff_code: string | null
+  staff_bitrix_id: number | null
+  discount_percent: number | null
+  discount_amount: number | null
 }
 
 interface OrderItemRow {
   bitrix_product_id: string | null
   name: string
   unit_price: number
+  unit_discount: number | null
   quantity: number
 }
+
+/**
+ * The staff code as it was applied at checkout. Rebuilt from the order rather
+ * than looked up again, so a code switched off or a rate changed between
+ * checkout and payment cannot change what the customer was promised.
+ */
+function referralOf(order: OrderRow): OrderReferral | null {
+  if (!order.staff_code || !order.staff_bitrix_id) return null
+  const discountAmount = Number(order.discount_amount ?? 0)
+  return {
+    code: order.staff_code,
+    staffBitrixId: order.staff_bitrix_id,
+    discountPercent: Number(order.discount_percent ?? 0),
+    discountAmount,
+    subtotal: Number(order.subtotal ?? Number(order.total ?? 0) + discountAmount),
+    // Dealer or switched-off are indistinguishable once stored, so neither is
+    // claimed; the deal just says no discount was applied.
+    noDiscountReason: null,
+  }
+}
+
+const ORDER_ITEM_COLUMNS = 'bitrix_product_id, name, unit_price, unit_discount, quantity'
 
 interface OrderEventInsert {
   order_id: string
@@ -72,7 +100,8 @@ export async function recordPaystackPayment(
       .from('orders')
       .select(
         'id, status, total, client_order_ref, user_id, customer_email, customer_first_name, ' +
-          'customer_last_name, customer_phone, shipping_address, fulfillment, branch, payment_method',
+          'customer_last_name, customer_phone, shipping_address, fulfillment, branch, payment_method, ' +
+          'subtotal, staff_code, staff_bitrix_id, discount_percent, discount_amount',
       )
       .eq('client_order_ref', reference)
       .maybeSingle<OrderRow>()
@@ -171,7 +200,7 @@ async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference
     const supabase = serverSupabaseServiceRole(event)
     const { data: items, error } = await supabase
       .from('order_items')
-      .select('bitrix_product_id, name, unit_price, quantity')
+      .select(ORDER_ITEM_COLUMNS)
       .eq('order_id', order.id)
       .returns<OrderItemRow[]>()
 
@@ -190,6 +219,7 @@ async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference
         id: item.bitrix_product_id ?? undefined,
         name: item.name,
         price: Number(item.unit_price),
+        discount: Number(item.unit_discount ?? 0),
         quantity: item.quantity,
       })),
       total: Number(order.total ?? 0),
@@ -197,6 +227,7 @@ async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference
       paymentMethod: order.payment_method ?? undefined,
       fulfillment: order.fulfillment ?? undefined,
       userId: order.user_id,
+      referral: referralOf(order),
     })
 
     logger.info('Paystack', 'Created deal for paid order', { reference, dealId: deal.dealId })
@@ -220,7 +251,7 @@ async function queueDealForRetry(event: H3Event, order: OrderRow, reference: str
     const supabase = serverSupabaseServiceRole(event)
     const { data: items } = await supabase
       .from('order_items')
-      .select('bitrix_product_id, name, unit_price, quantity')
+      .select(ORDER_ITEM_COLUMNS)
       .eq('order_id', order.id)
       .returns<OrderItemRow[]>()
 
@@ -241,10 +272,12 @@ async function queueDealForRetry(event: H3Event, order: OrderRow, reference: str
         paymentMethod: order.payment_method,
         fulfillment: order.fulfillment,
         total: Number(order.total ?? 0),
+        referral: referralOf(order),
         cart: (items ?? []).map((item) => ({
           id: item.bitrix_product_id,
           name: item.name,
           price: Number(item.unit_price),
+          discount: Number(item.unit_discount ?? 0),
           quantity: item.quantity,
         })),
       },

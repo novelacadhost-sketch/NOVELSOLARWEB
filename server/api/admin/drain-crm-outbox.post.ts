@@ -1,6 +1,6 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from '../../utils/logger'
-import { createOrderDeal } from '../../utils/orderDeal'
+import { createOrderDeal, type OrderReferral } from '../../utils/orderDeal'
 import { STOCK_REQUEST_EVENT, deliverStockRequest, type StockRequestPayload } from '../../utils/stockRequest'
 
 /**
@@ -34,7 +34,10 @@ type OutboxRow = {
     paymentMethod?: string
     fulfillment?: string
     total?: number
-    cart?: Array<{ id?: string; name?: string; price?: number; quantity?: number }>
+    cart?: Array<{ id?: string; name?: string; price?: number; discount?: number; quantity?: number }>
+    // Only on website orders queued after payment; the app's database route
+    // takes no staff code.
+    referral?: OrderReferral | null
   }
   attempts: number
 }
@@ -108,12 +111,14 @@ export default defineEventHandler(async (event) => {
           id: item.id,
           name: item.name,
           price: item.price,
+          discount: item.discount,
           quantity: item.quantity ?? 1,
         })),
         total: row.payload.total ?? 0,
         branch: row.payload.branch,
         paymentMethod: row.payload.paymentMethod,
         fulfillment: row.payload.fulfillment,
+        referral: row.payload.referral ?? null,
       })
 
       const update: OutboxUpdate = { status: 'sent', last_error: null, updated_at: new Date().toISOString() }

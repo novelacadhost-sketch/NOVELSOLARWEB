@@ -7,7 +7,8 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
-import { createOrderDeal } from '../utils/orderDeal'
+import { createOrderDeal, type OrderReferral } from '../utils/orderDeal'
+import { applyDiscount, resolveReferral } from '../utils/promotions'
 import { describePaymentMethod } from '../utils/paymentMethod'
 import { initialiseTransaction } from '../utils/paystack'
 import { fetchCatalogStock, type CatalogStock } from '../utils/catalogStock'
@@ -36,6 +37,9 @@ type TrustedCartItem = {
   image: string
   quantity: number
 }
+
+/** After the staff-code discount; `price` stays the undiscounted unit price. */
+type PricedCartItem = TrustedCartItem & { discount: number }
 
 // Note: TrustedCartItem is defined locally above; the import from '../types/database' was removed to avoid the duplicate declaration.
 
@@ -84,6 +88,9 @@ const checkoutSchema = z.object({
   // sends the customer afterwards — the app's bridge page or the website's
   // thank-you page. Nothing about the order or its price depends on it.
   client: z.enum(['web', 'app']).optional().default('web'),
+  // A staff referral code. Never trusted: looked up server-side, and an unknown
+  // one is dropped rather than refusing the order — a typo must not cost a sale.
+  staffCode: z.string().trim().max(32).nullish(),
 })
 
 type BitrixProductResult = {
@@ -266,9 +273,7 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
     })
   }
 
-  const total = trustedCart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-
-  return { cart: trustedCart, total }
+  return { cart: trustedCart, isDealer }
 }
 
 type CheckoutCustomer = z.infer<typeof checkoutSchema>['customer']
@@ -291,6 +296,10 @@ type OrderRow = {
   total: number
   status: string
   client_order_ref: string
+  staff_code: string | null
+  staff_bitrix_id: number | null
+  discount_percent: number
+  discount_amount: number
 }
 
 type OrderItemRow = {
@@ -298,6 +307,7 @@ type OrderItemRow = {
   bitrix_product_id: string
   name: string
   unit_price: number
+  unit_discount: number
   quantity: number
   image_url: string
 }
@@ -320,11 +330,13 @@ async function persistOrder(
   order: {
     orderId: string
     customer: CheckoutCustomer
-    cart: TrustedCartItem[]
+    cart: PricedCartItem[]
+    subtotal: number
     total: number
     branch: Record<string, unknown>
     paymentMethod: string
     fulfillment: 'pickup' | 'delivery'
+    referral: OrderReferral | null
   },
 ): Promise<string | null> {
   try {
@@ -341,11 +353,15 @@ async function persistOrder(
       fulfillment: order.fulfillment,
       branch: order.branch,
       payment_method: order.paymentMethod,
-      subtotal: order.total,
+      subtotal: order.subtotal,
       shipping: 0,
       total: order.total,
       status: 'pending',
       client_order_ref: order.orderId,
+      staff_code: order.referral?.code ?? null,
+      staff_bitrix_id: order.referral?.staffBitrixId ?? null,
+      discount_percent: order.referral?.discountPercent ?? 0,
+      discount_amount: order.referral?.discountAmount ?? 0,
     }
 
     const { data, error } = (await supabase
@@ -367,6 +383,7 @@ async function persistOrder(
       bitrix_product_id: String(item.id),
       name: item.name,
       unit_price: item.price,
+      unit_discount: item.discount,
       quantity: item.quantity,
       image_url: item.image,
     }))
@@ -429,7 +446,31 @@ export default defineEventHandler(async (event) => {
 
   // Safely extract data
   const customer = body.customer || {}
-  const { cart, total } = await resolveTrustedCart(event, body.cart || [])
+  const { cart: trustedCart, isDealer } = await resolveTrustedCart(event, body.cart || [])
+
+  // The staff code decides the rate here, server-side, against prices this
+  // handler resolved from Bitrix. Dealers are credited but never discounted.
+  const referralResult = await resolveReferral(body.staffCode, isDealer)
+  const { cart, subtotal, discountAmount, total, belowMinimum, capped } = applyDiscount(trustedCart, referralResult)
+  // Only knowable now the cart is priced: the code is valid, but this order is
+  // under the minimum. The staff member is still credited.
+  const noDiscountReason = belowMinimum ? 'below_minimum' : referralResult.noDiscountReason
+  const referral: OrderReferral | null =
+    referralResult.status === 'applied' && referralResult.staff
+      ? {
+          code: referralResult.staff.code,
+          staffBitrixId: referralResult.staff.bitrixUserId,
+          discountPercent: discountAmount > 0 ? referralResult.discountPercent : 0,
+          discountAmount,
+          subtotal,
+          noDiscountReason,
+          cappedAt: capped ? referralResult.maxDiscountAmount : null,
+        }
+      : null
+  if (referralResult.status === 'invalid') {
+    logger.info('Checkout API', 'Staff code not recognised; order continues without it', { code: referralResult.code })
+  }
+
   const branch = body.branch || {}
   const paymentMethod = body.paymentMethod || 'Bank Transfer'
   const fulfillment = body.fulfillment ?? (paymentMethod === 'pickup' ? 'pickup' : 'delivery')
@@ -453,6 +494,7 @@ export default defineEventHandler(async (event) => {
     total,
     branch,
     paymentMethod,
+    referral,
     timestamp: new Date().toISOString(),
     status: 'pending',
   }
@@ -462,10 +504,12 @@ export default defineEventHandler(async (event) => {
     orderId,
     customer,
     cart,
+    subtotal,
     total,
     branch,
     paymentMethod,
     fulfillment,
+    referral,
   })
 
   // A pay-now order does NOT get a deal yet.
@@ -493,6 +537,7 @@ export default defineEventHandler(async (event) => {
         paymentMethod,
         fulfillment,
         userId: await resolveUserIdFromEvent(event),
+        referral,
       })
 
       crmSuccess = true
@@ -528,10 +573,17 @@ export default defineEventHandler(async (event) => {
     // it means.
     paymentMethod: describePaymentMethod(paymentMethod, isPickup, !deferDealUntilPaid),
     branchName: branch?.address || 'N/A',
-    subtotal: total,
+    subtotal,
     shipping: 0,
-    total: total,
-    products: cart.map((item: TrustedCartItem) => {
+    discount:
+      discountAmount > 0 && referral
+        ? {
+            label: `Staff code ${referral.code} (${referral.discountPercent}%${capped ? `, max ₦${referralResult.maxDiscountAmount.toLocaleString()}` : ''})`,
+            amount: discountAmount,
+          }
+        : null,
+    total,
+    products: cart.map((item: PricedCartItem) => {
       // Absolute URLs only — these render in the confirmation email, where a
       // relative path resolves against the mail client, not the site.
       const siteUrl = config.public.baseUrl.replace(/\/$/, '')
@@ -622,6 +674,22 @@ export default defineEventHandler(async (event) => {
     paymentAccessCode,
     paymentReference: paymentUrl ? orderId : null,
     paymentPending: paymentMethod === 'paystack' && !paymentUrl,
+    // What was actually charged, after any staff-code discount. A client should
+    // show these rather than its own sums.
+    subtotal,
+    discountAmount,
+    total,
+    staffCode: {
+      status: referralResult.status,
+      code: referralResult.code,
+      discountPercent: discountAmount > 0 ? referralResult.discountPercent : 0,
+      // 'dealer', 'disabled' or 'below_minimum' when the code was accepted but
+      // took nothing off.
+      noDiscountReason,
+      capped,
+      minOrderAmount: referralResult.minOrderAmount,
+      maxDiscountAmount: referralResult.maxDiscountAmount,
+    },
     message: crmSuccess ? 'Order processed successfully.' : 'Order received. (Saved locally for retry)',
   }
 })

@@ -112,7 +112,7 @@ export interface BranchOrderNotification {
  * needs only the `crm` scope this integration already depends on, and
  * survives a handover.
  */
-async function commentOnDeal(dealId: string, message: string): Promise<boolean> {
+export async function commentOnDeal(dealId: string, message: string): Promise<boolean> {
   try {
     const response = await bitrixFetch<{ error?: string; error_description?: string }>('crm.timeline.comment.add', {
       method: 'POST',

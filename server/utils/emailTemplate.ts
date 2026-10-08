@@ -100,6 +100,14 @@ export function generateOrderReceiptHtml(orderDetails: OrderDetails) {
               <td style="padding-bottom: 24px; font-family: 'Inter', Arial, sans-serif; font-size: 14px; color: #525252;">Technical Shipping & Handling</td>
               <td style="padding-bottom: 24px; text-align: right; font-family: 'Inter', Arial, sans-serif; font-size: 14px; font-weight: 600; color: #1c1b1b;">₦${orderDetails.shipping.toLocaleString()}</td>
             </tr>
+            ${
+              orderDetails.discount
+                ? `<tr>
+              <td style="padding-bottom: 24px; font-family: 'Inter', Arial, sans-serif; font-size: 14px; color: #525252;">${orderDetails.discount.label}</td>
+              <td style="padding-bottom: 24px; text-align: right; font-family: 'Inter', Arial, sans-serif; font-size: 14px; font-weight: 600; color: #15803d;">-₦${orderDetails.discount.amount.toLocaleString()}</td>
+            </tr>`
+                : ''
+            }
             <tr>
               <td style="padding: 24px 20px; background-color: #ffe7e5; border-radius: 4px 0 0 4px;">
                 <span style="font-family: 'Space Grotesk', Arial, sans-serif; font-size: 12px; text-transform: uppercase; letter-spacing: 0.15em; color: #a9001d; font-weight: 800;">Total Amount Paid</span>

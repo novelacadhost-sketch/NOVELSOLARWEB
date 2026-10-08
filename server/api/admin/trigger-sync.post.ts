@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger'
 import { syncAllProducts } from '../../utils/syncAllProducts'
+import { syncStaffCodes } from '../../utils/staffCodes'
 
 export default defineEventHandler(async (event) => {
   const authHeader = getHeader(event, 'authorization')
@@ -25,7 +26,19 @@ export default defineEventHandler(async (event) => {
   // writing nothing. The sync caps its own Bitrix fetch at 30s.
   try {
     const result = await syncAllProducts()
-    return { success: true, ...result }
+
+    // Rides on the nightly run so a new hire has a code by the next morning.
+    // Never fails the product sync: the two are unrelated, and the admin
+    // Promotions page has its own "refresh now".
+    let staffCodes: Awaited<ReturnType<typeof syncStaffCodes>> | { error: string }
+    try {
+      staffCodes = await syncStaffCodes()
+    } catch (error) {
+      staffCodes = { error: error instanceof Error ? error.message : String(error) }
+      logger.warn('ProductSync', 'Staff code sync failed; products unaffected', staffCodes)
+    }
+
+    return { success: true, ...result, staffCodes }
   } catch (error) {
     logger.error('ProductSync', 'Task failed from trigger', { error })
     throw createError({

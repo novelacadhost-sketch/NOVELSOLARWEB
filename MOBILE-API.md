@@ -212,7 +212,8 @@ Content-Type: application/json
   "branch": { "name": "...", "address": "...", "state": "...", "bitrixId": "9356" },
   "fulfillment": "pickup",        // "pickup" | "delivery"
   "paymentMethod": "paystack",    // "paystack" | "pay_at_store"
-  "client": "app"                 // ALWAYS send this from the app — see below
+  "client": "app",                // ALWAYS send this from the app — see below
+  "staffCode": "DAFO12"           // optional — see Staff codes below
 }
 ```
 
@@ -266,9 +267,60 @@ Response:
   "paymentAccessCode": "...",                          // paystack only
   "paymentReference": "ORD-...",                       // paystack only
   "paymentPending": false,         // true = order saved but payment could not be opened
+  "subtotal": 650000,              // before any staff-code discount
+  "discountAmount": 6500,          // 0 when there is none
+  "total": 643500,                 // what was charged — show this, not your own sum
+  "staffCode": {
+    "status": "applied",           // "none" | "invalid" | "applied"
+    "code": "DAFO12",
+    "discountPercent": 1,          // what THIS order got; 0 when nothing was taken off
+    "noDiscountReason": null,      // "dealer" | "disabled" | "below_minimum" when applied but nothing taken off
+    "capped": false,               // true = the discount was reduced to the maximum
+    "minOrderAmount": 0,           // the terms in force; 0 = no limit
+    "maxDiscountAmount": 0
+  },
   "message": "..."
 }
 ```
+
+### Staff codes
+
+Every member of staff has a code: the first two letters of their first name, the first two of
+their surname, then their Bitrix user id (`DAFO12`). A customer who uses one is credited to that
+person, and a retail customer also gets a discount. Admins set the terms: the rate, an optional
+minimum order (below it there is no discount) and an optional maximum discount per order, or switch
+the discount off. **Dealers are credited but never discounted** — dealer pricing already is their
+discount. The staff member is credited in every case, including orders below the minimum.
+
+- **Send the code as `staffCode`** on `/api/checkout`. Case and spaces don't matter. Never compute
+  the discount yourself for anything that is charged: the server applies it, and Paystack is opened
+  for the discounted `total`.
+- **An unknown code never blocks the order.** It comes back as `"status": "invalid"` and the order
+  goes through without it. Check the code first so the customer knows:
+
+  ```http
+  GET /api/staff-code?code=DAFO12
+  Authorization: Bearer <token>        // so a dealer is told they get no discount
+  ```
+  ```jsonc
+  { "valid": true, "code": "DAFO12", "discountPercent": 1, "noDiscountReason": null,
+    "minOrderAmount": 50000, "maxDiscountAmount": 10000 }   // 0 = no limit
+  ```
+  It never says whose code it is, and it is rate limited (15 a minute). It does not know the cart,
+  so it returns the terms; apply them as below.
+- **To show the expected discount before checkout**, using the server's own arithmetic so your
+  figure matches:
+  1. `subtotal` = sum of price × quantity. If `minOrderAmount > 0` and `subtotal < minOrderAmount`,
+     the discount is 0; tell the customer how much more to spend.
+  2. Otherwise, per unit: `round(price × discountPercent / 100)` in whole naira, times quantity,
+     summed.
+  3. If `maxDiscountAmount > 0` and that sum is over it, use instead, per unit:
+     `floor(price × maxDiscountAmount / subtotal)`, times quantity, summed. This lands at or a few
+     naira under the cap, never over.
+- **Links.** The website remembers `?ref=DAFO12` on any page for 30 days and fills it in at
+  checkout. If your app links carry a `ref`, keep it the same way and send it as `staffCode`.
+- `place_order_from_cart()` (the database ordering route) does not take staff codes. Use
+  `/api/checkout` when a code is involved.
 
 ### Taking the payment inside the app
 

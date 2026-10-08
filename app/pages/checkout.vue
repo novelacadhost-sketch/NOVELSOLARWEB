@@ -137,6 +137,9 @@ const submitOrder = async () => {
         // Was never sent before 2026-09-22, so the server guessed it from
         // paymentMethod and every store pickup was recorded as a delivery.
         fulfillment: selectedFulfillment.value,
+        // A rejected code is not sent. One that could not be checked (a network
+        // blip) still is: the server looks it up again either way.
+        staffCode: staffCodeState.value === 'invalid' ? undefined : (normaliseStaffCode(staffCode.value) ?? undefined),
       },
     })
 
@@ -278,7 +281,94 @@ async function submitStockRequest() {
   }
 }
 
+// Staff code. The server decides the real discount at checkout; this only
+// shows the customer what to expect, using the same per-unit rounding.
+const staffRef = useStaffRef()
+const staffCode = ref('')
+const staffCodeState = ref<'idle' | 'checking' | 'applied' | 'invalid' | 'error'>('idle')
+interface AppliedStaffCode {
+  code: string
+  discountPercent: number
+  noDiscountReason: 'dealer' | 'disabled' | null
+  minOrderAmount: number
+  maxDiscountAmount: number
+}
+const staffCodeApplied = ref<AppliedStaffCode | null>(null)
+
+// Mirrors applyDiscount() in server/utils/promotions.ts, including its
+// rounding, so the preview matches what is charged.
+const staffDiscount = computed(() => {
+  const applied = staffCodeApplied.value
+  const percent = applied?.discountPercent ?? 0
+  const subtotal = Number(cartTotalAmount.value)
+  if (!applied || !(percent > 0)) return { amount: 0, belowMinimum: false, capped: false }
+  if (applied.minOrderAmount > 0 && subtotal < applied.minOrderAmount) {
+    return { amount: 0, belowMinimum: true, capped: false }
+  }
+  const sum = (perUnit: (price: number) => number) =>
+    cart.value.reduce((total, item) => total + perUnit(Number(item.price)) * Number(item.quantity), 0)
+  const amount = sum((price) => Math.round((price * percent) / 100))
+  const cap = applied.maxDiscountAmount
+  if (cap > 0 && amount > cap) {
+    return { amount: sum((price) => Math.floor((price * cap) / subtotal + 1e-9)), belowMinimum: false, capped: true }
+  }
+  return { amount, belowMinimum: false, capped: false }
+})
+const staffDiscountAmount = computed(() => staffDiscount.value.amount)
+const totalDue = computed(() => Number(cartTotalAmount.value) - staffDiscountAmount.value)
+
+async function applyStaffCode() {
+  const code = normaliseStaffCode(staffCode.value)
+  staffCodeApplied.value = null
+  if (!code) {
+    staffCodeState.value = staffCode.value.trim() ? 'invalid' : 'idle'
+    return
+  }
+
+  staffCodeState.value = 'checking'
+  try {
+    const res = await useNuxtApp().$apiFetch<{
+      valid: boolean
+      code: string | null
+      discountPercent: number
+      noDiscountReason: 'dealer' | 'disabled' | null
+      minOrderAmount: number
+      maxDiscountAmount: number
+    }>('/api/staff-code', { query: { code } })
+    if (!res.valid) {
+      staffCodeState.value = 'invalid'
+      return
+    }
+    staffCode.value = code
+    staffCodeApplied.value = {
+      code,
+      discountPercent: res.discountPercent,
+      noDiscountReason: res.noDiscountReason,
+      minOrderAmount: Number(res.minOrderAmount) || 0,
+      maxDiscountAmount: Number(res.maxDiscountAmount) || 0,
+    }
+    staffCodeState.value = 'applied'
+    // A code typed here replaces one remembered from a link.
+    staffRef.save(code)
+  } catch {
+    staffCodeState.value = 'error'
+  }
+}
+
+function onStaffCodeInput() {
+  // Editing an applied code un-applies it until it is checked again, so the
+  // totals never show a discount for a code that has been typed over.
+  staffCodeApplied.value = null
+  staffCodeState.value = 'idle'
+}
+
 onMounted(async () => {
+  const remembered = staffRef.read()
+  if (remembered) {
+    staffCode.value = remembered
+    applyStaffCode()
+  }
+
   try {
     const profile = await useNuxtApp().$apiFetch('/api/user/profile')
     if (profile) {
@@ -717,11 +807,68 @@ onMounted(async () => {
               </div>
             </div>
 
+            <!-- Staff code -->
+            <div class="pt-6 mb-6 border-t border-dashed border-gray-200">
+              <label for="staff-code" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2"
+                >Staff code (optional)</label
+              >
+              <div class="flex gap-2">
+                <input
+                  id="staff-code"
+                  v-model="staffCode"
+                  type="text"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  placeholder="e.g. DAFO12"
+                  maxlength="20"
+                  class="min-w-0 flex-1 rounded-lg border-slate-200 bg-slate-50 focus:ring-2 focus:ring-[#002888]/20 focus:border-[#002888] px-3 py-2 text-sm uppercase transition-all outline-none"
+                  @input="onStaffCodeInput"
+                  @keydown.enter.prevent="applyStaffCode"
+                >
+                <button
+                  type="button"
+                  :disabled="staffCodeState === 'checking' || !staffCode.trim()"
+                  class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold uppercase text-white disabled:opacity-40"
+                  @click="applyStaffCode"
+                >
+                  {{ staffCodeState === 'checking' ? 'Checking…' : 'Apply' }}
+                </button>
+              </div>
+              <p v-if="staffCodeState === 'applied' && staffCodeApplied" class="mt-2 text-xs font-bold text-green-700">
+                <template v-if="staffDiscountAmount > 0">
+                  Code {{ staffCodeApplied.code }} applied: {{ staffCodeApplied.discountPercent }}% off{{
+                    staffDiscount.capped ? `, up to ₦${staffCodeApplied.maxDiscountAmount.toLocaleString()}` : ''
+                  }}.
+                </template>
+                <template v-else-if="staffDiscount.belowMinimum">
+                  Code {{ staffCodeApplied.code }} applied. Orders of ₦{{
+                    staffCodeApplied.minOrderAmount.toLocaleString()
+                  }}
+                  or more get {{ staffCodeApplied.discountPercent }}% off.
+                </template>
+                <template v-else-if="staffCodeApplied.noDiscountReason === 'dealer'">
+                  Code {{ staffCodeApplied.code }} applied. Your dealer prices already include your discount.
+                </template>
+                <template v-else>Code {{ staffCodeApplied.code }} applied.</template>
+              </p>
+              <p v-else-if="staffCodeState === 'invalid'" class="mt-2 text-xs font-bold text-amber-700">
+                We don't recognise that code. You can still place your order without it.
+              </p>
+              <p v-else-if="staffCodeState === 'error'" class="mt-2 text-xs font-bold text-slate-500">
+                We couldn't check that code just now. It will be checked again when you place your order.
+              </p>
+            </div>
+
             <!-- Totals Section -->
             <div class="space-y-4 pt-6 border-t border-dashed border-gray-200">
               <div class="flex justify-between text-sm text-slate-600 font-medium">
                 <span>Subtotal</span>
                 <span>₦{{ Number(cartTotalAmount).toLocaleString() }}</span>
+              </div>
+              <div v-if="staffDiscountAmount > 0" class="flex justify-between text-sm text-green-700 font-medium">
+                <span>Staff code {{ staffCodeApplied?.code }} ({{ staffCodeApplied?.discountPercent }}%)</span>
+                <span>-₦{{ staffDiscountAmount.toLocaleString() }}</span>
               </div>
               <div class="flex justify-between text-sm text-slate-600 font-medium">
                 <span>{{ selectedFulfillment === 'pickup' ? 'Collection' : 'Delivery' }}</span>
@@ -737,9 +884,7 @@ onMounted(async () => {
               <div class="flex justify-between items-end pt-4 border-t border-gray-100">
                 <span class="text-sm font-bold text-slate-900">Total Due</span>
                 <div class="flex flex-col items-end">
-                  <span class="text-3xl font-black text-[#002888]"
-                    >₦{{ Number(cartTotalAmount).toLocaleString() }}</span
-                  >
+                  <span class="text-3xl font-black text-[#002888]">₦{{ totalDue.toLocaleString() }}</span>
                   <span class="text-[10px] text-slate-400 font-bold uppercase mt-1">
                     {{ selectedFulfillment === 'pickup' ? 'Inclusive of all taxes' : 'Items only — excludes delivery' }}
                   </span>
