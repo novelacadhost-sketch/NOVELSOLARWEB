@@ -44,13 +44,16 @@
 
           <div>
             <h3 class="font-bold text-slate-900 mb-3 text-sm uppercase tracking-wider flex justify-between">
-              Max Price <span class="text-[#002888]">&#8358;{{ Number(maxPrice).toLocaleString() }}</span>
+              Max Price
+              <span class="text-[#002888]">{{
+                maxPrice >= PRICE_SLIDER_TOP ? 'Any price' : `₦${Number(maxPrice).toLocaleString()}`
+              }}</span>
             </h3>
             <input
-              v-model="maxPrice"
+              v-model.number="maxPrice"
               type="range"
               min="0"
-              max="2000000"
+              :max="PRICE_SLIDER_TOP"
               step="50000"
               class="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#002888]"
             />
@@ -173,7 +176,11 @@ const sectionOf = (product: WithSection) => product.sectionName || product.secti
 // Declared before the loader below, which watches them.
 const searchQuery = ref('')
 const selectedCategory = ref('all')
-const maxPrice = ref(2000000)
+// The slider's top position means "any price", not ₦2,000,000. Treating it as
+// a real ceiling hid the 23 most expensive products — big lithium batteries and
+// inverter systems — from everyone who never touched the slider.
+const PRICE_SLIDER_TOP = 2000000
+const maxPrice = ref(PRICE_SLIDER_TOP)
 
 const { data: categoryData } = await useFetch('/api/categories')
 
@@ -315,13 +322,13 @@ const matchesCategory = (product, categoryId) => {
 
 // Determine if the user is actively using any filters
 const isFilterActive = computed(() => {
-  return searchQuery.value !== '' || selectedCategory.value !== 'all' || maxPrice.value < 2000000
+  return searchQuery.value !== '' || selectedCategory.value !== 'all' || maxPrice.value < PRICE_SLIDER_TOP
 })
 
 const clearFilters = () => {
   searchQuery.value = ''
   selectedCategory.value = 'all'
-  maxPrice.value = 2000000
+  maxPrice.value = PRICE_SLIDER_TOP
 }
 
 // The "See All" button magic: Applies filter and scrolls top natively
@@ -334,6 +341,7 @@ const matchingProducts = computed(() => {
   // Category and search are already applied by the server. Only the price
   // slider is client-side, and it only narrows what has been loaded so far —
   // the API has no price parameter.
+  if (maxPrice.value >= PRICE_SLIDER_TOP) return getProductsArray()
   return getProductsArray().filter((product) => Number(product.PRICE || product.price || 0) <= maxPrice.value)
 })
 
