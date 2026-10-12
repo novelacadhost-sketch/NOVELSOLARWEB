@@ -24,7 +24,7 @@ const requestReset = async () => {
   successMessage.value = ''
 
   try {
-    const response = await $fetch<{ message: string }>('/api/admin/auth/request-password-reset', {
+    const response = await useNuxtApp().$apiFetch<{ message: string }>('/api/admin/auth/request-password-reset', {
       method: 'POST',
       body: {
         email: email.value,

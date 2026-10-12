@@ -37,7 +37,7 @@ const changePassword = async () => {
   successMessage.value = ''
 
   try {
-    const response = await $fetch<{ message: string }>('/api/admin/change-password', {
+    const response = await useNuxtApp().$apiFetch<{ message: string }>('/api/admin/change-password', {
       method: 'POST',
       body: {
         current_password: currentPassword.value,

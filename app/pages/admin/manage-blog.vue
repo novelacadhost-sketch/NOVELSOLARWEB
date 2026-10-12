@@ -134,7 +134,7 @@ const onCoverFileChange = async (event: Event) => {
 
   isUploading.value = true
   try {
-    const res = await $fetch<{ url: string }>('/api/admin/blog/upload-image', {
+    const res = await useNuxtApp().$apiFetch<{ url: string }>('/api/admin/blog/upload-image', {
       method: 'POST',
       body: formData,
     })
@@ -164,7 +164,7 @@ const savePost = async () => {
 
   isSaving.value = true
   try {
-    const res = await $fetch<{ slug: string; action: string; message: string }>('/api/admin/blog/save', {
+    const res = await useNuxtApp().$apiFetch<{ slug: string; action: string; message: string }>('/api/admin/blog/save', {
       method: 'POST',
       body: {
         slug: form.value.slug,

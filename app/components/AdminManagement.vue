@@ -237,7 +237,7 @@ const createNewAdmin = async () => {
   createAdminSuccess.value = ''
 
   try {
-    const response = await $fetch<{ message: string; temporaryPassword?: string }>('/api/admin/create-admin', {
+    const response = await useNuxtApp().$apiFetch<{ message: string; temporaryPassword?: string }>('/api/admin/create-admin', {
       method: 'POST',
       body: {
         admin_email: newAdminForm.value.email,
