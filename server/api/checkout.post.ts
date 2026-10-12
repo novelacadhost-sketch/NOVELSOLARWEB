@@ -7,8 +7,8 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 import { normalizeProperty } from '../utils/normalizeProperty'
 import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
-import { createOrderDeal, type OrderReferral } from '../utils/orderDeal'
-import { applyDiscount, resolveReferral } from '../utils/promotions'
+import { createOrderDeal, type OrderPromotion } from '../utils/orderDeal'
+import { applyDiscount, describeTerms, REJECT_MESSAGES, resolvePromotion } from '../utils/promotions'
 import { describePaymentMethod } from '../utils/paymentMethod'
 import { initialiseTransaction } from '../utils/paystack'
 import { fetchCatalogStock, type CatalogStock } from '../utils/catalogStock'
@@ -88,9 +88,13 @@ const checkoutSchema = z.object({
   // sends the customer afterwards — the app's bridge page or the website's
   // thank-you page. Nothing about the order or its price depends on it.
   client: z.enum(['web', 'app']).optional().default('web'),
-  // A staff referral code. Never trusted: looked up server-side, and an unknown
-  // one is dropped rather than refusing the order — a typo must not cost a sale.
+  // The promo code box: a staff code or a promo code. Never trusted — looked up
+  // server-side. `staffCode` is the name it had before promo codes existed.
+  promoCode: z.string().trim().max(32).nullish(),
   staffCode: z.string().trim().max(32).nullish(),
+  // A staff code remembered from a ?ref= link. Credits that person even when
+  // the customer types a promo code; gives no discount by itself.
+  refCode: z.string().trim().max(32).nullish(),
 })
 
 type BitrixProductResult = {
@@ -298,6 +302,7 @@ type OrderRow = {
   client_order_ref: string
   staff_code: string | null
   staff_bitrix_id: number | null
+  promo_code: string | null
   discount_percent: number
   discount_amount: number
 }
@@ -336,7 +341,7 @@ async function persistOrder(
     branch: Record<string, unknown>
     paymentMethod: string
     fulfillment: 'pickup' | 'delivery'
-    referral: OrderReferral | null
+    promotion: OrderPromotion | null
   },
 ): Promise<string | null> {
   try {
@@ -358,10 +363,13 @@ async function persistOrder(
       total: order.total,
       status: 'pending',
       client_order_ref: order.orderId,
-      staff_code: order.referral?.code ?? null,
-      staff_bitrix_id: order.referral?.staffBitrixId ?? null,
-      discount_percent: order.referral?.discountPercent ?? 0,
-      discount_amount: order.referral?.discountAmount ?? 0,
+      // staff_* = who is credited; promo_code = a promo code that gave the
+      // discount (a typed staff code is recorded as the staff code alone).
+      staff_code: order.promotion?.staffCode ?? null,
+      staff_bitrix_id: order.promotion?.staffBitrixId ?? null,
+      promo_code: order.promotion?.kind === 'promo' ? order.promotion.code : null,
+      discount_percent: order.promotion?.discountPercent ?? 0,
+      discount_amount: order.promotion?.discountAmount ?? 0,
     }
 
     const { data, error } = (await supabase
@@ -448,28 +456,48 @@ export default defineEventHandler(async (event) => {
   const customer = body.customer || {}
   const { cart: trustedCart, isDealer } = await resolveTrustedCart(event, body.cart || [])
 
-  // The staff code decides the rate here, server-side, against prices this
-  // handler resolved from Bitrix. Dealers are credited but never discounted.
-  const referralResult = await resolveReferral(body.staffCode, isDealer)
-  const { cart, subtotal, discountAmount, total, belowMinimum, capped } = applyDiscount(trustedCart, referralResult)
-  // Only knowable now the cart is priced: the code is valid, but this order is
-  // under the minimum. The staff member is still credited.
-  const noDiscountReason = belowMinimum ? 'below_minimum' : referralResult.noDiscountReason
-  const referral: OrderReferral | null =
-    referralResult.status === 'applied' && referralResult.staff
+  // The code decides the discount here, server-side, against prices this
+  // handler resolved from Bitrix. Staff codes: dealers credited, never
+  // discounted. Promo codes: their own terms, dealers only if allowed.
+  const resolved = await resolvePromotion({
+    typed: body.promoCode ?? body.staffCode,
+    ref: body.refCode,
+    isDealer,
+    email: body.customer.email,
+  })
+
+  // A typed code that cannot be used is refused rather than silently dropped:
+  // the customer was shown a discount, and charging them more than they saw
+  // would be worse than asking them to press the button again. 409 like the
+  // other checkout refusals, so a client can clear the code and retry.
+  if (resolved.status === 'rejected' && resolved.rejectReason) {
+    logger.info('Checkout API', 'Promo code refused', { code: resolved.code, reason: resolved.rejectReason })
+    throw createError({
+      statusCode: 409,
+      statusMessage: REJECT_MESSAGES[resolved.rejectReason],
+      data: { code: 'PROMO_CODE_REJECTED', promoCode: resolved.code, reason: resolved.rejectReason },
+    })
+  }
+
+  const { cart, subtotal, discountAmount, total, belowMinimum, capped } = applyDiscount(trustedCart, resolved.terms)
+  // Only knowable now the cart is priced: the code is fine, but this order is
+  // under its minimum. Any staff member is still credited.
+  const noDiscountReason = belowMinimum ? 'below_minimum' : resolved.noDiscountReason
+  const promotion: OrderPromotion | null =
+    resolved.status === 'applied' || resolved.staff
       ? {
-          code: referralResult.staff.code,
-          staffBitrixId: referralResult.staff.bitrixUserId,
-          discountPercent: discountAmount > 0 ? referralResult.discountPercent : 0,
+          staffCode: resolved.staff?.code ?? null,
+          staffBitrixId: resolved.staff?.bitrixUserId ?? null,
+          code: resolved.status === 'applied' ? resolved.code : null,
+          kind: resolved.status === 'applied' ? resolved.kind : null,
+          discountLabel: discountAmount > 0 && resolved.terms ? describeTerms(resolved.terms) : null,
+          discountPercent: discountAmount > 0 && resolved.terms?.type === 'percent' ? resolved.terms.value : 0,
           discountAmount,
           subtotal,
           noDiscountReason,
-          cappedAt: capped ? referralResult.maxDiscountAmount : null,
+          capped,
         }
       : null
-  if (referralResult.status === 'invalid') {
-    logger.info('Checkout API', 'Staff code not recognised; order continues without it', { code: referralResult.code })
-  }
 
   const branch = body.branch || {}
   const paymentMethod = body.paymentMethod || 'Bank Transfer'
@@ -494,7 +522,7 @@ export default defineEventHandler(async (event) => {
     total,
     branch,
     paymentMethod,
-    referral,
+    promotion,
     timestamp: new Date().toISOString(),
     status: 'pending',
   }
@@ -509,7 +537,7 @@ export default defineEventHandler(async (event) => {
     branch,
     paymentMethod,
     fulfillment,
-    referral,
+    promotion,
   })
 
   // A pay-now order does NOT get a deal yet.
@@ -537,7 +565,7 @@ export default defineEventHandler(async (event) => {
         paymentMethod,
         fulfillment,
         userId: await resolveUserIdFromEvent(event),
-        referral,
+        promotion,
       })
 
       crmSuccess = true
@@ -576,9 +604,9 @@ export default defineEventHandler(async (event) => {
     subtotal,
     shipping: 0,
     discount:
-      discountAmount > 0 && referral
+      discountAmount > 0 && promotion?.code
         ? {
-            label: `Staff code ${referral.code} (${referral.discountPercent}%${capped ? `, max ₦${referralResult.maxDiscountAmount.toLocaleString()}` : ''})`,
+            label: `Promo code ${promotion.code} (${promotion.discountLabel}${capped ? ', capped' : ''})`,
             amount: discountAmount,
           }
         : null,
@@ -660,6 +688,25 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  const promoCodeResult = {
+    status: resolved.status,
+    code: resolved.code,
+    kind: resolved.kind,
+    discountType: resolved.terms?.type ?? null,
+    discountValue: resolved.terms?.value ?? 0,
+    // Kept for clients written before fixed-amount codes: the rate actually
+    // given, 0 when nothing came off or the code is a fixed amount.
+    discountPercent: discountAmount > 0 && resolved.terms?.type === 'percent' ? resolved.terms.value : 0,
+    // 'dealer', 'disabled' or 'below_minimum' when the code was accepted but
+    // took nothing off.
+    noDiscountReason,
+    capped,
+    minOrderAmount: resolved.terms?.minOrderAmount ?? 0,
+    maxDiscountAmount: resolved.terms?.maxDiscountAmount ?? 0,
+    // The staff member credited, which may come from a link rather than the code.
+    creditedStaffCode: resolved.staff?.code ?? null,
+  }
+
   return {
     success: true,
     orderId,
@@ -679,17 +726,9 @@ export default defineEventHandler(async (event) => {
     subtotal,
     discountAmount,
     total,
-    staffCode: {
-      status: referralResult.status,
-      code: referralResult.code,
-      discountPercent: discountAmount > 0 ? referralResult.discountPercent : 0,
-      // 'dealer', 'disabled' or 'below_minimum' when the code was accepted but
-      // took nothing off.
-      noDiscountReason,
-      capped,
-      minOrderAmount: referralResult.minOrderAmount,
-      maxDiscountAmount: referralResult.maxDiscountAmount,
-    },
+    promoCode: promoCodeResult,
+    // The name this had before promo codes; same object.
+    staffCode: promoCodeResult,
     message: crmSuccess ? 'Order processed successfully.' : 'Order received. (Saved locally for retry)',
   }
 })

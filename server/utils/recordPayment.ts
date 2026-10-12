@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from './logger'
 import { fromKobo, type PaystackTransaction } from './paystack'
-import { createOrderDeal, type OrderReferral } from './orderDeal'
+import { createOrderDeal, type OrderPromotion } from './orderDeal'
 
 /**
  * Marks an order paid, from either the webhook or the browser callback.
@@ -34,6 +34,7 @@ interface OrderRow {
   subtotal: number | null
   staff_code: string | null
   staff_bitrix_id: number | null
+  promo_code: string | null
   discount_percent: number | null
   discount_amount: number | null
 }
@@ -47,21 +48,29 @@ interface OrderItemRow {
 }
 
 /**
- * The staff code as it was applied at checkout. Rebuilt from the order rather
+ * The codes as they were applied at checkout. Rebuilt from the order rather
  * than looked up again, so a code switched off or a rate changed between
  * checkout and payment cannot change what the customer was promised.
  */
-function referralOf(order: OrderRow): OrderReferral | null {
-  if (!order.staff_code || !order.staff_bitrix_id) return null
+function promotionOf(order: OrderRow): OrderPromotion | null {
+  if (!order.staff_code && !order.promo_code) return null
   const discountAmount = Number(order.discount_amount ?? 0)
+  const discountPercent = Number(order.discount_percent ?? 0)
+  // A promo code is stored as such. A typed staff code is only distinguishable
+  // from a staff link when it gave a discount; otherwise it is shown as credit.
+  const kind = order.promo_code ? 'promo' : discountAmount > 0 ? 'staff' : null
   return {
-    code: order.staff_code,
+    staffCode: order.staff_code,
     staffBitrixId: order.staff_bitrix_id,
-    discountPercent: Number(order.discount_percent ?? 0),
+    code: order.promo_code ?? (kind === 'staff' ? order.staff_code : null),
+    kind,
+    discountLabel:
+      discountAmount > 0 ? (discountPercent > 0 ? `${discountPercent}%` : `₦${discountAmount.toLocaleString()} off`) : null,
+    discountPercent,
     discountAmount,
     subtotal: Number(order.subtotal ?? Number(order.total ?? 0) + discountAmount),
-    // Dealer or switched-off are indistinguishable once stored, so neither is
-    // claimed; the deal just says no discount was applied.
+    // Dealer, switched off and below the minimum are indistinguishable once
+    // stored, so none is claimed; the deal just says no discount was applied.
     noDiscountReason: null,
   }
 }
@@ -101,7 +110,7 @@ export async function recordPaystackPayment(
       .select(
         'id, status, total, client_order_ref, user_id, customer_email, customer_first_name, ' +
           'customer_last_name, customer_phone, shipping_address, fulfillment, branch, payment_method, ' +
-          'subtotal, staff_code, staff_bitrix_id, discount_percent, discount_amount',
+          'subtotal, staff_code, staff_bitrix_id, promo_code, discount_percent, discount_amount',
       )
       .eq('client_order_ref', reference)
       .maybeSingle<OrderRow>()
@@ -227,7 +236,7 @@ async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference
       paymentMethod: order.payment_method ?? undefined,
       fulfillment: order.fulfillment ?? undefined,
       userId: order.user_id,
-      referral: referralOf(order),
+      promotion: promotionOf(order),
     })
 
     logger.info('Paystack', 'Created deal for paid order', { reference, dealId: deal.dealId })
@@ -272,7 +281,7 @@ async function queueDealForRetry(event: H3Event, order: OrderRow, reference: str
         paymentMethod: order.payment_method,
         fulfillment: order.fulfillment,
         total: Number(order.total ?? 0),
-        referral: referralOf(order),
+        promotion: promotionOf(order),
         cart: (items ?? []).map((item) => ({
           id: item.bitrix_product_id,
           name: item.name,

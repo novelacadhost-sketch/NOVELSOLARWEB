@@ -139,7 +139,10 @@ const submitOrder = async () => {
         fulfillment: selectedFulfillment.value,
         // A rejected code is not sent. One that could not be checked (a network
         // blip) still is: the server looks it up again either way.
-        staffCode: staffCodeState.value === 'invalid' ? undefined : (normaliseStaffCode(staffCode.value) ?? undefined),
+        promoCode: promoCodeState.value === 'invalid' ? undefined : (normalisePromoCode(promoCode.value) ?? undefined),
+        // The staff link this customer came through, if any. It keeps that
+        // person credited when the box holds a promo code instead.
+        refCode: staffRef.read() ?? undefined,
       },
     })
 
@@ -196,7 +199,15 @@ const submitOrder = async () => {
     // items, and the popup below turns that into a call-back request.
     const shortage = readStockShortage(error)
     const unavailable = readUnavailable(error)
-    if (shortage) {
+    const promoRejected = readPromoRejection(error)
+    if (promoRejected) {
+      // Nothing was ordered. Drop the discount from the totals so the next
+      // press shows and charges the full price, and say why.
+      promoCodeApplied.value = null
+      promoCodeState.value = 'invalid'
+      promoCodeMessage.value = promoRejected
+      addToast('Promo code not applied', `${promoRejected} Your order was not placed; please check the total and try again.`, 'error')
+    } else if (shortage) {
       stockShortage.value = shortage
       stockRequestPhone.value = form.phone
       stockRequestState.value = 'asking'
@@ -281,92 +292,106 @@ async function submitStockRequest() {
   }
 }
 
-// Staff code. The server decides the real discount at checkout; this only
-// shows the customer what to expect, using the same per-unit rounding.
+// Promo code box. It takes a staff code (DAFO12) or a promo code (NOVEL10).
+// The server decides the real discount at checkout; this only shows what to
+// expect, with the server's own arithmetic (app/utils/promoDiscount.ts).
 const staffRef = useStaffRef()
-const staffCode = ref('')
-const staffCodeState = ref<'idle' | 'checking' | 'applied' | 'invalid' | 'error'>('idle')
-interface AppliedStaffCode {
+const promoCode = ref('')
+const promoCodeState = ref<'idle' | 'checking' | 'applied' | 'invalid' | 'error'>('idle')
+const promoCodeMessage = ref('')
+interface AppliedPromoCode extends PromoTerms {
   code: string
-  discountPercent: number
+  kind: 'staff' | 'promo'
   noDiscountReason: 'dealer' | 'disabled' | null
-  minOrderAmount: number
-  maxDiscountAmount: number
 }
-const staffCodeApplied = ref<AppliedStaffCode | null>(null)
+const promoCodeApplied = ref<AppliedPromoCode | null>(null)
 
-// Mirrors applyDiscount() in server/utils/promotions.ts, including its
-// rounding, so the preview matches what is charged.
-const staffDiscount = computed(() => {
-  const applied = staffCodeApplied.value
-  const percent = applied?.discountPercent ?? 0
-  const subtotal = Number(cartTotalAmount.value)
-  if (!applied || !(percent > 0)) return { amount: 0, belowMinimum: false, capped: false }
-  if (applied.minOrderAmount > 0 && subtotal < applied.minOrderAmount) {
-    return { amount: 0, belowMinimum: true, capped: false }
-  }
-  const sum = (perUnit: (price: number) => number) =>
-    cart.value.reduce((total, item) => total + perUnit(Number(item.price)) * Number(item.quantity), 0)
-  const amount = sum((price) => Math.round((price * percent) / 100))
-  const cap = applied.maxDiscountAmount
-  if (cap > 0 && amount > cap) {
-    return { amount: sum((price) => Math.floor((price * cap) / subtotal + 1e-9)), belowMinimum: false, capped: true }
-  }
-  return { amount, belowMinimum: false, capped: false }
+const promoDiscount = computed(() =>
+  previewPromoDiscount(
+    cart.value.map((item) => ({ price: Number(item.price), quantity: Number(item.quantity) })),
+    promoCodeApplied.value,
+  ),
+)
+const promoDiscountAmount = computed(() => promoDiscount.value.amount)
+const totalDue = computed(() => Number(cartTotalAmount.value) - promoDiscountAmount.value)
+
+/** "1%", "10%" or "₦5,000 off". */
+const promoLabel = computed(() => {
+  const applied = promoCodeApplied.value
+  if (!applied) return ''
+  return applied.discountType === 'fixed'
+    ? `₦${Math.round(applied.discountValue).toLocaleString()} off`
+    : `${applied.discountValue}% off`
 })
-const staffDiscountAmount = computed(() => staffDiscount.value.amount)
-const totalDue = computed(() => Number(cartTotalAmount.value) - staffDiscountAmount.value)
 
-async function applyStaffCode() {
-  const code = normaliseStaffCode(staffCode.value)
-  staffCodeApplied.value = null
+async function applyPromoCode() {
+  const code = normalisePromoCode(promoCode.value)
+  promoCodeApplied.value = null
+  promoCodeMessage.value = ''
   if (!code) {
-    staffCodeState.value = staffCode.value.trim() ? 'invalid' : 'idle'
+    promoCodeState.value = promoCode.value.trim() ? 'invalid' : 'idle'
+    if (promoCode.value.trim()) promoCodeMessage.value = "We don't recognise that promo code."
     return
   }
 
-  staffCodeState.value = 'checking'
+  promoCodeState.value = 'checking'
   try {
     const res = await useNuxtApp().$apiFetch<{
       valid: boolean
       code: string | null
-      discountPercent: number
+      kind: 'staff' | 'promo' | null
+      message: string | null
+      discountType: 'percent' | 'fixed' | null
+      discountValue: number
       noDiscountReason: 'dealer' | 'disabled' | null
       minOrderAmount: number
       maxDiscountAmount: number
-    }>('/api/staff-code', { query: { code } })
+    }>('/api/promo-code', { query: { code } })
     if (!res.valid) {
-      staffCodeState.value = 'invalid'
+      promoCodeState.value = 'invalid'
+      promoCodeMessage.value = res.message || "We don't recognise that promo code."
       return
     }
-    staffCode.value = code
-    staffCodeApplied.value = {
+    promoCode.value = code
+    promoCodeApplied.value = {
       code,
-      discountPercent: res.discountPercent,
+      kind: res.kind === 'promo' ? 'promo' : 'staff',
       noDiscountReason: res.noDiscountReason,
+      discountType: res.discountType ?? 'percent',
+      discountValue: Number(res.discountValue) || 0,
       minOrderAmount: Number(res.minOrderAmount) || 0,
       maxDiscountAmount: Number(res.maxDiscountAmount) || 0,
     }
-    staffCodeState.value = 'applied'
-    // A code typed here replaces one remembered from a link.
-    staffRef.save(code)
+    promoCodeState.value = 'applied'
+    // A staff code typed here replaces one remembered from a link. A promo
+    // code does not: the link's staff member is still credited.
+    if (res.kind === 'staff') staffRef.save(code)
   } catch {
-    staffCodeState.value = 'error'
+    promoCodeState.value = 'error'
   }
 }
 
-function onStaffCodeInput() {
+function onPromoCodeInput() {
   // Editing an applied code un-applies it until it is checked again, so the
   // totals never show a discount for a code that has been typed over.
-  staffCodeApplied.value = null
-  staffCodeState.value = 'idle'
+  promoCodeApplied.value = null
+  promoCodeState.value = 'idle'
+  promoCodeMessage.value = ''
+}
+
+/** Checkout refused the code (expired, used up, already used…) between the check and the order. */
+function readPromoRejection(error: unknown): string | null {
+  const err = error as { data?: { statusMessage?: string; data?: { code?: string } } }
+  return err?.data?.data?.code === 'PROMO_CODE_REJECTED'
+    ? err.data.statusMessage || 'This promo code can no longer be used.'
+    : null
 }
 
 onMounted(async () => {
   const remembered = staffRef.read()
   if (remembered) {
-    staffCode.value = remembered
-    applyStaffCode()
+    promoCode.value = remembered
+    applyPromoCode()
   }
 
   try {
@@ -807,55 +832,56 @@ onMounted(async () => {
               </div>
             </div>
 
-            <!-- Staff code -->
+            <!-- Promo code -->
             <div class="pt-6 mb-6 border-t border-dashed border-gray-200">
-              <label for="staff-code" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2"
-                >Staff code (optional)</label
+              <label for="promo-code" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2"
+                >Promo code (optional)</label
               >
               <div class="flex gap-2">
                 <input
-                  id="staff-code"
-                  v-model="staffCode"
+                  id="promo-code"
+                  v-model="promoCode"
                   type="text"
                   autocomplete="off"
                   autocapitalize="characters"
                   spellcheck="false"
-                  placeholder="e.g. DAFO12"
+                  placeholder="Enter code"
                   maxlength="20"
                   class="min-w-0 flex-1 rounded-lg border-slate-200 bg-slate-50 focus:ring-2 focus:ring-[#002888]/20 focus:border-[#002888] px-3 py-2 text-sm uppercase transition-all outline-none"
-                  @input="onStaffCodeInput"
-                  @keydown.enter.prevent="applyStaffCode"
+                  @input="onPromoCodeInput"
+                  @keydown.enter.prevent="applyPromoCode"
                 >
                 <button
                   type="button"
-                  :disabled="staffCodeState === 'checking' || !staffCode.trim()"
+                  :disabled="promoCodeState === 'checking' || !promoCode.trim()"
                   class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold uppercase text-white disabled:opacity-40"
-                  @click="applyStaffCode"
+                  @click="applyPromoCode"
                 >
-                  {{ staffCodeState === 'checking' ? 'Checking…' : 'Apply' }}
+                  {{ promoCodeState === 'checking' ? 'Checking…' : 'Apply' }}
                 </button>
               </div>
-              <p v-if="staffCodeState === 'applied' && staffCodeApplied" class="mt-2 text-xs font-bold text-green-700">
-                <template v-if="staffDiscountAmount > 0">
-                  Code {{ staffCodeApplied.code }} applied: {{ staffCodeApplied.discountPercent }}% off{{
-                    staffDiscount.capped ? `, up to ₦${staffCodeApplied.maxDiscountAmount.toLocaleString()}` : ''
+              <p v-if="promoCodeState === 'applied' && promoCodeApplied" class="mt-2 text-xs font-bold text-green-700">
+                <template v-if="promoDiscountAmount > 0">
+                  Code {{ promoCodeApplied.code }} applied: {{ promoLabel }}{{
+                    promoDiscount.capped ? `, up to ₦${promoCodeApplied.maxDiscountAmount.toLocaleString()}` : ''
                   }}.
                 </template>
-                <template v-else-if="staffDiscount.belowMinimum">
-                  Code {{ staffCodeApplied.code }} applied. Orders of ₦{{
-                    staffCodeApplied.minOrderAmount.toLocaleString()
+                <template v-else-if="promoDiscount.belowMinimum">
+                  Code {{ promoCodeApplied.code }} applied. Orders of ₦{{
+                    promoCodeApplied.minOrderAmount.toLocaleString()
                   }}
-                  or more get {{ staffCodeApplied.discountPercent }}% off.
+                  or more get {{ promoLabel }}.
                 </template>
-                <template v-else-if="staffCodeApplied.noDiscountReason === 'dealer'">
-                  Code {{ staffCodeApplied.code }} applied. Your dealer prices already include your discount.
+                <template v-else-if="promoCodeApplied.noDiscountReason === 'dealer'">
+                  Code {{ promoCodeApplied.code }} applied. Your dealer prices already include your discount.
                 </template>
-                <template v-else>Code {{ staffCodeApplied.code }} applied.</template>
+                <template v-else>Code {{ promoCodeApplied.code }} applied.</template>
               </p>
-              <p v-else-if="staffCodeState === 'invalid'" class="mt-2 text-xs font-bold text-amber-700">
-                We don't recognise that code. You can still place your order without it.
+              <p v-else-if="promoCodeState === 'invalid'" class="mt-2 text-xs font-bold text-amber-700">
+                {{ promoCodeMessage || "We don't recognise that promo code." }} You can still place your order without
+                it.
               </p>
-              <p v-else-if="staffCodeState === 'error'" class="mt-2 text-xs font-bold text-slate-500">
+              <p v-else-if="promoCodeState === 'error'" class="mt-2 text-xs font-bold text-slate-500">
                 We couldn't check that code just now. It will be checked again when you place your order.
               </p>
             </div>
@@ -866,9 +892,9 @@ onMounted(async () => {
                 <span>Subtotal</span>
                 <span>₦{{ Number(cartTotalAmount).toLocaleString() }}</span>
               </div>
-              <div v-if="staffDiscountAmount > 0" class="flex justify-between text-sm text-green-700 font-medium">
-                <span>Staff code {{ staffCodeApplied?.code }} ({{ staffCodeApplied?.discountPercent }}%)</span>
-                <span>-₦{{ staffDiscountAmount.toLocaleString() }}</span>
+              <div v-if="promoDiscountAmount > 0" class="flex justify-between text-sm text-green-700 font-medium">
+                <span>Promo code {{ promoCodeApplied?.code }} ({{ promoLabel }})</span>
+                <span>-₦{{ promoDiscountAmount.toLocaleString() }}</span>
               </div>
               <div class="flex justify-between text-sm text-slate-600 font-medium">
                 <span>{{ selectedFulfillment === 'pickup' ? 'Collection' : 'Delivery' }}</span>

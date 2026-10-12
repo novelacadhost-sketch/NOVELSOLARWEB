@@ -28,7 +28,9 @@ function getRateLimitConfig(path: string, isAnonymous: boolean) {
   }
   // Enough for someone typing a code and fixing a typo; too few to try codes
   // until one works.
-  if (path === '/api/staff-code') return { maxRequests: 15, windowSizeInSeconds: 60, bucket: 'staff-code' }
+  if (path === '/api/promo-code' || path === '/api/staff-code') {
+    return { maxRequests: 15, windowSizeInSeconds: 60, bucket: 'promo-code' }
+  }
   if (path.startsWith('/api/admin/')) return { maxRequests: 60, windowSizeInSeconds: 60, bucket: 'admin' }
   return { maxRequests: 100, windowSizeInSeconds: 60, bucket: 'api' }
 }

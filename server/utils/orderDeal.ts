@@ -25,25 +25,36 @@ export interface OrderDealCartItem {
   id?: string | number
   ID?: string | number
   name?: string
-  /** Before any staff-code discount. */
+  /** Before any promo-code discount. */
   price?: number
-  /** Staff-code discount per unit, in naira. */
+  /** Promo-code discount per unit, in naira. */
   discount?: number
   quantity: number
 }
 
-/** A staff code used on the order. See server/utils/promotions.ts. */
-export interface OrderReferral {
-  code: string
-  staffBitrixId: number
+/**
+ * Who an order is credited to and what code discounted it — two separate
+ * things, since a customer can arrive through one staff member's link and type
+ * a marketing code. See server/utils/promotions.ts.
+ */
+export interface OrderPromotion {
+  /** The staff member credited, from a typed staff code or a staff link. */
+  staffCode: string | null
+  staffBitrixId: number | null
+  /** The code typed at checkout: a staff code or a promo code. */
+  code: string | null
+  kind: 'staff' | 'promo' | null
+  /** "1%", "10%" or "₦5,000 off". Null when nothing came off. */
+  discountLabel: string | null
+  /** 0 for a fixed-amount code. */
   discountPercent: number
   discountAmount: number
   /** Before the discount; `total` on the order is after it. */
   subtotal: number
-  /** Set when the staff member is credited but the customer got no discount. */
+  /** Set when a code was accepted but took nothing off. */
   noDiscountReason?: 'dealer' | 'disabled' | 'below_minimum' | null
-  /** The cap, when the discount was scaled down to fit under it. */
-  cappedAt?: number | null
+  /** A percentage brought down to its cap. */
+  capped?: boolean
 }
 
 export interface OrderDealInput {
@@ -73,7 +84,7 @@ export interface OrderDealInput {
   userId?: string | null
   /** Marks a deal recreated from the failed-order queue. */
   recovered?: boolean
-  referral?: OrderReferral | null
+  promotion?: OrderPromotion | null
 }
 
 export interface OrderDealResult {
@@ -88,13 +99,17 @@ const PORTAL_URL = 'https://nisl.bitrix24.com'
 
 const naira = (amount: number) => `₦${Number(amount || 0).toLocaleString()}`
 
-function describeReferral(referral: OrderReferral): string {
-  if (referral.noDiscountReason === 'dealer') return 'dealer order, no discount on dealer pricing'
-  if (referral.noDiscountReason === 'disabled') return 'no discount running'
-  if (referral.noDiscountReason === 'below_minimum') return 'order below the minimum for a discount'
-  if (!(referral.discountAmount > 0)) return 'no discount applied'
-  const cap = referral.cappedAt ? `, capped at ${naira(referral.cappedAt)}` : ''
-  return `${referral.discountPercent}% staff-code discount${cap}, -${naira(referral.discountAmount)} on ${naira(referral.subtotal)}`
+/** "DAFO12 (staff code): 1% off, -₦6,500 on ₦650,000", or why nothing came off. */
+function describeDiscount(promotion: OrderPromotion): string {
+  const which = `${promotion.code}${promotion.kind === 'staff' ? ' (staff code)' : ''}`
+  if (promotion.discountAmount > 0) {
+    const cap = promotion.capped ? ', capped' : ''
+    return `${which}: ${promotion.discountLabel ?? 'discount'}${cap}, -${naira(promotion.discountAmount)} on ${naira(promotion.subtotal)}`
+  }
+  if (promotion.noDiscountReason === 'dealer') return `${which}: dealer order, no discount on dealer pricing`
+  if (promotion.noDiscountReason === 'disabled') return `${which}: no discount running`
+  if (promotion.noDiscountReason === 'below_minimum') return `${which}: order below the minimum for a discount`
+  return `${which}: no discount applied`
 }
 
 function productIdOf(item: OrderDealCartItem): string | null {
@@ -145,9 +160,12 @@ function buildComments(order: OrderDealInput, staffName: string | null): string 
   // the deal needs to know the total excludes it.
   if (!isPickup) lines.push('Delivery cost: NOT quoted - agent to contact the customer')
 
-  if (order.referral) {
+  const promotion = order.promotion
+  if (promotion?.code) lines.push(`Promo code: ${describeDiscount(promotion)}`)
+  if (promotion?.staffCode) {
     const who = staffName ? ` (${staffName})` : ''
-    lines.push(`Staff code: ${order.referral.code}${who} - ${describeReferral(order.referral)}`)
+    const how = promotion.kind === 'promo' ? ' - via their staff link' : ''
+    lines.push(`Staff credited: ${promotion.staffCode}${who}${how}`)
   }
 
   return [...lines, `Notes: ${order.customer.note || 'None'}`, '', 'ITEMS:', items].join('\n')
@@ -247,7 +265,8 @@ async function setProductRows(dealId: string, order: OrderDealInput): Promise<bo
  */
 export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealResult> {
   const contactId = await resolveContact(order)
-  const staffName = order.referral ? await staffNameFor(order.referral.staffBitrixId) : null
+  const staffBitrixId = order.promotion?.staffBitrixId ?? null
+  const staffName = staffBitrixId ? await staffNameFor(staffBitrixId) : null
 
   const name = `${order.customer.firstName || 'Guest'} ${order.customer.lastName || ''}`.trim()
   const summary = buildComments(order, staffName)
@@ -264,7 +283,7 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
   }
 
   if (contactId) fields.CONTACT_ID = contactId
-  if (order.referral) fields[BITRIX_DEAL.REFERRED_BY_FIELD] = order.referral.staffBitrixId
+  if (staffBitrixId) fields[BITRIX_DEAL.REFERRED_BY_FIELD] = staffBitrixId
 
   const branchId = branchElementId(order.branch)
   if (branchId) fields[BITRIX_DEAL.BRANCH_FIELD] = branchId
@@ -293,7 +312,7 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
     ? await notifyBranchManagerOfOrder({ branchElementId: branchId, dealId, orderId: order.orderId, total: order.total })
     : false
 
-  const staffNotified = order.referral ? await notifyReferringStaff(order, dealId) : false
+  const staffNotified = staffBitrixId ? await notifyReferringStaff(order, dealId, staffBitrixId) : false
 
   logger.info('OrderDeal', 'Created deal in Bitrix', {
     orderId: order.orderId,
@@ -302,7 +321,8 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
     branchId,
     productRowsSet,
     branchManagerNotified,
-    staffCode: order.referral?.code ?? null,
+    staffCode: order.promotion?.staffCode ?? null,
+    promoCode: order.promotion?.code ?? null,
     staffNotified,
     summaryOnTimeline,
   })
@@ -317,24 +337,29 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
  * order only gets its deal after Paystack confirms payment, so nobody is told
  * about a sale that was never paid for. Never fatal.
  */
-async function notifyReferringStaff(order: OrderDealInput, dealId: string): Promise<boolean> {
-  const referral = order.referral!
+async function notifyReferringStaff(order: OrderDealInput, dealId: string, staffBitrixId: number): Promise<boolean> {
+  const promotion = order.promotion!
   const customer = [order.customer.firstName, order.customer.lastName?.charAt(0)].filter(Boolean).join(' ')
+  // Staff are told "your staff code was used" whichever way they were
+  // credited, as Davies asked; the line below says when the customer came
+  // through their link and used a promo code instead.
+  const discount = promotion.code ? describeDiscount(promotion) : 'no promo code used'
   const message = [
-    `[B]Your staff code ${referral.code} was used.[/B]`,
+    `[B]Your staff code ${promotion.staffCode} was used.[/B]`,
     '',
     `Customer: ${customer || 'Guest'}${order.customer.lastName ? '.' : ''}`,
     `Order: ${order.orderId}`,
-    `Value: ${naira(order.total)} (${describeReferral(referral)})`,
+    `Value: ${naira(order.total)}`,
+    promotion.kind === 'staff' ? `Discount: ${discount}` : `Came through your link. Promo code: ${discount}`,
     `Deal: [URL=${PORTAL_URL}/crm/deal/details/${dealId}/]#${dealId}[/URL]`,
   ].join('\n')
 
-  const sent = await messageStaff(referral.staffBitrixId, message)
+  const sent = await messageStaff(staffBitrixId, message)
   if (!sent) {
-    logger.warn('OrderDeal', 'Could not notify the staff member whose code was used', {
+    logger.warn('OrderDeal', 'Could not notify the staff member credited with the order', {
       orderId: order.orderId,
       dealId,
-      staffBitrixId: referral.staffBitrixId,
+      staffBitrixId,
     })
   }
   return sent

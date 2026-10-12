@@ -1,7 +1,9 @@
 import { getSupabaseAdminClient } from './supabaseAdmin'
-import { lookupStaffCode, normaliseStaffCode, type StaffCode } from './staffCodes'
+import { lookupStaffCode, type StaffCode } from './staffCodes'
+import { countPromoCodeUses, findPromoCode, PROMO_CODE_PATTERN } from './promoCodes'
 import { logger } from './logger'
 
+/** The global terms that staff codes carry. Promo codes carry their own; see promoCodes.ts. */
 export interface PromotionSettings {
   discountEnabled: boolean
   discountPercent: number
@@ -66,80 +68,158 @@ export function clearPromotionSettingsCache(): void {
   cache = null
 }
 
-export type ReferralStatus = 'none' | 'invalid' | 'applied'
-
-export interface Referral {
-  status: ReferralStatus
-  /** The code as the customer gave it, normalised. Null when none was given. */
-  code: string | null
-  staff: StaffCode | null
-  /**
-   * The rate this code earns. Zero for a dealer, when the discount is switched
-   * off, or when there is no valid code — the staff member is still credited in
-   * the first two cases. The order can still get less: see applyDiscount().
-   */
-  discountPercent: number
-  /** The money limits in force, which applyDiscount() needs the cart to apply. */
+/**
+ * What a discount is worth before it meets a cart: a percentage or a fixed
+ * naira amount, with the money limits that come with it. 0 = no limit.
+ */
+export interface DiscountTerms {
+  type: 'percent' | 'fixed'
+  value: number
   minOrderAmount: number
   maxDiscountAmount: number
-  /** Why there is no discount on an applied code, for the customer and the deal. */
+}
+
+/** Why a typed code was refused. Checkout answers 409 with it; see checkout.post.ts. */
+export type RejectReason =
+  | 'not_found'
+  | 'expired'
+  | 'not_started'
+  | 'used_up'
+  | 'already_used'
+  | 'disabled'
+  | 'dealers_excluded'
+  | 'unavailable'
+
+/** What the customer is told, by checkout and by the code check alike. */
+export const REJECT_MESSAGES: Record<RejectReason, string> = {
+  not_found: "We don't recognise that promo code.",
+  expired: 'This promo code has expired.',
+  not_started: "This promo code isn't active yet.",
+  used_up: 'This promo code has been fully used.',
+  already_used: "You've already used this promo code.",
+  disabled: 'This promo code is no longer available.',
+  dealers_excluded: "This promo code can't be used with dealer pricing.",
+  unavailable: "We couldn't check this promo code just now. Please try again.",
+}
+
+/** Why an accepted code took nothing off. 'below_minimum' is only known once the cart is priced. */
+export type NoDiscountReason = 'dealer' | 'disabled' | 'below_minimum'
+
+export interface ResolvedPromotion {
+  /** The typed code, normalised. Null when none was typed. */
+  code: string | null
+  kind: 'staff' | 'promo' | null
+  status: 'none' | 'applied' | 'rejected'
+  rejectReason: RejectReason | null
+  /** Who is credited: the typed staff code, or else the staff link the customer came through. */
+  staff: StaffCode | null
+  /** Null when no discount applies. */
+  terms: DiscountTerms | null
   noDiscountReason: NoDiscountReason | null
 }
 
-/** 'below_minimum' is only known once the cart is priced; see applyDiscount(). */
-export type NoDiscountReason = 'dealer' | 'disabled' | 'below_minimum'
+/** What a customer typed or a link carried, in the form codes are stored. */
+export function normaliseCode(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const code = raw.replace(/[\s-]/g, '').toUpperCase()
+  return PROMO_CODE_PATTERN.test(code) ? code : null
+}
 
-/**
- * What a code earns this customer. Dealers are credited to the staff member
- * but never discounted: dealer pricing already is their discount.
- */
-export async function resolveReferral(rawCode: unknown, isDealer: boolean): Promise<Referral> {
-  const given = typeof rawCode === 'string' && rawCode.trim() !== ''
-  const none = { discountPercent: 0, minOrderAmount: 0, maxDiscountAmount: 0 }
-  if (!given) return { status: 'none', code: null, staff: null, ...none, noDiscountReason: null }
-
-  const staff = await lookupStaffCode(rawCode)
-  if (!staff) {
-    return {
-      status: 'invalid',
-      code: normaliseStaffCode(rawCode),
-      staff: null,
-      ...none,
-      noDiscountReason: null,
-    }
-  }
-
-  if (isDealer) {
-    return { status: 'applied', code: staff.code, staff, ...none, noDiscountReason: 'dealer' }
-  }
-
-  const settings = await getPromotionSettings()
-  if (!settings.discountEnabled || settings.discountPercent <= 0) {
-    return { status: 'applied', code: staff.code, staff, ...none, noDiscountReason: 'disabled' }
-  }
-
-  return {
-    status: 'applied',
-    code: staff.code,
-    staff,
-    discountPercent: settings.discountPercent,
-    minOrderAmount: settings.minOrderAmount,
-    maxDiscountAmount: settings.maxDiscountAmount,
-    noDiscountReason: null,
-  }
+export interface ResolvePromotionInput {
+  /** What the customer typed in the promo code box. */
+  typed?: unknown
+  /** A staff code remembered from a ?ref= link. Credits; never discounts on its own. */
+  ref?: unknown
+  isDealer: boolean
+  /** For once-per-customer codes. Absent on the code check, which has no email yet. */
+  email?: string | null
 }
 
 /**
- * The discount on one unit, in whole naira.
+ * Work out who is credited and what discount applies.
  *
- * Worked out per unit rather than once on the order total so that the deal's
- * product lines, the order record and the Paystack charge all add up to
- * exactly the same figure — rounding the order total alone would leave the
- * lines a few naira out from what was charged.
+ * A typed STAFF code credits that person and carries the global terms
+ * (promotion_settings). A typed PROMO code carries its own terms, and the
+ * staff member whose link the customer arrived through is still credited —
+ * so a marketing code never takes the sale away from the person who sent the
+ * customer. Dealers get no staff-code discount, and a promo code only if it
+ * allows dealers.
  */
-export function unitDiscount(unitPrice: number, percent: number): number {
-  if (!(percent > 0) || !(unitPrice > 0)) return 0
-  return Math.round((unitPrice * percent) / 100)
+export async function resolvePromotion(input: ResolvePromotionInput): Promise<ResolvedPromotion> {
+  const typed = normaliseCode(input.typed)
+  const given = typeof input.typed === 'string' && input.typed.trim() !== ''
+  const linkStaff = input.ref ? await lookupStaffCode(input.ref) : null
+
+  const result = (patch: Partial<ResolvedPromotion>): ResolvedPromotion => ({
+    code: typed,
+    kind: null,
+    status: 'none',
+    rejectReason: null,
+    staff: linkStaff,
+    terms: null,
+    noDiscountReason: null,
+    ...patch,
+  })
+
+  if (!given) return result({})
+  if (!typed) return result({ status: 'rejected', rejectReason: 'not_found' })
+
+  const staff = await lookupStaffCode(typed)
+  if (staff) {
+    if (input.isDealer) return result({ kind: 'staff', status: 'applied', staff, noDiscountReason: 'dealer' })
+    const settings = await getPromotionSettings()
+    if (!settings.discountEnabled || settings.discountPercent <= 0) {
+      return result({ kind: 'staff', status: 'applied', staff, noDiscountReason: 'disabled' })
+    }
+    return result({
+      kind: 'staff',
+      status: 'applied',
+      staff,
+      terms: {
+        type: 'percent',
+        value: settings.discountPercent,
+        minOrderAmount: settings.minOrderAmount,
+        maxDiscountAmount: settings.maxDiscountAmount,
+      },
+    })
+  }
+
+  const promo = await findPromoCode(typed)
+  if (!promo) return result({ status: 'rejected', rejectReason: 'not_found' })
+
+  const reject = (rejectReason: RejectReason) => result({ kind: 'promo', status: 'rejected', rejectReason })
+  const now = Date.now()
+  if (!promo.enabled) return reject('disabled')
+  if (promo.startsAt && new Date(promo.startsAt).getTime() > now) return reject('not_started')
+  if (promo.expiresAt && new Date(promo.expiresAt).getTime() <= now) return reject('expired')
+  if (input.isDealer && !promo.allowDealers) return reject('dealers_excluded')
+
+  if (promo.usageLimit || (promo.oncePerCustomer && input.email)) {
+    try {
+      const uses = await countPromoCodeUses(promo.code, promo.oncePerCustomer ? input.email : null)
+      if (promo.usageLimit && uses.total >= promo.usageLimit) return reject('used_up')
+      if (promo.oncePerCustomer && uses.byCustomer > 0) return reject('already_used')
+    } catch (error) {
+      // A limited code that cannot be counted is refused, not handed out past
+      // its limit.
+      logger.warn('Promotions', 'Could not count promo code uses; refused', {
+        code: promo.code,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return reject('unavailable')
+    }
+  }
+
+  return result({
+    kind: 'promo',
+    status: 'applied',
+    terms: {
+      type: promo.discountType,
+      value: promo.discountValue,
+      minOrderAmount: promo.minOrderAmount,
+      maxDiscountAmount: promo.discountType === 'percent' ? promo.maxDiscountAmount : 0,
+    },
+  })
 }
 
 export interface DiscountedTotals<T> {
@@ -149,50 +229,91 @@ export interface DiscountedTotals<T> {
   total: number
   /** The order did not reach the minimum, so nothing was taken off. */
   belowMinimum: boolean
-  /** The cap was reached and the discount was scaled down to fit under it. */
+  /** A percentage reached the cap and was brought down to it. */
   capped: boolean
 }
 
-export interface DiscountTerms {
-  discountPercent: number
-  minOrderAmount?: number
-  maxDiscountAmount?: number
+/**
+ * Spread an exact naira amount over the cart, as whole-naira discounts per unit.
+ *
+ * Each unit first gets its proportional share rounded down, which can leave a
+ * few naira over. Those go one naira per unit to the lines with the fewest
+ * units first — a single-unit line can absorb any remainder exactly — so a
+ * "₦5,000 off" code takes off ₦5,000, not ₦4,997. Only a cart made entirely of
+ * multiples can leave a naira or two unplaced, and then it stays under.
+ *
+ * Mirrored in app/utils/promoDiscount.ts for the checkout preview; change both.
+ */
+function spread<T extends { price: number; quantity: number }>(cart: T[], amount: number, subtotal: number): number[] {
+  // Multiply before dividing, and allow for float error, so an exact share
+  // such as 650000 * 10000 / 1300000 = 5000 is not floored to 4999.
+  const perUnit = cart.map((item) => Math.floor((item.price * amount) / subtotal + 1e-9))
+  let remainder = amount - perUnit.reduce((sum, d, i) => sum + d * cart[i]!.quantity, 0)
+
+  const order = cart.map((_, i) => i).sort((a, b) => cart[a]!.quantity - cart[b]!.quantity || a - b)
+  for (const i of order) {
+    const item = cart[i]!
+    while (remainder >= item.quantity && perUnit[i]! + 1 <= item.price) {
+      perUnit[i]!++
+      remainder -= item.quantity
+    }
+    if (remainder <= 0) break
+  }
+  return perUnit
+}
+
+/** The discount on one unit at a percentage, in whole naira. */
+export function unitDiscount(unitPrice: number, percent: number): number {
+  if (!(percent > 0) || !(unitPrice > 0)) return 0
+  return Math.round((unitPrice * percent) / 100)
 }
 
 /**
- * Apply the discount to a priced cart.
+ * Apply a discount to a priced cart.
  *
  * Every line carries a whole-naira discount PER UNIT, and the order's discount
  * is the sum of those — never a separately rounded figure — so the deal's
  * product lines, the order record and the Paystack charge always agree.
  *
- * When the rate would go over the cap, the rate is lowered to cap / subtotal
- * and each unit's discount is rounded DOWN, so the total lands at or a few
- * naira under the cap and never over it.
+ * A fixed amount never takes more than the order is worth, and a percentage
+ * over its cap is brought down to the cap.
  */
 export function applyDiscount<T extends { price: number; quantity: number }>(
   cart: T[],
-  terms: DiscountTerms,
+  terms: DiscountTerms | null,
 ): DiscountedTotals<T> {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const min = terms.minOrderAmount ?? 0
-  const cap = terms.maxDiscountAmount ?? 0
-  const belowMinimum = terms.discountPercent > 0 && min > 0 && subtotal < min
+  const none = (belowMinimum: boolean): DiscountedTotals<T> => ({
+    cart: cart.map((item) => ({ ...item, discount: 0 })),
+    subtotal,
+    discountAmount: 0,
+    total: subtotal,
+    belowMinimum,
+    capped: false,
+  })
 
-  const withDiscounts = (perUnit: (price: number) => number) => {
-    const lines = cart.map((item) => ({ ...item, discount: perUnit(item.price) }))
-    return { lines, amount: lines.reduce((sum, item) => sum + item.discount * item.quantity, 0) }
-  }
+  if (!terms || !(terms.value > 0) || !(subtotal > 0)) return none(false)
+  if (terms.minOrderAmount > 0 && subtotal < terms.minOrderAmount) return none(true)
 
-  let { lines, amount } = withDiscounts((price) => (belowMinimum ? 0 : unitDiscount(price, terms.discountPercent)))
+  let perUnit: number[]
   let capped = false
-
-  if (cap > 0 && amount > cap) {
-    // Multiply before dividing, and allow for float error, so an exact share
-    // such as 650000 * 10000 / 1300000 = 5000 is not floored to 4999.
-    ;({ lines, amount } = withDiscounts((price) => Math.floor((price * cap) / subtotal + 1e-9)))
-    capped = true
+  if (terms.type === 'fixed') {
+    perUnit = spread(cart, Math.min(Math.round(terms.value), subtotal), subtotal)
+  } else {
+    perUnit = cart.map((item) => unitDiscount(item.price, terms.value))
+    const amount = perUnit.reduce((sum, d, i) => sum + d * cart[i]!.quantity, 0)
+    if (terms.maxDiscountAmount > 0 && amount > terms.maxDiscountAmount) {
+      perUnit = spread(cart, Math.round(terms.maxDiscountAmount), subtotal)
+      capped = true
+    }
   }
 
-  return { cart: lines, subtotal, discountAmount: amount, total: subtotal - amount, belowMinimum, capped }
+  const lines = cart.map((item, i) => ({ ...item, discount: perUnit[i]! }))
+  const discountAmount = lines.reduce((sum, item) => sum + item.discount * item.quantity, 0)
+  return { cart: lines, subtotal, discountAmount, total: subtotal - discountAmount, belowMinimum: false, capped }
+}
+
+/** "1%", "10%" or "₦5,000 off", for receipts, deals and staff messages. */
+export function describeTerms(terms: Pick<DiscountTerms, 'type' | 'value'>): string {
+  return terms.type === 'fixed' ? `₦${Math.round(terms.value).toLocaleString()} off` : `${terms.value}%`
 }

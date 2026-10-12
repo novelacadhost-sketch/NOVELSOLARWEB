@@ -1,3 +1,4 @@
+import type { OrderPromotion } from '../utils/orderDeal'
 // Supabase/Database Types
 
 export interface AuthSession {
@@ -77,16 +78,8 @@ export interface FailedOrder {
     name?: string
   }
   paymentMethod?: string
-  /** Absent on orders queued before staff codes existed. */
-  referral?: {
-    code: string
-    staffBitrixId: number
-    discountPercent: number
-    discountAmount: number
-    subtotal: number
-    noDiscountReason?: 'dealer' | 'disabled' | 'below_minimum' | null
-    cappedAt?: number | null
-  } | null
+  /** Absent on orders queued before promo codes existed. */
+  promotion?: OrderPromotion | null
   timestamp: string
   status: string
 }

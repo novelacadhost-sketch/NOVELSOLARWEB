@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
       branch: stored.branch,
       paymentMethod: stored.paymentMethod,
       recovered: true,
-      referral: stored.referral ?? null,
+      promotion: stored.promotion ?? null,
     })
 
     try {

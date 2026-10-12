@@ -42,6 +42,161 @@ const search = ref('')
 const isRefreshing = ref(false)
 const togglingCode = ref<string | null>(null)
 
+// Promo codes: admin-made codes (NOVEL10) with their own terms.
+interface PromoCodeRow {
+  code: string
+  description: string | null
+  discountType: 'percent' | 'fixed'
+  discountValue: number
+  minOrderAmount: number
+  maxDiscountAmount: number
+  startsOn: string | null
+  expiresOn: string | null
+  usageLimit: number | null
+  oncePerCustomer: boolean
+  allowDealers: boolean
+  enabled: boolean
+  uses: number
+  discountGiven: number
+}
+
+interface PromoForm {
+  code: string
+  description: string
+  discountType: 'percent' | 'fixed'
+  discountValue: number | null
+  minOrderAmount: number
+  maxDiscountAmount: number
+  startsOn: string
+  expiresOn: string
+  usageLimit: number | null
+  oncePerCustomer: boolean
+  allowDealers: boolean
+  enabled: boolean
+}
+
+const promoCodes = ref<PromoCodeRow[]>([])
+const promoForm = ref<PromoForm | null>(null)
+const isNewPromo = ref(false)
+const isSavingPromo = ref(false)
+
+function blankPromo(): PromoForm {
+  return {
+    code: '',
+    description: '',
+    discountType: 'percent',
+    discountValue: null,
+    minOrderAmount: 0,
+    maxDiscountAmount: 0,
+    startsOn: '',
+    expiresOn: '',
+    usageLimit: null,
+    oncePerCustomer: true,
+    allowDealers: false,
+    enabled: true,
+  }
+}
+
+function startNewPromo() {
+  promoForm.value = blankPromo()
+  isNewPromo.value = true
+}
+
+function editPromo(p: PromoCodeRow) {
+  promoForm.value = {
+    code: p.code,
+    description: p.description ?? '',
+    discountType: p.discountType,
+    discountValue: p.discountValue,
+    minOrderAmount: p.minOrderAmount,
+    maxDiscountAmount: p.maxDiscountAmount,
+    startsOn: p.startsOn ?? '',
+    expiresOn: p.expiresOn ?? '',
+    usageLimit: p.usageLimit,
+    oncePerCustomer: p.oncePerCustomer,
+    allowDealers: p.allowDealers,
+    enabled: p.enabled,
+  }
+  isNewPromo.value = false
+}
+
+/** "10% off orders of ₦50,000 or more, up to ₦10,000" or "₦5,000 off orders of ₦100,000 or more". */
+function describePromo(p: Pick<PromoCodeRow, 'discountType' | 'discountValue' | 'minOrderAmount' | 'maxDiscountAmount'>) {
+  const what = p.discountType === 'fixed' ? `${naira(p.discountValue)} off` : `${p.discountValue}% off`
+  const min = p.minOrderAmount > 0 ? ` orders of ${naira(p.minOrderAmount)} or more` : ' any order'
+  const cap = p.discountType === 'percent' && p.maxDiscountAmount > 0 ? `, up to ${naira(p.maxDiscountAmount)}` : ''
+  return `${what}${min}${cap}`
+}
+
+const todayLagos = () => new Date(Date.now() + 3600_000).toISOString().slice(0, 10)
+
+function promoStatus(p: PromoCodeRow): { label: string; tone: string } {
+  if (!p.enabled) return { label: 'Off', tone: 'bg-red-100 text-red-700' }
+  const today = todayLagos()
+  if (p.expiresOn && p.expiresOn < today) return { label: 'Expired', tone: 'bg-slate-100 text-slate-500' }
+  if (p.startsOn && p.startsOn > today) return { label: 'Scheduled', tone: 'bg-amber-100 text-amber-700' }
+  if (p.usageLimit && p.uses >= p.usageLimit) return { label: 'Used up', tone: 'bg-slate-100 text-slate-500' }
+  return { label: 'Live', tone: 'bg-emerald-100 text-emerald-700' }
+}
+
+async function savePromo(form: PromoForm | null = promoForm.value, isNew = isNewPromo.value) {
+  if (!form) return
+  const value = Number(form.discountValue)
+  if (!(value > 0)) {
+    addToast('Not saved', 'Enter the discount.', 'error')
+    return
+  }
+  if (form.discountType === 'fixed' && !(Number(form.minOrderAmount) > value)) {
+    addToast('Not saved', 'A fixed-amount code needs a minimum order larger than the discount.', 'error')
+    return
+  }
+
+  isSavingPromo.value = true
+  try {
+    const res = await useNuxtApp().$apiFetch<{ code: string }>('/api/admin/promotions/promo-code', {
+      method: 'POST',
+      body: {
+        isNew,
+        code: form.code,
+        description: form.description || null,
+        discountType: form.discountType,
+        discountValue: value,
+        minOrderAmount: Number(form.minOrderAmount) || 0,
+        maxDiscountAmount: form.discountType === 'percent' ? Number(form.maxDiscountAmount) || 0 : 0,
+        startsOn: form.startsOn || null,
+        expiresOn: form.expiresOn || null,
+        usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
+        oncePerCustomer: form.oncePerCustomer,
+        allowDealers: form.allowDealers,
+        enabled: form.enabled,
+      },
+    })
+    addToast('Saved', `${res.code} is saved. Checkouts use it within a moment.`, 'success')
+    promoForm.value = null
+    await load()
+  } catch (err) {
+    const e = err as { statusMessage?: string; data?: { statusMessage?: string } }
+    addToast('Not saved', e.data?.statusMessage || e.statusMessage || 'The promo code could not be saved.', 'error')
+  } finally {
+    isSavingPromo.value = false
+  }
+}
+
+async function togglePromo(p: PromoCodeRow) {
+  if (p.enabled && !confirm(`Switch off ${p.code}? It will stop working at checkout straight away.`)) return
+  const { uses: _uses, discountGiven: _given, ...rest } = p
+  await savePromo(
+    {
+      ...rest,
+      description: rest.description ?? '',
+      startsOn: rest.startsOn ?? '',
+      expiresOn: rest.expiresOn ?? '',
+      enabled: !p.enabled,
+    },
+    false,
+  )
+}
+
 const settingsChanged = computed(
   () =>
     form.discountEnabled !== saved.discountEnabled ||
@@ -75,12 +230,14 @@ async function load() {
       settings: { discountEnabled: boolean; discountPercent: number; minOrderAmount: number; maxDiscountAmount: number }
       maxDiscountPercent: number
       codes: StaffCodeRow[]
+      promoCodes: PromoCodeRow[]
       changes: ChangeRow[]
     }>('/api/admin/promotions')
     Object.assign(saved, res.settings)
     Object.assign(form, res.settings)
     maxPercent.value = res.maxDiscountPercent
     codes.value = res.codes
+    promoCodes.value = res.promoCodes
     changes.value = res.changes
   } catch {
     addToast('Load failed', 'Could not load the promotion settings.', 'error')
@@ -253,6 +410,7 @@ function describeChange(change: ChangeRow): string {
     staff?: string
     created?: number
     deactivated?: number
+    enabled?: boolean
   }
   switch (change.action) {
     case 'settings': {
@@ -265,6 +423,10 @@ function describeChange(change: ChangeRow): string {
       return `Switched on ${d.code} (${d.staff})`
     case 'code_disabled':
       return `Switched off ${d.code} (${d.staff})`
+    case 'promo_created':
+      return `Created promo code ${d.code}`
+    case 'promo_updated':
+      return `Updated promo code ${d.code}${d.enabled === false ? ' (off)' : ''}`
     case 'codes_refreshed':
       return `Refreshed from Bitrix: ${d.created} new, ${d.deactivated} leavers`
     default:
@@ -279,8 +441,9 @@ function describeChange(change: ChangeRow): string {
       <NuxtLink to="/admin" class="text-xs font-bold text-slate-500">&larr; Control Center</NuxtLink>
       <h1 class="mt-2 text-2xl font-black uppercase tracking-tight text-[#002888]">Promotions</h1>
       <p class="mt-2 max-w-3xl text-sm text-slate-600">
-        Every member of staff has a code. A customer who uses one at checkout, or arrives through a staff link, is
-        credited to that person. Retail customers also get the discount below. Dealers are credited but never discounted.
+        Customers type one promo code at checkout. It can be a staff code, which credits that member of staff and gives
+        the staff code discount below, or a promo code from the list further down, with its own terms. A customer who
+        arrives through a staff link is credited to that person either way.
       </p>
     </header>
 
@@ -289,7 +452,10 @@ function describeChange(change: ChangeRow): string {
     <template v-else>
       <!-- Discount settings -->
       <section class="mb-10 rounded-2xl border border-slate-200 p-6">
-        <h2 class="mb-4 text-lg font-bold text-slate-900">Discount</h2>
+        <h2 class="text-lg font-bold text-slate-900">Staff code discount</h2>
+        <p class="mb-4 text-xs text-slate-500">
+          What a customer gets for typing a staff code. Dealers are credited but never discounted.
+        </p>
         <div class="flex flex-wrap items-end gap-6">
           <label class="flex items-center gap-3 text-sm font-bold text-slate-700">
             <input v-model="form.discountEnabled" type="checkbox" class="h-5 w-5">
@@ -342,6 +508,197 @@ function describeChange(change: ChangeRow): string {
           on orders below the minimum. Changes reach new checkouts within about a minute; orders already placed keep the
           terms they were given. Rate at most {{ maxPercent }}%.
         </p>
+      </section>
+
+      <!-- Promo codes -->
+      <section class="mb-10 rounded-2xl border border-slate-200 p-6">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Promo codes</h2>
+            <p class="text-xs text-slate-500">
+              Codes like NOVEL10, each with its own discount, dates and limits. A staff member whose link the customer
+              came through is still credited.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="rounded-xl bg-[#002888] px-4 py-2 text-xs font-bold uppercase text-white"
+            @click="startNewPromo"
+          >
+            + New promo code
+          </button>
+        </div>
+
+        <!-- Editor -->
+        <div v-if="promoForm" class="mb-6 rounded-2xl border-2 border-[#002888] p-5">
+          <h3 class="mb-4 font-bold text-slate-900">{{ isNewPromo ? 'New promo code' : `Editing ${promoForm.code}` }}</h3>
+          <div class="grid gap-4 sm:grid-cols-3">
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">Code</span>
+              <input
+                v-model="promoForm.code"
+                :disabled="!isNewPromo"
+                placeholder="NOVEL10"
+                maxlength="20"
+                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase disabled:bg-slate-100"
+              >
+              <span class="mt-1 block text-[11px] text-slate-400">
+                {{ isNewPromo ? '3 to 20 letters and numbers' : 'Fixed once created' }}
+              </span>
+            </label>
+            <label class="block sm:col-span-2">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">What it is for (admins only)</span>
+              <input
+                v-model="promoForm.description"
+                maxlength="200"
+                placeholder="e.g. October radio campaign"
+                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              >
+            </label>
+          </div>
+
+          <div class="mt-4 grid gap-4 sm:grid-cols-4">
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">Discount type</span>
+              <select v-model="promoForm.discountType" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="percent">Percentage (%)</option>
+                <option value="fixed">Fixed amount (₦)</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">
+                {{ promoForm.discountType === 'fixed' ? 'Amount off (₦)' : 'Percent off' }}
+              </span>
+              <input
+                v-model.number="promoForm.discountValue"
+                type="number"
+                min="0"
+                :max="promoForm.discountType === 'percent' ? 90 : undefined"
+                :step="promoForm.discountType === 'percent' ? 0.5 : 500"
+                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              >
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">
+                Minimum order (₦){{ promoForm.discountType === 'fixed' ? ' *' : '' }}
+              </span>
+              <input
+                v-model.number="promoForm.minOrderAmount"
+                type="number"
+                min="0"
+                step="1000"
+                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              >
+            </label>
+            <label v-if="promoForm.discountType === 'percent'" class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">Maximum discount (₦)</span>
+              <input
+                v-model.number="promoForm.maxDiscountAmount"
+                type="number"
+                min="0"
+                step="1000"
+                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              >
+            </label>
+          </div>
+
+          <div class="mt-4 grid gap-4 sm:grid-cols-3">
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">Starts (optional)</span>
+              <input v-model="promoForm.startsOn" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">Expires (optional)</span>
+              <input v-model="promoForm.expiresOn" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold uppercase text-slate-500">Total uses allowed (optional)</span>
+              <input
+                v-model.number="promoForm.usageLimit"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="Unlimited"
+                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              >
+            </label>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-6 text-sm font-bold text-slate-700">
+            <label class="flex items-center gap-2">
+              <input v-model="promoForm.oncePerCustomer" type="checkbox"> Once per customer (by email)
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="promoForm.allowDealers" type="checkbox"> Dealers can use it too
+            </label>
+            <label class="flex items-center gap-2"> <input v-model="promoForm.enabled" type="checkbox"> On </label>
+          </div>
+
+          <p v-if="Number(promoForm.discountValue) > 0" class="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+            Customers get
+            <strong>{{ describePromo({ ...promoForm, discountValue: Number(promoForm.discountValue) }) }}</strong>
+            {{
+              promoForm.startsOn || promoForm.expiresOn
+                ? `, ${promoForm.startsOn ? `from ${promoForm.startsOn}` : 'from now'} ${
+                    promoForm.expiresOn ? `until the end of ${promoForm.expiresOn}` : 'with no end date'
+                  }`
+                : ''
+            }}.
+          </p>
+
+          <div class="mt-5 flex gap-3">
+            <button
+              type="button"
+              class="rounded-xl bg-[#002888] px-5 py-2 text-xs font-bold uppercase text-white disabled:opacity-50"
+              :disabled="isSavingPromo"
+              @click="savePromo()"
+            >
+              {{ isSavingPromo ? 'Saving…' : 'Save' }}
+            </button>
+            <button
+              type="button"
+              class="rounded-xl border border-slate-300 px-5 py-2 text-xs font-bold uppercase text-slate-600"
+              @click="promoForm = null"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- List -->
+        <p v-if="!promoCodes.length" class="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
+          No promo codes yet.
+        </p>
+        <div v-else class="space-y-3">
+          <div
+            v-for="p in promoCodes"
+            :key="p.code"
+            class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 p-4"
+          >
+            <span class="w-28 font-mono text-sm font-bold text-[#002888]">{{ p.code }}</span>
+            <div class="min-w-[14rem] flex-1">
+              <p class="text-sm font-bold text-slate-900">{{ describePromo(p) }}</p>
+              <p class="text-xs text-slate-500">
+                {{ p.startsOn || p.expiresOn ? `${p.startsOn ?? 'now'} to ${p.expiresOn ?? 'no end'}` : 'No dates' }}
+                · {{ p.uses }}{{ p.usageLimit ? ` of ${p.usageLimit}` : '' }} used · {{ naira(p.discountGiven) }} given
+                {{ p.oncePerCustomer ? '· once per customer' : '' }}{{ p.allowDealers ? ' · dealers too' : '' }}
+              </p>
+              <p v-if="p.description" class="text-xs italic text-slate-400">{{ p.description }}</p>
+            </div>
+            <span class="rounded-full px-3 py-1 text-[11px] font-bold uppercase" :class="promoStatus(p).tone">
+              {{ promoStatus(p).label }}
+            </span>
+            <button type="button" class="text-xs font-bold text-[#002888]" @click="editPromo(p)">Edit</button>
+            <button
+              type="button"
+              class="w-20 text-xs font-bold"
+              :class="p.enabled ? 'text-red-600' : 'text-[#002888]'"
+              @click="togglePromo(p)"
+            >
+              {{ p.enabled ? 'Switch off' : 'Switch on' }}
+            </button>
+          </div>
+        </div>
       </section>
 
       <!-- Sales report -->
