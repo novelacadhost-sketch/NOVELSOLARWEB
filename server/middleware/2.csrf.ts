@@ -1,28 +1,24 @@
 import { randomUUID } from 'node:crypto'
+import { isSignedCallbackPath } from '../utils/requestCredentials'
 
 export default defineEventHandler((event) => {
   // Only apply CSRF protection to explicit internal API routes
   if (!event.path.startsWith('/api/')) return
 
-  // Exclude bitrix callbacks, webhooks, or open APIs that don't originate from a browser session
-  if (
-    event.path.startsWith('/api/bitrix/') ||
-    event.path.includes('webhook') ||
-    event.path.startsWith('/api/admin/trigger-sync')
-  )
-    return
+  if (isSignedCallbackPath(event)) return
 
   // Scheduled jobs. They run from GitHub Actions with a Bearer cron secret and
   // no cookie jar, so the token dance is impossible for them — and pointless:
   // CSRF defends ambient credentials a browser attaches on its own, and a
   // secret held deliberately by the caller is the opposite of ambient.
   //
-  // A header check rather than another hardcoded path. The path above exempts
-  // /api/admin/trigger-sync for EVERY caller; this exempts only a caller that
+  // A header check rather than a hardcoded path: it exempts only a caller that
   // already holds the secret, which adminGuard then treats as admin anyway —
   // so it grants nothing that the secret did not already grant. New cron
-  // endpoints are covered without editing this list, which is what the drain
-  // needed: it was answering 403 here before ever reaching adminGuard.
+  // endpoints are covered without editing a list, which is what the drain
+  // needed: it was answering 403 here before ever reaching adminGuard. (The
+  // product sync was also exempted by path, for every caller; that went once
+  // its workflow was confirmed to send the secret.)
   const { cronSecret } = useRuntimeConfig()
   if (cronSecret && getHeader(event, 'authorization') === `Bearer ${cronSecret}`) return
 

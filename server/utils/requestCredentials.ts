@@ -46,3 +46,21 @@ export const ANONYMOUS_WRITE_PATHS = new Set([
   // shape as the enquiry forms: it creates a lead and acts on nobody's behalf.
   '/api/stock-request',
 ])
+
+const SIGNED_CALLBACK_PATHS = new Set(['/api/bitrix/handler', '/api/payments/paystack/webhook'])
+
+/**
+ * Server-to-server callbacks that prove themselves another way, and so skip
+ * both rate limiting and CSRF: Bitrix's handler checks a shared token, the
+ * Paystack webhook checks an HMAC signature over the body.
+ *
+ * Matched on the path without its query, and exactly. The check used to be
+ * `event.path.includes('webhook')` on the full URL, so appending `?webhook`
+ * to any request — admin login included — skipped both middlewares. Exact
+ * rather than a `/api/bitrix/` prefix, so `/api/bitrix/../admin/…` cannot
+ * borrow the exemption either.
+ */
+export function isSignedCallbackPath(event: H3Event): boolean {
+  const path = event.path.split('?')[0] ?? ''
+  return SIGNED_CALLBACK_PATHS.has(path)
+}

@@ -1,19 +1,5 @@
-function getClientIp(event: any) {
-  const headerValue =
-    getHeader(event, 'cf-connecting-ip') || getHeader(event, 'x-real-ip') || getHeader(event, 'x-forwarded-for')
-
-  const rawIp = Array.isArray(headerValue)
-    ? headerValue[0]
-    : String(headerValue || event.node.req.socket.remoteAddress || 'unknown-ip')
-
-  return (
-    rawIp
-      .split(',')[0]
-      .trim()
-      .replace(/^\[|\]$/g, '')
-      .replace(/:\d+$/, '') || 'unknown-ip'
-  )
-}
+import { getClientIp } from '../utils/clientIp'
+import { isSignedCallbackPath } from '../utils/requestCredentials'
 
 function getRateLimitConfig(path: string, isAnonymous: boolean) {
   if (path.startsWith('/api/admin/auth/')) return { maxRequests: 20, windowSizeInSeconds: 60, bucket: 'admin-auth' }
@@ -39,8 +25,7 @@ export default defineEventHandler(async (event) => {
   // Only rate limit API routes and exclude internal or static paths
   if (!event.path.startsWith('/api/')) return
 
-  // Exclude bitrix callback/webhook from rate limiting and CSRF
-  if (event.path.startsWith('/api/bitrix/') || event.path.includes('webhook')) return
+  if (isSignedCallbackPath(event)) return
 
   const storage = useStorage('rateLimit')
 

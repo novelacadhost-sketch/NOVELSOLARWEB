@@ -2,9 +2,8 @@ import { getSupabaseAdminClient } from '../../../utils/supabaseAdmin'
 import { logger } from '../../../utils/logger'
 
 export default defineEventHandler(async (event) => {
-  await enforceAuthRateLimit(event)
-
   const body = await readBody<{ email?: string }>(event)
+  await enforceAuthRateLimit(event, { account: body?.email })
   const config = useRuntimeConfig()
 
   if (!body?.email) {

@@ -3,6 +3,8 @@ import { serverSupabaseClient } from '#supabase/server'
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { email, password } = body
+  // It had none: dealer passwords could be guessed as fast as Supabase answered.
+  await enforceAuthRateLimit(event, { prefix: 'dealer-auth', account: typeof email === 'string' ? email : null })
 
   if (!email || !password) {
     throw createError({ statusCode: 400, statusMessage: 'Email and password are required' })
