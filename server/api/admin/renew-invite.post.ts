@@ -1,5 +1,5 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
-import nodemailer from 'nodemailer'
+import { getMailTransporter } from '../../utils/mailer'
 import { logger } from '../../utils/logger'
 import crypto from 'node:crypto'
 
@@ -55,19 +55,8 @@ export default defineEventHandler(async (event) => {
 
     // Resend dynamically updated email
     const config = useRuntimeConfig()
-    if (config.smtpUser && config.smtpPass) {
-      const transporter = nodemailer.createTransport({
-        pool: true,
-        host: config.smtpHost,
-        port: Number(config.smtpPort) || 587,
-        secure: false,
-        auth: {
-          user: config.smtpUser,
-          pass: config.smtpPass,
-        },
-        tls: { rejectUnauthorized: false },
-      })
-
+    const transporter = getMailTransporter()
+    if (transporter) {
       const domain = config.public.baseUrl ? config.public.baseUrl.replace(/\/$/, '') : 'https://novelsolar.com'
       const setupLink = `${domain}/dealer/setup-account?token=${token}`
 

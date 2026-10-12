@@ -1,6 +1,5 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { getMailTransporter } from '../../utils/mailer'
-import nodemailer from 'nodemailer'
 import { logger } from '../../utils/logger'
 import { z } from 'zod'
 import { fileTypeFromBuffer } from 'file-type'

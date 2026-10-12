@@ -16,7 +16,6 @@ export function getMailTransporter() {
           user: config.smtpUser,
           pass: config.smtpPass,
         },
-        tls: { rejectUnauthorized: false },
       })
     }
   }
