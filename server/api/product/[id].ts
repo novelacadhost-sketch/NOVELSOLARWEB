@@ -3,6 +3,7 @@ import { resolveIsDealerFromEvent } from '../../utils/dealerCheck'
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { getHiddenProductIds } from '../../utils/productVisibility'
 import { isLowStock } from '../../utils/lowStock'
+import { parseGallery, parseSpecs, sanitizeRichText } from '../../utils/productFields'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -36,8 +37,15 @@ export default defineEventHandler(async (event) => {
       }
 
       product.PROPERTY_102 = normalizeProperty(product.PROPERTY_102)
-      product.PROPERTY_104 = normalizeProperty(product.PROPERTY_104)
-      product.PROPERTY_112 = normalizeProperty(product.PROPERTY_112)
+      // Still JSON text, which is what the product page parses — but read and
+      // re-written by the shared parser, so a malformed or HTML-escaped value
+      // arrives as a clean list and a gallery holds only web addresses.
+      product.PROPERTY_104 = JSON.stringify(parseSpecs(product.PROPERTY_104))
+      product.PROPERTY_112 = JSON.stringify(parseGallery(product.PROPERTY_112))
+      // The page renders this with v-html. Descriptions can be edited in Bitrix
+      // directly, where nothing of ours runs, so it is cleaned on the way out.
+      if (typeof product.DESCRIPTION === 'string') product.DESCRIPTION = sanitizeRichText(product.DESCRIPTION)
+      if (typeof product.DETAIL_TEXT === 'string') product.DETAIL_TEXT = sanitizeRichText(product.DETAIL_TEXT)
 
       if (isDealer) {
         const dealerPrice = parseBitrixPrice(normalizeProperty(product.PROPERTY_184))

@@ -6,6 +6,7 @@ import {
 } from '../../utils/productMedia'
 import type { BitrixResponse } from '../../types/bitrix'
 import { logger } from '../../utils/logger'
+import { cleanText, parseSpecs, sanitizeRichText } from '../../utils/productFields'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -16,22 +17,24 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid form data' })
   }
 
-  // Helper to extract fields from multipart form data
+  // Read as typed; each field is cleaned for what it is below. These used to go
+  // through sanitizePayload(), which HTML-escaped the specs JSON so new
+  // products were saved with specs the shop could not parse.
   const getField = (name: string): string | null => {
     const field = formData.find((f) => f.name === name)
-    return field ? (sanitizePayload(field.data.toString()) as string) : null
+    return field ? field.data.toString() : null
   }
 
   // Removed passcode check - Handled globally by admin-auth server middleware
 
   // 3. Extract Product Fields
-  let productName = getField('productName')
+  let productName = cleanText(getField('productName'), 255) || null
   const productPrice = getField('productPrice')
   const productDealerPrice = getField('productDealerPrice')
   const productType = getField('productType')
   const productBrand = getField('productBrand')
-  const productDescription = getField('productDescription')
-  const productSpecs = getField('productSpecs')
+  const productDescription = sanitizeRichText(getField('productDescription'))
+  const productSpecs = parseSpecs(getField('productSpecs'))
   const imageFile = formData.find((f) => f.name === 'productImage')
   const galleryImages = formData.filter((f) => f.name === 'galleryImages')
 
@@ -84,7 +87,7 @@ export default defineEventHandler(async (event) => {
           DESCRIPTION: productDescription,
           DESCRIPTION_TYPE: 'html',
           PROPERTY_102: imageUrl, // Store Cloudinary URL directly in Custom Field
-          PROPERTY_104: productSpecs, // Stringified specs array
+          PROPERTY_104: JSON.stringify(productSpecs),
           PROPERTY_112: JSON.stringify(galleryUrls), // Stringified gallery URL array
         },
       },

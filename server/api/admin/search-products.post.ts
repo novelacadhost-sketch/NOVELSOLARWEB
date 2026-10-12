@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger'
+import { parseGallery, parseSpecs } from '../../utils/productFields'
 import { getHiddenProductIds } from '../../utils/productVisibility'
 
 interface BitrixRawProduct {
@@ -105,10 +106,11 @@ export default defineEventHandler(async (event) => {
           (legacyImageId
             ? `/api/bitrix-image?url=${encodeURIComponent(`https://nisl.bitrix24.com/bitrix/admin/crm_product_show.php?ID=${p.ID}&fieldName=DETAIL_PICTURE`)}`
             : null),
-        specs:
-          typeof p.PROPERTY_104 === 'string' ? JSON.parse(p.PROPERTY_104) : normalizeProperty(p.PROPERTY_104) || [],
-        gallery:
-          typeof p.PROPERTY_112 === 'string' ? JSON.parse(p.PROPERTY_112) : normalizeProperty(p.PROPERTY_112) || [],
+        // Bitrix wraps these as [{ valueId, value: "<json>" }], so a plain
+        // JSON.parse missed them and the editor got a string, spread into
+        // single characters; a malformed value also failed the whole search.
+        specs: parseSpecs(p.PROPERTY_104),
+        gallery: parseGallery(p.PROPERTY_112),
       }
     })
 

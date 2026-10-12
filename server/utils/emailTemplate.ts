@@ -1,4 +1,5 @@
 import type { OrderDetails, ServiceBookingDetails } from '../types/database'
+import { escapeHtml } from './sanitize'
 
 function getEmailTemplateUrls() {
   const config = useRuntimeConfig()
@@ -18,10 +19,10 @@ export function generateOrderReceiptHtml(orderDetails: OrderDetails) {
       (item: any) => `
     <tr>
       <td style="padding: 15px 0; border-bottom: 1px solid #e5e2e1; width: 90px;">
-        <img src="${item.image}" alt="${item.name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px; background-color: #f0edec; border: 1px solid #e5e2e1;" />
+        <img src="${escapeHtml(String(item.image))}" alt="${escapeHtml(item.name)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px; background-color: #f0edec; border: 1px solid #e5e2e1;" />
       </td>
       <td style="padding: 15px 15px; border-bottom: 1px solid #e5e2e1; color: #1c1b1b;">
-        <h4 style="margin: 0; font-family: 'Plus Jakarta Sans', Arial, sans-serif; font-weight: bold; font-size: 15px; color: #1c1b1b;">${item.name}</h4>
+        <h4 style="margin: 0; font-family: 'Plus Jakarta Sans', Arial, sans-serif; font-weight: bold; font-size: 15px; color: #1c1b1b;">${escapeHtml(item.name)}</h4>
         <p style="margin: 6px 0 0 0; font-family: 'Inter', Arial, sans-serif; font-size: 12px; color: #525252;">Quantity: ${item.quantity}</p>
       </td>
       <td style="padding: 15px 0; border-bottom: 1px solid #e5e2e1; text-align: right; vertical-align: middle;">

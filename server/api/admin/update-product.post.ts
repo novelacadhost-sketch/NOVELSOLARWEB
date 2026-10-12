@@ -8,6 +8,7 @@ import {
 import type { BitrixResponse } from '../../types/bitrix'
 import { logger } from '../../utils/logger'
 import { setProductHidden } from '../../utils/productVisibility'
+import { cleanText, parseGallery, parseSpecs, sanitizeRichText } from '../../utils/productFields'
 
 export default defineEventHandler(async (event) => {
   const contentType = getHeader(event, 'content-type') || ''
@@ -38,37 +39,28 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // Read as typed. These used to go through sanitizePayload(), which
+    // HTML-escaped the specs and gallery JSON before it was parsed — so every
+    // save wiped both — and escaped the name again on every save. Each field
+    // is now cleaned for what it is; see server/utils/productFields.ts.
     const getField = (name: string): string | null => {
       const field = formData.find((entry) => entry.name === name)
-      return field ? (sanitizePayload(field.data.toString()) as string) : null
+      return field ? field.data.toString() : null
     }
 
     productId = getField('productId')
-    productName = getField('productName')
+    productName = cleanText(getField('productName'), 255)
     productPrice = getField('productPrice')
     productDealerPrice = getField('productDealerPrice')
-    productDescription = getField('productDescription')
+    productDescription = sanitizeRichText(getField('productDescription'))
     productDisabled = getField('productDisabled') === 'true'
     mainImageUrl = getField('mainImageUrl')
     removeMainImage = getField('removeMainImage') === 'true'
     mainImageFile = formData.find((entry) => entry.name === 'mainImageFile')
     newGalleryFiles = formData.filter((entry) => entry.name === 'newGalleryFiles')
 
-    const specsRaw = getField('productSpecs')
-    const galleryRaw = getField('galleryUrls')
-
-    try {
-      productSpecs = specsRaw ? JSON.parse(specsRaw) : []
-    } catch {
-      productSpecs = []
-    }
-
-    try {
-      const parsedGallery = galleryRaw ? JSON.parse(galleryRaw) : []
-      galleryUrls = Array.isArray(parsedGallery) ? parsedGallery : []
-    } catch {
-      galleryUrls = []
-    }
+    productSpecs = parseSpecs(getField('productSpecs'))
+    galleryUrls = parseGallery(getField('galleryUrls'))
 
     if (mainImageFile) {
       await validateImageFile(mainImageFile, 'Main image')
@@ -87,13 +79,13 @@ export default defineEventHandler(async (event) => {
       galleryUrls = [...galleryUrls, ...uploadedGallery.map((item) => item.secure_url)]
     }
   } else {
-    const body = sanitizePayload(await readBody(event)) as Record<string, string | number | boolean | null | undefined>
-    productId = body.productId
-    productName = body.productName
-    productPrice = body.productPrice
-    productDealerPrice = body.productDealerPrice
-    productDescription = body.productDescription
-    productSpecs = body.productSpecs
+    const body = (await readBody(event)) as Record<string, unknown>
+    productId = body.productId == null ? null : String(body.productId)
+    productName = cleanText(body.productName, 255)
+    productPrice = body.productPrice as string | number | null
+    productDealerPrice = body.productDealerPrice as string | number | null
+    productDescription = sanitizeRichText(body.productDescription)
+    productSpecs = parseSpecs(typeof body.productSpecs === 'string' ? body.productSpecs : JSON.stringify(body.productSpecs ?? []))
     productDisabled = !!body.productDisabled
   }
 

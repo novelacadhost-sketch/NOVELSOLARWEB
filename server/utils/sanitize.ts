@@ -12,7 +12,7 @@ export const isValidEmail = (email: unknown): boolean => {
 }
 
 // Utility to escape potentially dangerous HTML characters
-const escapeHtml = (unsafe: string): string => {
+export const escapeHtml = (unsafe: string): string => {
   if (typeof unsafe !== 'string') return unsafe
   return unsafe
     .replace(/&/g, '&amp;')

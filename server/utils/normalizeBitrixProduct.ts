@@ -1,4 +1,5 @@
 import { parseBitrixPrice } from './bitrixProperties'
+import { parseGallery, parseSpecs } from './productFields'
 import { normalizeProperty } from './normalizeProperty'
 
 export interface BitrixProduct {
@@ -55,32 +56,11 @@ export function normalizeBitrixProduct(product: BitrixProduct, sections?: Map<st
     }
   }
 
-  // 2. Parse specs
-  let specs: unknown | null = null
-  const rawSpecs = normalizeProperty(product.PROPERTY_104)
-  if (typeof rawSpecs === 'string' && rawSpecs.trim() !== '') {
-    try {
-      specs = JSON.parse(rawSpecs)
-    } catch {
-      specs = null
-    }
-  } else if (rawSpecs) {
-    specs = rawSpecs
-  }
-
-  // 3. Parse gallery_urls
-  let gallery_urls: string[] = []
-  const rawGallery = normalizeProperty(product.PROPERTY_112)
-  if (typeof rawGallery === 'string' && rawGallery.trim() !== '') {
-    try {
-      const parsed = JSON.parse(rawGallery)
-      gallery_urls = Array.isArray(parsed) ? parsed : []
-    } catch {
-      gallery_urls = []
-    }
-  } else if (Array.isArray(rawGallery)) {
-    gallery_urls = rawGallery
-  }
+  // 2-3. Specs and gallery, via the same parser the admin editor uses. It also
+  // reads the HTML-escaped copies an old admin-save bug wrote.
+  const parsedSpecs = parseSpecs(product.PROPERTY_104)
+  const specs: unknown | null = parsedSpecs.length ? parsedSpecs : null
+  const gallery_urls: string[] = parseGallery(product.PROPERTY_112)
 
   // 4. Safely parse numbers
   const dealer_price = parseBitrixPrice(normalizeProperty(product.PROPERTY_184))
