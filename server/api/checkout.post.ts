@@ -8,6 +8,7 @@ import { normalizeProperty } from '../utils/normalizeProperty'
 import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
 import { createOrderDeal, type OrderPromotion } from '../utils/orderDeal'
+import { queueOrderDeal } from '../utils/crmQueue'
 import { applyDiscount, describeTerms, REJECT_MESSAGES, resolvePromotion } from '../utils/promotions'
 import { describePaymentMethod } from '../utils/paymentMethod'
 import { initialiseTransaction } from '../utils/paystack'
@@ -514,18 +515,6 @@ export default defineEventHandler(async (event) => {
   // Generate a unique order ID
   const orderId = `ORD-${Date.now()}-${randomUUID().slice(0, 8)}`
 
-  // Prepare the order payload for CRM or fallback storage
-  const orderPayload = {
-    orderId,
-    customer,
-    cart,
-    total,
-    branch,
-    paymentMethod,
-    promotion,
-    timestamp: new Date().toISOString(),
-    status: 'pending',
-  }
 
   // Mirrored before the CRM call, so a Bitrix outage cannot lose the record.
   const orderRecordId = await persistOrder(event, {
@@ -577,16 +566,27 @@ export default defineEventHandler(async (event) => {
       const err = error as { data?: unknown }
       logger.error('Checkout API', 'Bitrix order submission failed', { error: err.data || error, orderId })
 
-      // SAFETY NET: persist the order so it isn't lost while Bitrix is down.
-      try {
-        const storage = useStorage('data:failed-orders')
-        await storage.setItem(orderId, orderPayload)
-        logger.info('Checkout API', `Order ${orderId} saved to fallback queue.`)
-      } catch (storageError) {
-        logger.error('Checkout API', '[CRITICAL] Failed to save order to fallback storage', {
-          error: storageError,
+      // The drain creates the deal once Bitrix is back. Same payload shape as
+      // the app's orders and queueDealForRetry(), so it needs no special case.
+      if (
+        await queueOrderDeal({
           orderId,
+          customer,
+          cart: cart.map((item: PricedCartItem) => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            discount: item.discount,
+            quantity: item.quantity,
+          })),
+          total,
+          branch,
+          paymentMethod,
+          fulfillment,
+          promotion,
         })
+      ) {
+        logger.info('Checkout API', `Order ${orderId} queued for its deal`, { orderId })
       }
     }
   }
@@ -729,6 +729,10 @@ export default defineEventHandler(async (event) => {
     promoCode: promoCodeResult,
     // The name this had before promo codes; same object.
     staffCode: promoCodeResult,
-    message: crmSuccess ? 'Order processed successfully.' : 'Order received. (Saved locally for retry)',
+    message: deferDealUntilPaid
+      ? 'Order received. Awaiting payment.'
+      : crmSuccess
+        ? 'Order processed successfully.'
+        : 'Order received. Our team will confirm it shortly.',
   }
 })

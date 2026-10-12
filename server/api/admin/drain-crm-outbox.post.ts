@@ -1,6 +1,7 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from '../../utils/logger'
 import { createOrderDeal, type OrderPromotion } from '../../utils/orderDeal'
+import { LEAD_EVENT, deliverQueuedLead, type QueuedLead } from '../../utils/crmQueue'
 import { STOCK_REQUEST_EVENT, deliverStockRequest, type StockRequestPayload } from '../../utils/stockRequest'
 
 /**
@@ -13,7 +14,9 @@ import { STOCK_REQUEST_EVENT, deliverStockRequest, type StockRequestPayload } fr
  * else, which is the exact failure the endpoint-based flow avoids.
  *
  * It also retries stock requests (`stock.requested`) whose first delivery
- * from /api/stock-request failed — see server/utils/stockRequest.ts.
+ * from /api/stock-request failed — see server/utils/stockRequest.ts — and
+ * contact / quote / booking enquiries (`lead.create`) and website orders whose
+ * deal could not be created while Bitrix was down — see server/utils/crmQueue.ts.
  *
  * Guarded by `adminGuard`, so it takes either an admin session or
  * `Authorization: Bearer $CRON_SECRET`.
@@ -84,6 +87,15 @@ export default defineEventHandler(async (event) => {
         continue
       }
 
+      if (row.event_type === LEAD_EVENT) {
+        const leadId = await deliverQueuedLead(row.payload as unknown as QueuedLead)
+        const update: OutboxUpdate = { status: 'sent', last_error: null, updated_at: new Date().toISOString() }
+        await supabase.from('crm_outbox').update(update as never).eq('id', row.id)
+        sent++
+        logger.info('CrmOutbox', 'Delivered enquiry to Bitrix', { outboxId: row.id, leadId })
+        continue
+      }
+
       if (row.event_type !== 'order.created') {
         // Not something this drain knows how to deliver. Park it rather than
         // retrying forever.
@@ -137,7 +149,11 @@ export default defineEventHandler(async (event) => {
       })
     } catch (err) {
       const attempts = (row.attempts || 0) + 1
-      const message = err instanceof Error ? err.message : String(err)
+      // A failed fetch names the webhook URL, whose path is the credential.
+      const message = (err instanceof Error ? err.message : String(err)).replace(
+        /\/rest\/\d+\/[^/\s"]+\//g,
+        '/rest/***/',
+      )
 
       // Exponential backoff, capped. Past MAX_ATTEMPTS the row is parked for a
       // human rather than retried forever.

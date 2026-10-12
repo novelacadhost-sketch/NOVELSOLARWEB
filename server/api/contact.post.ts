@@ -1,5 +1,6 @@
 import type { BitrixLeadResponse } from '../types/bitrix'
 import { logger } from '../utils/logger'
+import { queueLead } from '../utils/crmQueue'
 export default defineEventHandler(async (event) => {
   interface ContactBody {
     name: string
@@ -37,21 +38,23 @@ export default defineEventHandler(async (event) => {
 
   const normalizedUrl = webhookUrl.endsWith('/') ? webhookUrl : `${webhookUrl}/`
 
+  const fields = {
+    TITLE: `General Web Inquiry: ${body.subject || 'No Subject'}`,
+    NAME: body.name,
+    EMAIL: [{ VALUE: body.email, VALUE_TYPE: 'WORK' }],
+    PHONE: [{ VALUE: body.phone || '', VALUE_TYPE: 'WORK' }],
+    COMMENTS: `Inquiry Type: General Contact Form\nSubject: ${body.subject || 'No Subject'}\n\nMessage:\n${body.message}`,
+    SOURCE_ID: 'WEB',
+    OPENED: 'Y',
+  }
+
   try {
     logger.info('Contact API', `Attempting to send contact inquiry to Bitrix for ${body.email}`)
 
     const response = await $fetch<BitrixLeadResponse>(`${normalizedUrl}crm.lead.add`, {
       method: 'POST',
       body: {
-        fields: {
-          TITLE: `General Web Inquiry: ${body.subject || 'No Subject'}`,
-          NAME: body.name,
-          EMAIL: [{ VALUE: body.email, VALUE_TYPE: 'WORK' }],
-          PHONE: [{ VALUE: body.phone || '', VALUE_TYPE: 'WORK' }],
-          COMMENTS: `Inquiry Type: General Contact Form\nSubject: ${body.subject || 'No Subject'}\n\nMessage:\n${body.message}`,
-          SOURCE_ID: 'WEB',
-          OPENED: 'Y',
-        },
+        fields,
         params: { REGISTER_SONET_EVENT: 'Y' },
       },
     })
@@ -74,25 +77,15 @@ export default defineEventHandler(async (event) => {
     const err = error as { data?: unknown }
     logger.error('Contact API', 'Bitrix Contact Inquiry Error', { error: err.data || error, email: body.email })
 
-    // THE SAFETY NET: Save the contact inquiry to Nitro's local storage
-    try {
-      const storage = useStorage('data:failed-contacts')
-      const contactId = `CONT-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-      await storage.setItem(contactId, {
-        ...body,
-        timestamp: new Date().toISOString(),
-        id: contactId,
-      })
-      logger.info('Contact API', `Contact inquiry ${contactId} saved to fallback queue.`)
-    } catch (storageError) {
-      logger.error('Contact API', '[CRITICAL] Failed to save contact inquiry to fallback storage', {
-        error: storageError,
-      })
+    // Bitrix is down or refused it. Queue it in crm_outbox, which the drain
+    // retries; the customer has done their part, so it counts as received.
+    if (await queueLead({ fields, source: 'contact' })) {
+      return { success: true, queued: true, message: 'Your message has been received. Our team will be in touch shortly.' }
     }
 
     throw createError({
-      statusCode: 500,
-      statusMessage: 'Failed to send message. (Saved locally for retry)',
+      statusCode: 503,
+      statusMessage: 'Failed to send message. Please try again, or reach us on WhatsApp.',
     })
   }
 })

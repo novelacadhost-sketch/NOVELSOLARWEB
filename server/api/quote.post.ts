@@ -1,5 +1,6 @@
 import type { BitrixLeadResponse } from '../types/bitrix'
 import { logger } from '../utils/logger'
+import { queueLead } from '../utils/crmQueue'
 
 export default defineEventHandler(async (event) => {
   interface QuoteBody {
@@ -40,6 +41,16 @@ export default defineEventHandler(async (event) => {
 
   const normalizedUrl = webhookUrl.endsWith('/') ? webhookUrl : `${webhookUrl}/`
 
+  const fields = {
+    TITLE: `Website Quote Request: ${body.projectType || 'General Inquiry'}`,
+    NAME: body.firstName,
+    LAST_NAME: body.lastName,
+    EMAIL: [{ VALUE: body.email, VALUE_TYPE: 'WORK' }],
+    PHONE: [{ VALUE: body.phone, VALUE_TYPE: 'WORK' }],
+    COMMENTS: `Project Type: ${body.projectType}\n\nDetails:\n${body.details || 'No additional details provided'}`,
+    SOURCE_ID: 'WEB',
+  }
+
   try {
     // Format the data for Bitrix crm.lead.add
     logger.info('Quote API', `Attempting to send quote request to Bitrix for ${body.email}`, {
@@ -49,15 +60,7 @@ export default defineEventHandler(async (event) => {
     const response = await $fetch<BitrixLeadResponse>(`${normalizedUrl}crm.lead.add`, {
       method: 'POST',
       body: {
-        fields: {
-          TITLE: `Website Quote Request: ${body.projectType || 'General Inquiry'}`,
-          NAME: body.firstName,
-          LAST_NAME: body.lastName,
-          EMAIL: [{ VALUE: body.email, VALUE_TYPE: 'WORK' }],
-          PHONE: [{ VALUE: body.phone, VALUE_TYPE: 'WORK' }],
-          COMMENTS: `Project Type: ${body.projectType}\n\nDetails:\n${body.details || 'No additional details provided'}`,
-          SOURCE_ID: 'WEB',
-        },
+        fields,
         params: { REGISTER_SONET_EVENT: 'Y' },
       },
     })
@@ -84,23 +87,15 @@ export default defineEventHandler(async (event) => {
   } catch (error: unknown) {
     logger.error('Quote API', '❌ Bitrix Lead Creation Error', { error: error, email: body.email })
 
-    // THE SAFETY NET: Save the quote request to Nitro's local storage
-    try {
-      const storage = useStorage('data:failed-quotes')
-      const quoteId = `QT-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-      await storage.setItem(quoteId, {
-        ...body,
-        timestamp: new Date().toISOString(),
-        id: quoteId,
-      })
-      logger.info('Quote API', `[QUOTE RECOVERY] Quote ${quoteId} saved to fallback queue.`)
-    } catch (storageError) {
-      logger.error('Quote API', '[CRITICAL] Failed to save quote to fallback storage', { error: storageError })
+    // Bitrix is down or refused it. Queue it in crm_outbox, which the drain
+    // retries; the customer has done their part, so it counts as received.
+    if (await queueLead({ fields, source: 'quote' })) {
+      return { success: true, queued: true, message: 'Your quote request has been received. Our team will contact you shortly.' }
     }
 
     throw createError({
-      statusCode: 500,
-      statusMessage: 'Failed to submit quote request. (Saved locally for retry)',
+      statusCode: 503,
+      statusMessage: 'Failed to submit quote request. Please try again, or reach us on WhatsApp.',
     })
   }
 })
