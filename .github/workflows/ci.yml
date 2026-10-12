@@ -25,7 +25,6 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: 'dummy-service-role-key'
       BITRIX_WEBHOOK_URL: 'https://dummy.bitrix24.com/rest/1/dummy/'
       OTP_SECRET: 'ci-otp-secret-long-enough-for-hmac-validation'
-      AUTH_SESSION_SECRET: 'ci-session-secret-long-enough-for-hmac'
 
     steps:
       - uses: actions/checkout@v4
@@ -35,21 +34,16 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm install
+      - run: npm ci
 
       # Explicitly regenerate .nuxt types to ensure clean state
       - name: Generate Nuxt types
         run: npx nuxi prepare
 
-      # nuxi typecheck exits non-zero when there are errors.
-      # Baseline reflects the CI environment (Node 22), which generates
-      # different auto-import types than local dev.
-      #
-      # 2026-09-18: local went 309 -> 264, so this dropped 388 -> 343 by the
-      # same delta. CI has historically counted ~48 more than local, and that
-      # slack is dead weight — a regression that size passes unnoticed. Set
-      # this to the actual CI count from a green run to make the gate mean
-      # something.
+      # vue-tsc and typescript are pinned devDependencies. Until 2026-10-12 they
+      # were not installed at all: `nuxi typecheck` printed "A type checker is
+      # required", found 0 errors, and this gate passed every run while checking
+      # nothing. The guards below fail the job if that ever happens again.
       - name: Run typecheck (baseline-gated)
         run: |
           set +e
@@ -57,8 +51,22 @@ jobs:
           EXIT_CODE=${PIPESTATUS[0]}
           set -e
 
+          if grep -q 'type checker is required' typecheck.log; then
+            echo "::error ::No type checker ran. Is vue-tsc in devDependencies?"
+            exit 1
+          fi
+
           ERROR_COUNT=$(grep -c 'error TS' typecheck.log || true)
-          BASELINE=343
+          # Measured 2026-10-12 with vue-tsc 3.3.11 / typescript 6.0.3, locally
+          # and with CI's dummy env (both 255). Lower it whenever the count drops.
+          BASELINE=255
+
+          # vue-tsc exits non-zero whenever there are errors, which there are.
+          # Non-zero with nothing counted means the tool itself fell over.
+          if [ "$EXIT_CODE" -ne 0 ] && [ "$ERROR_COUNT" -eq 0 ]; then
+            echo "::error ::Typecheck exited ${EXIT_CODE} without reporting any errors: the checker crashed."
+            exit 1
+          fi
 
           echo "::notice ::Typecheck errors: ${ERROR_COUNT} (baseline: ${BASELINE})"
 
@@ -68,7 +76,7 @@ jobs:
           fi
 
           if [ "$ERROR_COUNT" -lt "$BASELINE" ]; then
-            echo "::notice ::🎉 Typecheck improved! ${ERROR_COUNT} errors (was ${BASELINE}). Consider updating the baseline in ci.yml."
+            echo "::notice ::Typecheck improved: ${ERROR_COUNT} errors (was ${BASELINE}). Lower the baseline in ci.yml."
           fi
 
       - name: Upload typecheck log
