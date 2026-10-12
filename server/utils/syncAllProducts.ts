@@ -149,12 +149,22 @@ async function applyMirroredImages(
   mapped: MirrorableProduct[],
 ): Promise<MirrorReport> {
   try {
-    const { data, error } = await supabase.from('products').select('id, image_url, bitrix_image_id')
-    if (error) throw error
-
+    // Paged: PostgREST caps a response at 1000 rows. Unpaged, every product past
+    // that had its mirrored photo forgotten on each run — reset to the proxy URL
+    // and re-uploaded, spending the upload budget on photos already mirrored.
     const existing = new Map<string, { image_url: string | null; bitrix_image_id: string | null }>()
-    for (const row of (data ?? []) as { id: string; image_url: string | null; bitrix_image_id: string | null }[]) {
-      existing.set(String(row.id), { image_url: row.image_url, bitrix_image_id: row.bitrix_image_id })
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, image_url, bitrix_image_id')
+        .order('id', { ascending: true })
+        .range(from, from + 999)
+      if (error) throw error
+      const page = (data ?? []) as { id: string; image_url: string | null; bitrix_image_id: string | null }[]
+      for (const row of page) {
+        existing.set(String(row.id), { image_url: row.image_url, bitrix_image_id: row.bitrix_image_id })
+      }
+      if (page.length < 1000) break
     }
 
     const candidates: MirrorableProduct[] = []
