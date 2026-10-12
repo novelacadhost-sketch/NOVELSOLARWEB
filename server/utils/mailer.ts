@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer'
 import { useRuntimeConfig } from '#imports'
 
-let _transporter: nodemailer.Transporter | null = null
+let _transporter: ReturnType<typeof nodemailer.createTransport> | null = null
 
 export function getMailTransporter() {
   if (!_transporter) {
