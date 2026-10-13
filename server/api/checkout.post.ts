@@ -661,7 +661,7 @@ export default defineEventHandler(async (event) => {
   if (transporter) {
     try {
       await transporter.sendMail({
-        from: config.smtpFrom,
+        from: (site.id === 'homes' && config.smtpFromHomes) || config.smtpFrom,
         to: customer.email,
         subject: `Your ${site.name} Order Confirmed: #${generatedOrderNumber}`,
         html: premiumHtmlEmail,

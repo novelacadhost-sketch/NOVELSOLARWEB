@@ -101,6 +101,9 @@ export default defineNuxtConfig({
     smtpUser: process.env.SMTP_USER,
     smtpPass: process.env.SMTP_PASS,
     smtpFrom: process.env.SMTP_FROM,
+    // Novel Home Essentials receipts. Unset = SMTP_FROM; set it only once the
+    // domain is verified in Brevo, or its mail fails DMARC.
+    smtpFromHomes: process.env.SMTP_FROM_HOMES,
     blogGithubToken: process.env.BLOG_GITHUB_TOKEN,
     blogGithubOwner: process.env.BLOG_GITHUB_OWNER || 'dev-davies',
     blogGithubRepo: process.env.BLOG_GITHUB_REPO || 'NovelSolar',
