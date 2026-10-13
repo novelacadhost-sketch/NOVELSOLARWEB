@@ -43,9 +43,9 @@ export default defineEventHandler(async (event) => {
       },
     }
 
-    if (process.env.NODE_ENV !== 'production') {
-      logger.info('ErrorLog', 'Captured error log', logEntry)
-    }
+    // Logged in production too: with no forwarding webhook configured, this was
+    // the only record of a browser-side error, and it was being dropped.
+    logger.warn('ErrorLog', 'Browser error', logEntry)
 
     let forwarded = false
 
