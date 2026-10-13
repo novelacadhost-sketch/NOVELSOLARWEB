@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BitrixProduct } from '~/types'
+const site = useSite()
 const route = useRoute()
 const { addToCart } = useCart()
 const { getProductImage } = useProductImage()
@@ -84,11 +85,11 @@ const galleryImages = computed(() => {
 })
 
 useHead({
-  title: product.value ? `${product.value.NAME} | NovelSolar` : 'Loading Product...',
+  title: product.value ? `${product.value.NAME} | ${site.name}` : 'Loading Product...',
   meta: [
     {
       name: 'description',
-      content: product.value ? `Get the best price on ${product.value.NAME}. Reliable solar inventory on-demand.` : '',
+      content: product.value ? `Get the best price on ${product.value.NAME} at ${site.name}.` : '',
     },
   ],
 })

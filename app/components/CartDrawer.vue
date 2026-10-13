@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const site = useSite()
 const { cart, isCartOpen, toggleCart, removeFromCart, updateQuantity, cartTotalAmount } = useCart()
 </script>
 
@@ -53,7 +54,7 @@ const { cart, isCartOpen, toggleCart, removeFromCart, updateQuantity, cartTotalA
           </div>
           <h3 class="text-lg font-bold text-slate-900 mb-1">Your cart is empty</h3>
           <p class="text-sm text-gray-500 max-w-[200px] mx-auto mb-8">
-            Looks like you haven't added any solar equipment yet.
+            Looks like you haven't added anything yet.
           </p>
           <button class="text-[#002888] font-bold text-sm hover:underline" @click="toggleCart">
             Continue Shopping &rarr;
@@ -139,7 +140,7 @@ const { cart, isCartOpen, toggleCart, removeFromCart, updateQuantity, cartTotalA
           Checkout Now
           <span class="material-symbols-outlined">arrow_forward</span>
         </NuxtLink>
-        <p class="text-center text-[11px] text-gray-500 mt-4">Secure checkout powered by NovelSolar</p>
+        <p class="text-center text-[11px] text-gray-500 mt-4">Secure checkout powered by {{ site.name }}</p>
       </div>
     </div>
   </teleport>

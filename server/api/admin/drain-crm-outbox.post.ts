@@ -1,3 +1,4 @@
+import { siteFromStored } from '../../utils/site'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from '../../utils/logger'
 import { createOrderDeal, type OrderPromotion } from '../../utils/orderDeal'
@@ -41,6 +42,7 @@ type OutboxRow = {
     // Only on website orders queued after payment; the app's database route
     // takes no staff code.
     promotion?: OrderPromotion | null
+    site?: string
   }
   attempts: number
 }
@@ -131,6 +133,7 @@ export default defineEventHandler(async (event) => {
         paymentMethod: row.payload.paymentMethod,
         fulfillment: row.payload.fulfillment,
         promotion: row.payload.promotion ?? null,
+        site: siteFromStored(row.payload.site).id,
       })
 
       const update: OutboxUpdate = { status: 'sent', last_error: null, updated_at: new Date().toISOString() }

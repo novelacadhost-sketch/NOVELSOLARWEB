@@ -1,5 +1,7 @@
 import { getSupabaseAdminClient } from '../utils/supabaseAdmin'
 import { logger } from '../utils/logger'
+import { getSite } from '../utils/site'
+import { siteSellsSection } from '#shared/sites'
 
 /**
  * The shoppable product categories, with how many products each holds.
@@ -21,6 +23,9 @@ export interface ProductCategory {
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600')
 
+  // Vercel's CDN keys its cache on the host, so the two sites' lists never mix.
+  const site = getSite(event)
+
   try {
     const supabase = getSupabaseAdminClient()
     const { data, error } = await supabase
@@ -33,6 +38,7 @@ export default defineEventHandler(async (event) => {
     const categories: ProductCategory[] = ((data ?? []) as { id: string; name: string | null; product_count: number }[])
       .map((row) => ({ id: String(row.id), name: row.name, productCount: Number(row.product_count) || 0 }))
       .filter((c) => c.productCount > 0)
+      .filter((c) => siteSellsSection(site, c.name))
 
     return { categories }
   } catch (error) {

@@ -4,6 +4,9 @@ import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { getHiddenProductIds } from '../../utils/productVisibility'
 import { isLowStock } from '../../utils/lowStock'
 import { parseGallery, parseSpecs, sanitizeRichText } from '../../utils/productFields'
+import { getSectionMap } from '../../utils/bitrixSections'
+import { getSite } from '../../utils/site'
+import { siteSellsSection } from '#shared/sites'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -34,6 +37,15 @@ export default defineEventHandler(async (event) => {
       // listings but leaving the URL live would only half-hide it.
       if ((await getHiddenProductIds()).has(String(id))) {
         throw createError({ statusCode: 404, statusMessage: 'Product not found' })
+      }
+
+      // A solar product's URL on the Home Essentials domain is not a page there.
+      const site = getSite(event)
+      if (site.sections) {
+        const sectionName = (await getSectionMap()).get(String(product.SECTION_ID ?? ''))
+        if (!siteSellsSection(site, sectionName)) {
+          throw createError({ statusCode: 404, statusMessage: 'Product not found' })
+        }
       }
 
       product.PROPERTY_102 = normalizeProperty(product.PROPERTY_102)

@@ -1,3 +1,5 @@
+import { siteFromPaystackMetadata } from './site'
+import type { SiteId } from '#shared/sites'
 import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { logger } from './logger'
@@ -182,7 +184,7 @@ export async function recordPaystackPayment(
     // is what makes it a sale. Non-fatal: the money is already taken and the
     // order is confirmed, so a CRM outage must not undo any of that. The
     // outbox picks it up instead.
-    await createDealForPaidOrder(event, data, reference)
+    await createDealForPaidOrder(event, data, reference, siteFromPaystackMetadata(transaction.metadata).id)
 
     return { result: 'confirmed', orderId: data.id }
   } catch (err) {
@@ -202,7 +204,7 @@ export async function recordPaystackPayment(
  * Only for orders whose deal was deferred. A pay-at-store order already has
  * one from checkout, and creating a second would duplicate it in the pipeline.
  */
-async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference: string): Promise<void> {
+async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference: string, site: SiteId): Promise<void> {
   if (order.payment_method !== 'paystack') return
 
   try {
@@ -237,6 +239,7 @@ async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference
       fulfillment: order.fulfillment ?? undefined,
       userId: order.user_id,
       promotion: promotionOf(order),
+      site,
     })
 
     logger.info('Paystack', 'Created deal for paid order', { reference, dealId: deal.dealId })
@@ -246,7 +249,7 @@ async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference
     // paid; the deal turning up ten minutes late is a far smaller problem than
     // a paid order the CRM never hears about.
     logger.error('Paystack', 'Deal creation failed for paid order; queueing', { reference, error: message })
-    await queueDealForRetry(event, order, reference)
+    await queueDealForRetry(event, order, reference, site)
   }
 }
 
@@ -255,7 +258,7 @@ async function createDealForPaidOrder(event: H3Event, order: OrderRow, reference
  * into a deal (see /api/admin/drain-crm-outbox). Same payload shape the
  * place_order_from_cart RPC writes, so the drain needs no special case.
  */
-async function queueDealForRetry(event: H3Event, order: OrderRow, reference: string): Promise<void> {
+async function queueDealForRetry(event: H3Event, order: OrderRow, reference: string, site: SiteId): Promise<void> {
   try {
     const supabase = serverSupabaseServiceRole(event)
     const { data: items } = await supabase
@@ -282,6 +285,7 @@ async function queueDealForRetry(event: H3Event, order: OrderRow, reference: str
         fulfillment: order.fulfillment,
         total: Number(order.total ?? 0),
         promotion: promotionOf(order),
+        site,
         cart: (items ?? []).map((item) => ({
           id: item.bitrix_product_id,
           name: item.name,

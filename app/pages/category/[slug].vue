@@ -85,9 +85,11 @@
 </template>
 
 <script setup lang="ts">
-import { CATEGORY_GROUPS } from '~/utils/productCategories'
+import { categoryGroupsFor } from '~/utils/productCategories'
 import { excludeServiceProducts } from '~/utils/productFilters'
 const route = useRoute()
+const site = useSite()
+const CATEGORY_GROUPS = categoryGroupsFor(site.id)
 const categorySlug = computed(() => (route.params.slug || '').toString())
 
 /**
@@ -165,11 +167,14 @@ const titleName = computed(() => {
 })
 
 useHead({
-  title: `${titleName.value} Inventory | NovelSolar Shop`,
+  title: site.id === 'homes' ? (group.value?.name ?? titleName.value) : `${titleName.value} Inventory | NovelSolar Shop`,
   meta: [
     {
       name: 'description',
-      content: `Browse our professional range of ${titleName.value} solar components and systems.`,
+      content:
+        site.id === 'homes'
+          ? `Shop ${group.value?.name ?? titleName.value} at ${site.name}.`
+          : `Browse our professional range of ${titleName.value} solar components and systems.`,
     },
   ],
 })

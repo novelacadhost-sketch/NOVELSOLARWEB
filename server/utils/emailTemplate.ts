@@ -13,7 +13,18 @@ function getEmailTemplateUrls() {
 }
 
 export function generateOrderReceiptHtml(orderDetails: OrderDetails) {
-  const { siteUrl, logoUrl, whatsappUrl } = getEmailTemplateUrls()
+  const urls = getEmailTemplateUrls()
+  const { whatsappUrl } = urls
+  const brand = orderDetails.brand
+  const siteUrl = brand?.siteUrl ?? urls.siteUrl
+  const brandName = brand?.name ?? 'Novel Solar'
+  const tagline = brand ? brand.tagline : 'Precision Engineering for Sustainable Power.'
+  const thanks = brand ? 'Your order is being prepared.' : 'Your precision energy solution is being prepared for dispatch.'
+  // No logo file yet: the name as a wordmark rather than a broken image.
+  const logoHtml =
+    brand && !brand.logoPath
+      ? `<span style="font-family: 'Plus Jakarta Sans', Arial, sans-serif; font-weight: 800; font-size: 22px; color: #1c1b1b;">${brandName}</span>`
+      : `<img src="${brand?.logoPath ? `${siteUrl}${brand.logoPath}` : urls.logoUrl}" alt="${brandName}" style="max-height: 45px; width: auto; display: block;" />`
   const productsHtml = orderDetails.products
     .map(
       (item: any) => `
@@ -45,7 +56,7 @@ export function generateOrderReceiptHtml(orderDetails: OrderDetails) {
       <tr>
         <td align="center" style="padding: 30px 20px; border-bottom: 1px solid #e5e2e1;">
           <a href="${siteUrl}" target="_blank" style="text-decoration: none;">
-            <img src="${logoUrl}" alt="Novel Solar" style="max-height: 45px; width: auto; display: block;" />
+            ${logoHtml}
           </a>
         </td>
       </tr
@@ -56,7 +67,7 @@ export function generateOrderReceiptHtml(orderDetails: OrderDetails) {
           </div>
           <h1 style="font-family: 'Plus Jakarta Sans', Arial, sans-serif; font-weight: 800; font-size: 28px; color: #1c1b1b; margin: 0 0 12px 0;">Order Confirmed</h1>
           <p style="font-family: 'Inter', Arial, sans-serif; color: #525252; font-size: 14px; line-height: 1.6; max-width: 420px; margin: 0 auto;">
-            Thank you for choosing Novel Solar. Your precision energy solution is being prepared for dispatch.
+            Thank you for choosing ${brandName}. ${thanks}
           </p>
         </td>
       </tr>
@@ -126,7 +137,7 @@ export function generateOrderReceiptHtml(orderDetails: OrderDetails) {
           <div style="font-family: 'Inter', Arial, sans-serif; font-size: 14px; color: #1c1b1b; font-weight: bold; line-height: 1.6; margin-bottom: 30px;">
             ${orderDetails.branchName}
           </div>
-          <h2 style="font-family: 'Space Grotesk', Arial, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: #525252; font-weight: bold; margin: 0 0 12px 0; border-top: 1px solid #e5e2e1; padding-top: 30px;">Novel Solar Head Office</h2>
+          <h2 style="font-family: 'Space Grotesk', Arial, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: #525252; font-weight: bold; margin: 0 0 12px 0; border-top: 1px solid #e5e2e1; padding-top: 30px;">Head Office</h2>
           <div style="font-family: 'Inter', Arial, sans-serif; font-size: 13px; color: #525252; line-height: 1.6;">
             <p style="margin: 0;">Novel Solar Akinjide Plaza</p>
             <p style="margin: 0;">No. 76, Adekunle Fajuyi Road, Ekotedo, Ibadan, Oyo State</p>
@@ -154,7 +165,7 @@ export function generateOrderReceiptHtml(orderDetails: OrderDetails) {
             <a href="#" style="font-family: 'Space Grotesk', Arial, sans-serif; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #ffffff; text-decoration: none; font-weight: bold; margin: 0 10px;">Terms</a>
           </div>
           <p style="font-family: 'Space Grotesk', Arial, sans-serif; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.7); line-height: 1.8; margin: 0;">
-            © ${new Date().getFullYear()} Novel Solar. All rights reserved.<br/>Precision Engineering for Sustainable Power.
+            © ${new Date().getFullYear()} ${brandName}. All rights reserved.${tagline ? `<br/>${tagline}` : ''}
           </p>
         </td>
       </tr>

@@ -14,6 +14,9 @@ import { describePaymentMethod } from '../utils/paymentMethod'
 import { initialiseTransaction } from '../utils/paystack'
 import { fetchCatalogStock, type CatalogStock } from '../utils/catalogStock'
 import { logger } from '../utils/logger'
+import { getSectionMap } from '../utils/bitrixSections'
+import { getSite, siteUrlFor } from '../utils/site'
+import { siteAllowsBranch, siteSellsSection } from '#shared/sites'
 
 import type { H3Event } from 'h3'
 
@@ -168,9 +171,15 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
   // Every unavailable item at once, like the stock shortages below, so the
   // customer is not sent back once per stale item. 409 with the ids so the
   // client can remove them from the cart.
+  //
+  // A product outside this storefront's sections counts as unavailable here:
+  // the Home Essentials site cannot sell a solar panel by posting its id.
+  const site = getSite(event)
+  const sectionNames = site.sections ? await getSectionMap() : null
   const unavailable = responses.flatMap((response, index) => {
     const product = response?.result
-    if (product && product.ACTIVE !== 'N') return []
+    const onThisSite = !sectionNames || siteSellsSection(site, sectionNames.get(String(product?.SECTION_ID ?? '')))
+    if (product && product.ACTIVE !== 'N' && onThisSite) return []
     return [{ id: String(validatedItems[index]!.productId), name: product?.NAME || null }]
   })
   if (unavailable.length) {
@@ -452,6 +461,7 @@ export default defineEventHandler(async (event) => {
 
   const config = useRuntimeConfig()
   const bitrixUrl = config.bitrixWebhookUrl
+  const site = getSite(event)
 
   // Safely extract data
   const customer = body.customer || {}
@@ -501,6 +511,15 @@ export default defineEventHandler(async (event) => {
       : null
 
   const branch = body.branch || {}
+
+  // Home Essentials orders are fulfilled only from its own branches.
+  if (site.branchIds && !siteAllowsBranch(site, branch.bitrixId)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Please choose a ${site.name} branch for your order.`,
+    })
+  }
+
   const paymentMethod = body.paymentMethod || 'Bank Transfer'
   const fulfillment = body.fulfillment ?? (paymentMethod === 'pickup' ? 'pickup' : 'delivery')
   const isPickup = fulfillment === 'pickup'
@@ -555,6 +574,7 @@ export default defineEventHandler(async (event) => {
         fulfillment,
         userId: await resolveUserIdFromEvent(event),
         promotion,
+        site: site.id,
       })
 
       crmSuccess = true
@@ -584,6 +604,7 @@ export default defineEventHandler(async (event) => {
           paymentMethod,
           fulfillment,
           promotion,
+          site: site.id,
         })
       ) {
         logger.info('Checkout API', `Order ${orderId} queued for its deal`, { orderId })
@@ -595,6 +616,8 @@ export default defineEventHandler(async (event) => {
   const generatedOrderNumber = 'NS-' + Math.floor(100000 + Math.random() * 900000)
 
   const orderData = {
+    brand:
+      site.id === 'solar' ? null : { name: site.name, siteUrl: siteUrlFor(event), logoPath: site.logoPath, tagline: '' },
     orderNumber: generatedOrderNumber,
     orderDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     // Not paid yet when the deal was deferred — that is exactly what deferring
@@ -614,7 +637,7 @@ export default defineEventHandler(async (event) => {
     products: cart.map((item: PricedCartItem) => {
       // Absolute URLs only — these render in the confirmation email, where a
       // relative path resolves against the mail client, not the site.
-      const siteUrl = config.public.baseUrl.replace(/\/$/, '')
+      const siteUrl = siteUrlFor(event)
       let finalImage = item.image || `${siteUrl}/images/placeholder.png`
       if (typeof finalImage === 'string' && finalImage.startsWith('/')) {
         finalImage = `${siteUrl}${finalImage}`
@@ -637,7 +660,7 @@ export default defineEventHandler(async (event) => {
       await transporter.sendMail({
         from: config.smtpFrom,
         to: customer.email,
-        subject: `Your Novel Solar Order Confirmed: #${generatedOrderNumber}`,
+        subject: `Your ${site.name} Order Confirmed: #${generatedOrderNumber}`,
         html: premiumHtmlEmail,
       })
       logger.info('Checkout API', 'Successfully sent order receipt email')
@@ -662,7 +685,9 @@ export default defineEventHandler(async (event) => {
         reference: orderId,
         amount: total,
         email: customer.email,
-        callbackUrl: `${String(config.public.baseUrl).replace(/\/$/, '')}/api/payments/paystack/callback`,
+        // Back to the domain the customer paid on, so the thank-you page and
+        // its cart are the ones they left.
+        callbackUrl: `${siteUrlFor(event)}/api/payments/paystack/callback`,
         metadata: {
           orderId,
           orderRecordId,
@@ -672,6 +697,8 @@ export default defineEventHandler(async (event) => {
           // from the query string, so it cannot be spoofed by editing the
           // redirect URL.
           client: body.client,
+          // Which storefront, so the deal created on payment is tagged with it.
+          site: site.id,
         },
       })
       paymentUrl = transaction.authorization_url

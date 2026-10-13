@@ -87,7 +87,7 @@
 
 <script setup lang="ts">
 useHead({
-  title: 'Thank You! | NovelSolar',
+  title: 'Thank You!',
   meta: [{ name: 'robots', content: 'noindex, nofollow' }],
 })
 

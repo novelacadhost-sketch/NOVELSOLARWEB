@@ -504,6 +504,34 @@ export const branches = [
   },
 ]
 
+/**
+ * Where Novel Home Essentials orders are fulfilled. Deliberately NOT in
+ * `branches`: Novel Homes Oyo is not a Novel Solar shop, and Akinjide appears
+ * here for its electronics store. The ids are what the server checks against
+ * shared/sites.ts.
+ *
+ * TODO before the November launch: Novel Homes Oyo's address, phone and
+ * position. Its Bitrix record (iblock 28 element 19094) is empty too — fill in
+ * the branch manager there, or orders from it notify nobody.
+ */
+export const homeEssentialsBranches = [
+  {
+    name: 'Novel Homes Oyo',
+    city: 'Oyo',
+    state: 'Oyo',
+    address: 'Novel Homes, Oyo, Oyo State.',
+    phone: '',
+    coords: [7.8526, 3.931],
+    coordinates: [7.8526, 3.931],
+    bitrixId: '19094',
+    approxCoords: true,
+  },
+  {
+    ...branches.find((b) => b.bitrixId === '6434')!,
+    name: 'Akinjide Electronics Store (Ibadan)',
+  },
+]
+
 export function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371 // Earth's radius in kilometers
   const dLat = ((lat2 - lat1) * Math.PI) / 180

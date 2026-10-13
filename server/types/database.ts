@@ -103,6 +103,8 @@ export interface OrderDetails {
   discount?: { label: string; amount: number } | null
   total: number
   products: OrderProductItem[]
+  /** Another storefront's branding. Absent = Novel Solar. */
+  brand?: { name: string; siteUrl: string; logoPath: string | null; tagline: string } | null
 }
 
 export interface ServiceBookingDetails {

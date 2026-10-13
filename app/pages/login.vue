@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const site = useSite()
 const email = ref('')
 const isSuccess = ref(false)
 const isLoading = ref(false)
@@ -45,9 +46,9 @@ const resetLogin = () => {
 }
 
 useHead({
-  title: 'Sign In | Novel Solar',
+  title: 'Sign In',
   meta: [
-    { name: 'description', content: 'Sign in to your Novel Solar account to view orders and manage your profile.' },
+    { name: 'description', content: `Sign in to your ${site.name} account to view orders and manage your profile.` },
   ],
 })
 </script>
@@ -66,7 +67,7 @@ useHead({
           >
           <span class="text-sm font-bold uppercase tracking-widest">Back to Home</span>
         </NuxtLink>
-        <h1 class="text-3xl font-black text-[#3c59b0] tracking-tight">Novel Solar</h1>
+        <h1 class="text-3xl font-black text-[#3c59b0] tracking-tight">{{ site.name }}</h1>
       </div>
 
       <!-- Main Login Card -->

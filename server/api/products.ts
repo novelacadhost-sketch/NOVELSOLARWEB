@@ -6,6 +6,8 @@ import { normalizeProperty } from '../utils/normalizeProperty'
 import { getSectionMap } from '../utils/bitrixSections'
 import { getHiddenProductIds } from '../utils/productVisibility'
 import { getLowStockIds } from '../utils/lowStock'
+import { getSite } from '../utils/site'
+import { siteSellsSection } from '#shared/sites'
 
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
@@ -24,6 +26,7 @@ export default defineEventHandler(async (event) => {
   const PAGE_SIZE = 50
 
   const isDealer = await resolveIsDealerFromEvent(event)
+  const site = getSite(event)
 
   interface MappedProduct {
     ID?: string | number
@@ -212,6 +215,7 @@ export default defineEventHandler(async (event) => {
     const visible = bitrixProducts
       .filter((p) => includeServices || (sectionNameOf(p, p) ?? '').toUpperCase() !== 'SERVICES')
       .filter((p) => !hidden.has(String(p.ID)))
+      .filter((p) => siteSellsSection(site, sectionNameOf(p, p)))
     const products = visible.map((p) => mapProduct(p, false))
     const nextStart =
       typeof response?.next === 'number'
@@ -263,6 +267,7 @@ export default defineEventHandler(async (event) => {
           String((p as { section_name?: string }).section_name ?? '').toUpperCase() !== 'SERVICES',
       )
       .filter((p) => !hidden.has(String((p as { id?: string | number }).id)))
+      .filter((p) => siteSellsSection(site, (p as { section_name?: string | null }).section_name))
     const products = rows.map((p) => mapProduct(p, true))
     const totalCount = count || 0
     const nextStart = startFrom + PAGE_SIZE < totalCount ? startFrom + PAGE_SIZE : null

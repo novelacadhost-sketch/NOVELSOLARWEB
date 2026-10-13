@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const site = useSite()
 const { addToast } = useToast()
 const supabase = useSupabaseClient()
 const isLoading = ref(false)
@@ -91,8 +92,8 @@ onMounted(() => {
 })
 
 useHead({
-  title: 'My Account | Novel Solar',
-  meta: [{ name: 'description', content: 'Manage your Novel Solar account.' }],
+  title: 'My Account',
+  meta: [{ name: 'description', content: `Manage your ${site.name} account.` }],
 })
 </script>
 
@@ -147,7 +148,7 @@ useHead({
               </div>
               <h2 class="text-3xl font-black text-slate-900 mb-3">Complete Your Profile</h2>
               <p class="text-slate-500 font-medium max-w-sm mx-auto">
-                Just a few more details so we can provide you with personalized solar solutions.
+                Just a few more details so we can provide you with a personalised service.
               </p>
             </div>
 
@@ -240,7 +241,7 @@ useHead({
 
               <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100 mb-8">
                 <p class="text-lg text-slate-700 font-medium leading-relaxed">
-                  You are securely logged in to your professional Novel Solar console. Dashboard analytics and order
+                  You are securely logged in to your {{ site.name }} account. Dashboard analytics and order
                   history features are being initialized.
                 </p>
               </div>
@@ -321,7 +322,7 @@ useHead({
                 <span class="material-symbols-outlined text-blue-200 mb-4 text-3xl">bolt</span>
                 <h4 class="font-black text-lg mb-2 uppercase tracking-tight">Technical Hub</h4>
                 <p class="text-blue-100 text-xs font-medium leading-relaxed opacity-80">
-                  Your specialized solar dashboard is currently under active development. New monitoring tools coming
+                  Your dashboard is currently under active development. New monitoring tools coming
                   soon.
                 </p>
               </div>

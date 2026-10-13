@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { z } from 'zod'
+const site = useSite()
 const { cart, cartTotalAmount } = useCart()
 const { addToast } = useToast()
 const { payWithPopup } = usePaystackPopup()
 
 const selectedFulfillment = ref('delivery') // 'delivery' or 'pickup'
 const selectedState = ref('')
-const selectedBranch = ref<(typeof branches)[number] | null>(null)
+const selectedBranch = ref<(typeof branches)[number] | (typeof homeEssentialsBranches)[number] | null>(null)
+// Novel Home Essentials fulfils from its own two branches, whatever the state;
+// the server refuses any other.
+const fixedBranches = site.branchIds ? homeEssentialsBranches : null
 
 const suggestedBranches = computed(() => {
+  if (fixedBranches) return fixedBranches
   if (!selectedState.value) return []
 
   // 1. If we have exact matches, return them immediately
@@ -89,7 +94,7 @@ const checkoutSchema = z.object({
 
 const submitOrder = async () => {
   if (cart.value.length === 0) {
-    addToast('Empty Cart', 'Please add some solar equipment to your cart.', 'error')
+    addToast('Empty Cart', 'Please add some items to your cart.', 'error')
     return
   }
 
@@ -191,7 +196,7 @@ const submitOrder = async () => {
       return
     }
 
-    addToast('Order Placed', 'Your order was successfully sent to NovelSolar!', 'success')
+    addToast('Order Placed', `Your order was successfully sent to ${site.name}!`, 'success')
     navigateTo('/thank-you')
   } catch (error) {
     // Out of stock is not a failure to apologise for — it is a customer we can
@@ -418,7 +423,7 @@ onMounted(async () => {
         <span class="material-symbols-outlined text-4xl text-gray-300">shopping_cart</span>
       </div>
       <h2 class="text-2xl font-bold text-slate-900 mb-2">Your cart is empty</h2>
-      <p class="text-gray-500 mb-8">Add some solar equipment to your cart before checking out.</p>
+      <p class="text-gray-500 mb-8">Add some items to your cart before checking out.</p>
       <NuxtLink
         to="/products"
         class="bg-[#002888] text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-900 transition-all shadow-lg inline-block"
@@ -517,7 +522,7 @@ onMounted(async () => {
               <input
                 v-model="form.address"
                 type="text"
-                placeholder="123 Solar Street, Phase 1"
+                placeholder="12 Example Street, Phase 1"
                 :class="[
                   'rounded-lg bg-slate-50 p-3 w-full transition-all outline-none',
                   formErrors.address
@@ -596,7 +601,7 @@ onMounted(async () => {
           </div>
 
           <!-- State Selector -->
-          <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+          <div v-if="!fixedBranches" class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
             <div>
               <label class="block text-sm font-semibold text-slate-700 mb-2">Select your shipping state:</label>
               <select
@@ -620,7 +625,9 @@ onMounted(async () => {
               <span class="material-symbols-outlined text-[#002888] text-lg">hub</span>
               <h4 class="font-bold text-slate-800 text-sm">
                 {{
-                  exactMatches.length > 0
+                  fixedBranches
+                    ? 'Choose the branch for your order:'
+                    : exactMatches.length > 0
                     ? 'Expert branches available in your state:'
                     : 'No branches in your state. Here are the closest options:'
                 }}
@@ -648,7 +655,7 @@ onMounted(async () => {
                   <div class="flex items-center gap-2 mb-0.5">
                     <p class="font-bold text-slate-900 truncate uppercase text-sm">{{ branch.name }}</p>
                     <span
-                      v-if="exactMatches.some((e) => e.name === branch.name)"
+                      v-if="!fixedBranches && exactMatches.some((e) => e.name === branch.name)"
                       class="bg-green-100 text-green-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase"
                       >In State</span
                     >
@@ -929,7 +936,7 @@ onMounted(async () => {
             <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col items-center text-center">
               <span class="material-symbols-outlined text-[#002888] mb-2">support_agent</span>
               <p class="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-1">24/7 Support</p>
-              <p class="text-[9px] text-slate-500 leading-tight">Expert help for solar systems</p>
+              <p class="text-[9px] text-slate-500 leading-tight">Expert help from our team</p>
             </div>
           </div>
         </div>

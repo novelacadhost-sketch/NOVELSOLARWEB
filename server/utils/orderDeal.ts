@@ -6,6 +6,7 @@ import { commentOnDeal, notifyBranchManagerOfOrder } from './branchManagerNotify
 import { describeFulfillment, describePaymentMethod } from './paymentMethod'
 import { messageStaff } from './staffMessage'
 import { staffNameFor } from './staffCodes'
+import { SITES, type SiteId } from '#shared/sites'
 
 /**
  * Files a web order in Bitrix as a DEAL.
@@ -85,6 +86,8 @@ export interface OrderDealInput {
   /** Marks a deal recreated from the failed-order queue. */
   recovered?: boolean
   promotion?: OrderPromotion | null
+  /** The storefront it was placed on. Absent = Novel Solar (the app, older queue rows). */
+  site?: SiteId
 }
 
 export interface OrderDealResult {
@@ -151,6 +154,7 @@ function buildComments(order: OrderDealInput, staffName: string | null): string 
 
   const lines = [
     `${order.recovered ? 'RECOVERED WEB ORDER' : 'WEB ORDER'} (${order.orderId})`,
+    `Website: ${SITES[order.site ?? 'solar'].name}`,
     `Fulfillment: ${describeFulfillment(isPickup)}`,
     `Branch: ${branchLabel}`,
     `Payment: ${describePaymentMethod(order.paymentMethod, isPickup)}`,
@@ -271,7 +275,8 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
   const name = `${order.customer.firstName || 'Guest'} ${order.customer.lastName || ''}`.trim()
   const summary = buildComments(order, staffName)
   const fields: Record<string, unknown> = {
-    TITLE: `Web Order: ${name} (${order.orderId})${order.recovered ? ' [RECOVERED]' : ''}`,
+    // Both sites share Product Sales; the title is what tells them apart in the list.
+    TITLE: `${order.site === 'homes' ? 'Home Essentials Order' : 'Web Order'}: ${name} (${order.orderId})${order.recovered ? ' [RECOVERED]' : ''}`,
     CATEGORY_ID: BITRIX_DEAL.CATEGORY_ID,
     STAGE_ID: BITRIX_DEAL.STAGE_ID,
     OPPORTUNITY: order.total,

@@ -158,7 +158,7 @@
 
 <script setup lang="ts">
 import { excludeServiceProducts } from '~/utils/productFilters'
-import { CATEGORY_GROUPS, groupIdForSection, isExcludedSection, orderSections } from '~/utils/productCategories'
+import { categoryGroupsFor, groupIdForSection, isExcludedSection, orderSections } from '~/utils/productCategories'
 import { watch, computed, ref } from 'vue'
 
 // Index signature deliberate: the /api/inventory response is a union whose
@@ -174,7 +174,17 @@ const sectionOf = (product: WithSection) => product.sectionName || product.secti
  * over from when the portal's sections were deleted.
  */
 // Declared before the loader below, which watches them.
-const searchQuery = ref('')
+const site = useSite()
+const CATEGORY_GROUPS = categoryGroupsFor(site.id)
+// The header search on Novel Home Essentials lands here as ?q=.
+const route = useRoute()
+const searchQuery = ref(String(route.query.q ?? ''))
+watch(
+  () => route.query.q,
+  (q) => {
+    searchQuery.value = String(q ?? '')
+  },
+)
 const selectedCategory = ref('all')
 // The slider's top position means "any price", not ₦2,000,000. Treating it as
 // a real ceiling hid the 23 most expensive products — big lithium batteries and
@@ -193,7 +203,7 @@ const { data: categoryData } = await useFetch('/api/categories')
 const categories = computed(() => {
   const counts = new Map<string, number>()
   for (const c of categoryData.value?.categories ?? []) {
-    const groupId = groupIdForSection(c.name)
+    const groupId = groupIdForSection(c.name, site.id)
     if (!groupId) continue
     counts.set(groupId, (counts.get(groupId) ?? 0) + c.productCount)
   }
@@ -287,7 +297,7 @@ const matchesCategory = (product, categoryId) => {
   const section = sectionOf(product)
   if (section) {
     if (isExcludedSection(section)) return false
-    return groupIdForSection(section) === categoryId
+    return groupIdForSection(section, site.id) === categoryId
   }
 
   const title = (product.NAME || product.name || '').toLowerCase()
@@ -366,7 +376,7 @@ const sectionRuns = computed(() => {
   }
   if (bySection.size < 2) return null
 
-  return orderSections(selectedCategory.value, [...bySection.keys()]).map((name) => ({
+  return orderSections(selectedCategory.value, [...bySection.keys()], site.id).map((name) => ({
     name,
     products: bySection.get(name) ?? [],
   }))

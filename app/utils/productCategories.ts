@@ -17,6 +17,8 @@
  * never invisible — it just sits in the catch-all until someone places it.
  */
 
+import type { SiteId } from '#shared/sites'
+
 export interface CategoryGroup {
   id: string
   name: string
@@ -58,23 +60,44 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
 
 const norm = (value: string) => value.trim().toLowerCase()
 
-// Built once. A section named in two groups would be ambiguous, so the first
-// listing wins and the duplicate is ignored rather than silently reassigning.
-const SECTION_TO_GROUP = new Map<string, string>()
-for (const group of CATEGORY_GROUPS) {
-  for (const section of group.sections) {
-    if (!SECTION_TO_GROUP.has(norm(section))) SECTION_TO_GROUP.set(norm(section), group.id)
+/**
+ * Novel Home Essentials: one group per section it sells (shared/sites.ts holds
+ * the list the server filters by). The ids are its /category/ slugs.
+ */
+export const HOMES_CATEGORY_GROUPS: CategoryGroup[] = [
+  { id: 'appliances', name: 'Home Appliances', sections: ['Appliances'] },
+  { id: 'fans', name: 'Fans', sections: ['Fan'] },
+  { id: 'voltage-stabilizers', name: 'Voltage Stabilizers', sections: ['Voltage Stabilizer'] },
+]
+
+export function categoryGroupsFor(siteId: SiteId = 'solar'): CategoryGroup[] {
+  return siteId === 'homes' ? HOMES_CATEGORY_GROUPS : CATEGORY_GROUPS
+}
+
+// Built once per site. A section named in two groups would be ambiguous, so the
+// first listing wins and the duplicate is ignored rather than silently reassigning.
+function sectionMap(groups: CategoryGroup[]) {
+  const map = new Map<string, string>()
+  for (const group of groups) {
+    for (const section of group.sections) {
+      if (!map.has(norm(section))) map.set(norm(section), group.id)
+    }
   }
+  return map
+}
+const SECTION_TO_GROUP: Record<SiteId, Map<string, string>> = {
+  solar: sectionMap(CATEGORY_GROUPS),
+  homes: sectionMap(HOMES_CATEGORY_GROUPS),
 }
 
 export const FALLBACK_GROUP_ID = 'accessories'
 
-/** Which shop group a Bitrix section belongs to. Unknown sections fall to Accessories. */
-export function groupIdForSection(sectionName?: string | null): string | null {
+/** Which shop group a Bitrix section belongs to. Unknown sections fall to Accessories on Novel Solar. */
+export function groupIdForSection(sectionName?: string | null, siteId: SiteId = 'solar'): string | null {
   if (!sectionName) return null
   const key = norm(sectionName)
   if (EXCLUDED_SECTIONS.some((s) => norm(s) === key)) return null
-  return SECTION_TO_GROUP.get(key) ?? FALLBACK_GROUP_ID
+  return SECTION_TO_GROUP[siteId].get(key) ?? (siteId === 'solar' ? FALLBACK_GROUP_ID : null)
 }
 
 export function isExcludedSection(sectionName?: string | null): boolean {
@@ -87,8 +110,8 @@ export function isExcludedSection(sectionName?: string | null): boolean {
  * then anything unlisted that fell in, alphabetically. Keeps a newly added
  * Bitrix section visible at the bottom of Accessories rather than lost.
  */
-export function orderSections(groupId: string, present: string[]): string[] {
-  const group = CATEGORY_GROUPS.find((g) => g.id === groupId)
+export function orderSections(groupId: string, present: string[], siteId: SiteId = 'solar'): string[] {
+  const group = categoryGroupsFor(siteId).find((g) => g.id === groupId)
   const known = group ? group.sections.filter((s) => present.some((p) => norm(p) === norm(s))) : []
   const extra = present.filter((p) => !known.some((k) => norm(k) === norm(p))).sort((a, b) => a.localeCompare(b))
   return [...known, ...extra]

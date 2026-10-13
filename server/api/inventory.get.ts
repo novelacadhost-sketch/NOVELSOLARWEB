@@ -7,6 +7,7 @@ import { normalizeProperty } from '../utils/normalizeProperty'
 import { getSectionMap } from '../utils/bitrixSections'
 import { getHiddenProductIds, getVisibilityVersion } from '../utils/productVisibility'
 import { getLowStockIds } from '../utils/lowStock'
+import { getSite } from '../utils/site'
 
 export default defineCachedEventHandler(
   async (event) => {
@@ -45,6 +46,20 @@ export default defineCachedEventHandler(
         .map((name) => name.trim().toLowerCase())
         .filter(Boolean),
     )
+
+    // Novel Home Essentials sells only its own sections, whatever was asked for:
+    // no request can list a solar product on that site.
+    const site = getSite(event)
+    if (site.sections) {
+      const allowed = site.sections.map((s) => s.toLowerCase())
+      const requested = [...sectionFilter]
+      sectionFilter.clear()
+      for (const name of requested.length ? requested.filter((n) => allowed.includes(n)) : allowed) {
+        sectionFilter.add(name)
+      }
+      // Asked only for sections this site does not sell: nothing, not everything.
+      if (!sectionFilter.size) return []
+    }
 
     interface MappedProduct {
       ID: string | number
@@ -206,7 +221,10 @@ export default defineCachedEventHandler(
       }
 
       if (sectionFilter.size) {
-        query = query.in('section_name', [...sectionFilter].map((n) => n))
+        // The filter is lowercased and `in` is case-sensitive, so map back to the
+        // stored names; matching on the lowercase form returned nothing at all.
+        const stored = [...new Set(sectionNames.values())].filter((n) => sectionFilter.has(n.toLowerCase()))
+        query = query.in('section_name', stored.length ? stored : [...sectionFilter])
       }
 
       if (!includeServices) {
@@ -264,7 +282,7 @@ export default defineCachedEventHandler(
       const vis = await getVisibilityVersion()
       // v7: the low-stock threshold dropped from 10 to 3. Bumped so cached
       // bodies flagging the old half of the catalogue are not served on.
-      return `inventory-v7:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
+      return `inventory-v7:${getSite(event).id}:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than
