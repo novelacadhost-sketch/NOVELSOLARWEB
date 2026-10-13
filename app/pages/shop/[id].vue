@@ -295,25 +295,14 @@ useHead({
                 @click="activeTab = 'specs'"
               >
                 Specifications
-              </button>
-              <button
-                class="pb-4 text-sm font-black uppercase transition-all duration-200"
-                :class="
-                  activeTab === 'downloads'
-                    ? 'border-b-2 border-[#002888] text-slate-900'
-                    : 'text-slate-400 hover:text-slate-600'
-                "
-                @click="activeTab = 'downloads'"
-              >
-                Downloads
-              </button>
+              </button>
             </div>
 
             <!-- Description Tab -->
             <div v-if="activeTab === 'description'" class="animate-fadeIn">
               <div
                 class="prose max-w-none text-slate-600 text-sm md:text-base leading-relaxed mb-8"
-                v-html="product?.DESCRIPTION || product?.DETAIL_TEXT || 'Full product description coming soon.'"
+                v-html="product?.DESCRIPTION || product?.DETAIL_TEXT || 'Ask our sales team for the full details of this product.'"
               />
             </div>
 
@@ -344,15 +333,7 @@ useHead({
                 <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">list_alt</span>
                 <p class="text-slate-500 font-medium">No technical specifications available for this product.</p>
               </div>
-            </div>
-
-            <!-- Downloads Tab -->
-            <div v-if="activeTab === 'downloads'" class="animate-fadeIn">
-              <div class="py-12 bg-slate-50 rounded-2xl text-center border border-dashed border-slate-200">
-                <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">download</span>
-                <p class="text-slate-500 font-medium">Manuals and data sheets will be available soon.</p>
-              </div>
-            </div>
+            </div>
           </div>
         </div>
       </div>

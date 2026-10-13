@@ -182,7 +182,10 @@
                 </div>
                 <div>
                   <h3 class="font-black text-slate-900 mb-1">Email</h3>
-                  <p class="text-slate-500 font-medium">hello@novelsolar.ng</p>
+                  <p class="text-slate-500 font-medium">
+                    <a href="mailto:sales@novelsolar.com" class="hover:text-[#002888]">sales@novelsolar.com</a><br />
+                    <a href="mailto:info@novelsolar.com" class="hover:text-[#002888]">info@novelsolar.com</a>
+                  </p>
                 </div>
               </div>
 
@@ -204,8 +207,14 @@
                   </svg>
                 </div>
                 <div>
-                  <h3 class="font-black text-slate-900 mb-1">Location</h3>
-                  <p class="text-slate-500 font-medium">Lagos, Nigeria</p>
+                  <h3 class="font-black text-slate-900 mb-1">Head office</h3>
+                  <p class="text-slate-500 font-medium">
+                    Akinjide Plaza, 76 Adekunle Fajuyi Road, Ekotedo, Ibadan, Oyo State
+                  </p>
+                  <p class="text-slate-400 text-sm mt-1">Mon–Fri 8:00am–5:30pm · Sat 10:00am–5:30pm</p>
+                  <NuxtLink to="/branch-outlets" class="text-sm font-bold text-[#002888] hover:underline"
+                    >See all our branches</NuxtLink
+                  >
                 </div>
               </div>
             </div>

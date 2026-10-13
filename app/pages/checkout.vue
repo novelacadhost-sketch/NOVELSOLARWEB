@@ -935,8 +935,8 @@ onMounted(async () => {
             </div>
             <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col items-center text-center">
               <span class="material-symbols-outlined text-[#002888] mb-2">support_agent</span>
-              <p class="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-1">24/7 Support</p>
-              <p class="text-[9px] text-slate-500 leading-tight">Expert help from our team</p>
+              <p class="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-1">Expert Support</p>
+              <p class="text-[9px] text-slate-500 leading-tight">Mon–Sat from our branch teams</p>
             </div>
           </div>
         </div>

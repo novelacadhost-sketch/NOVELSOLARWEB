@@ -177,14 +177,6 @@
                 </li>
                 <li>
                   <NuxtLink
-                    to="/gallery"
-                    class="block px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-[#002888] transition-colors"
-                    @click="closeDesktopMenu"
-                    >Gallery</NuxtLink
-                  >
-                </li>
-                <li>
-                  <NuxtLink
                     to="/blog"
                     class="block px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-[#002888] transition-colors"
                     @click="closeDesktopMenu"
@@ -967,7 +959,6 @@ const supportMenu = computed(() =>
 const aboutMenu = [
   { title: 'About us', link: '/about' },
   { title: 'Branch outlets', link: '/branch-outlets' },
-  { title: 'Gallery', link: '/gallery' },
   { title: 'Blog', link: '/blog' },
 ]
 const quoteRequestMenu = [

@@ -327,7 +327,7 @@ import type { BitrixProduct } from '~/types'
 import { useHead } from '#imports'
 
 useHead({
-  title: 'Novel Solar: Leading Solar Energy Company in Nigeria - novelsolar',
+  title: 'Novel Solar: Leading Solar Energy Company in Nigeria',
 })
 
 // Built-in hero slides. These are the FALLBACK, not dead code: they render
