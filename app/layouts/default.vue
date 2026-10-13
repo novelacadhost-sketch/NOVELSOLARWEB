@@ -736,8 +736,19 @@
             </form>
           </div>
         </div>
-        <div class="mt-8 pt-8 border-t border-gray-200 flex items-center justify-between">
-          <p class="text-sm text-gray-400">&copy; 2026 NovelSolar. All rights reserved.</p>
+        <div
+          class="mt-8 pt-8 border-t border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p class="text-sm text-gray-400">&copy; {{ new Date().getFullYear() }} Novel Solar. All rights reserved.</p>
+          <nav class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            <NuxtLink
+              v-for="link in LEGAL_LINKS"
+              :key="link.to"
+              :to="link.to"
+              class="text-gray-500 hover:text-[#002888]"
+              >{{ link.label }}</NuxtLink
+            >
+          </nav>
         </div>
       </div>
     </footer>
@@ -868,6 +879,8 @@
 </template>
 
 <script setup lang="ts">
+import { LEGAL_LINKS } from '~/utils/legal'
+
 const supabaseUser = useSupabaseUser()
 const supabase = useSupabaseClient()
 

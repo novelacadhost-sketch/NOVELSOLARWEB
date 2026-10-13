@@ -15,6 +15,7 @@ const HOMES_PATHS = [
   /^\/login$/,
   /^\/confirm$/,
   /^\/404$/,
+  /^\/(privacy|terms|returns|delivery)$/,
   // Dealer pricing applies on both sites, so dealers sign in here too.
   /^\/dealer\/(login|setup-account)$/,
   /^\/admin(\/.*)?$/,

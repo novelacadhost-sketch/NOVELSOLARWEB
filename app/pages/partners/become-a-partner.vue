@@ -159,6 +159,7 @@
                 Need Help?
               </NuxtLink>
             </div>
+            <PrivacyNotice class="md:col-span-2" />
           </form>
         </div>
       </div>

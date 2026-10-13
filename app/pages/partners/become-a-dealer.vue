@@ -288,6 +288,7 @@ useHead({
                 />
                 {{ isLoading ? 'Submitting Application...' : 'Register as Dealer' }}
               </button>
+              <PrivacyNotice action="By submitting your application" class="mt-3" />
               <p class="text-center mt-6 text-sm text-slate-500 font-medium">
                 Already have an account?
                 <NuxtLink to="/login" class="text-[#002888] font-bold hover:underline">Sign In</NuxtLink>

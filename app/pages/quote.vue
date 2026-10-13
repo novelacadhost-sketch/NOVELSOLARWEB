@@ -150,6 +150,7 @@
             />
             {{ isSubmitting ? 'Sending Request...' : 'Submit Quote Request' }}
           </button>
+          <PrivacyNotice class="mt-3 text-center" />
         </form>
       </div>
     </div>

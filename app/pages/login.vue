@@ -134,6 +134,7 @@ useHead({
                 {{ isLoading ? 'Sending Link...' : 'Send Magic Link' }}
                 <span v-if="!isLoading" class="material-symbols-outlined text-lg">bolt</span>
               </button>
+              <PrivacyNotice action="By continuing" class="mt-3 text-center" />
             </form>
           </div>
 

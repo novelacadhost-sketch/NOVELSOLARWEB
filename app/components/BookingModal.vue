@@ -240,6 +240,7 @@ const closeModal = () => {
             />
             {{ isSubmitting ? 'Booking...' : 'Confirm Booking' }}
           </button>
+          <PrivacyNotice class="mt-3 text-center" />
         </form>
       </div>
     </div>

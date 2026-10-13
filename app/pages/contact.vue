@@ -144,6 +144,7 @@
                 />
                 {{ isSubmitting ? 'Sending Message...' : 'Send Message' }}
               </button>
+              <PrivacyNotice class="mt-3" />
             </form>
           </template>
         </div>

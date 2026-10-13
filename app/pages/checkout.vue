@@ -794,6 +794,7 @@ onMounted(async () => {
           <span v-if="!isSubmitting" class="material-symbols-outlined">arrow_forward</span>
           <span v-else class="material-symbols-outlined animate-spin">sync</span>
         </button>
+        <PrivacyNotice action="By placing your order" with-terms class="mt-3 text-center" />
       </div>
 
       <!-- Right Column: Sticky Order Summary -->

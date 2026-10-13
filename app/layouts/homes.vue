@@ -137,9 +137,20 @@
         </div>
       </div>
       <div class="border-t border-white/10">
-        <p class="max-w-7xl mx-auto px-4 sm:px-6 py-5 text-xs text-stone-500">
-          &copy; {{ year }} {{ site.name }}. Part of Novel Solar.
-        </p>
+        <div
+          class="max-w-7xl mx-auto px-4 sm:px-6 py-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p class="text-xs text-stone-500">&copy; {{ year }} {{ site.name }}. Part of Novel Solar.</p>
+          <nav class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            <NuxtLink
+              v-for="link in LEGAL_LINKS"
+              :key="link.to"
+              :to="link.to"
+              class="text-stone-400 hover:text-white"
+              >{{ link.label }}</NuxtLink
+            >
+          </nav>
+        </div>
       </div>
     </footer>
 
@@ -169,6 +180,7 @@
 
 <script setup lang="ts">
 import { HOMES_CATEGORY_GROUPS } from '~/utils/productCategories'
+import { LEGAL_LINKS } from '~/utils/legal'
 import { homeEssentialsBranches } from '~/utils/locations'
 
 const site = useSite()
