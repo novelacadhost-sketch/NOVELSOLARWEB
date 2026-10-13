@@ -17,7 +17,7 @@
  * never invisible — it just sits in the catch-all until someone places it.
  */
 
-import type { SiteId } from '#shared/sites'
+import type { SiteId } from './sites'
 
 export interface CategoryGroup {
   id: string

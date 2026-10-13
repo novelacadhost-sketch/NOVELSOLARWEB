@@ -1,6 +1,5 @@
-import { serverQueryContent } from '#content/server'
 import { siteSellsSection } from '#shared/sites'
-import { CATEGORY_GROUPS, EXCLUDED_SECTIONS, HOMES_CATEGORY_GROUPS } from '../../app/utils/productCategories'
+import { CATEGORY_GROUPS, EXCLUDED_SECTIONS, HOMES_CATEGORY_GROUPS } from '#shared/productCategories'
 import { getSupabaseAdminClient } from '../utils/supabaseAdmin'
 import { getHiddenProductIds } from '../utils/productVisibility'
 import { getSite, siteUrlFor } from '../utils/site'
@@ -95,10 +94,20 @@ export default defineEventHandler(async (event) => {
   }
 
   if (site.id === 'solar') {
+    // Read the post files from Nuxt Content's storage rather than through
+    // #content/server: importing that pulls the whole app (layouts included)
+    // into the server's type check and broke it.
     try {
-      const posts = await serverQueryContent(event, 'blog').only(['_path', 'date', 'updatedAt']).find()
-      for (const post of posts) {
-        if (typeof post._path === 'string') add(post._path, (post.updatedAt ?? post.date) as string | undefined)
+      const storage = useStorage('content:source')
+      // Keys carry the source name first (content:blog:post.md), so filter
+      // rather than asking for a 'blog' prefix.
+      for (const key of (await storage.getKeys()).filter((k) => /(^|:)blog:[^:]+\.md$/.test(k))) {
+        const file = key.split(':').pop() ?? ''
+        if (!file.endsWith('.md')) continue
+        const raw = String((await storage.getItem(key)) ?? '')
+        if (/^draft:\s*true\b/m.test(raw)) continue
+        const date = raw.match(/^date:\s*['"]?(\d{4}-\d{2}-\d{2})/m)?.[1]
+        add(`/blog/${file.slice(0, -3)}`, date)
       }
     } catch (error) {
       logger.warn('Sitemap', 'Blog posts left out', { error: error instanceof Error ? error.message : String(error) })
