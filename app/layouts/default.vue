@@ -716,24 +716,7 @@
           <div>
             <h3 class="text-sm font-semibold text-gray-800 uppercase tracking-wider mb-4">Newsletter</h3>
             <p class="text-sm text-gray-500 mb-4">Subscribe to get the latest updates and offers.</p>
-            <form class="flex" @submit.prevent>
-              <label for="newsletter-email" class="sr-only">Email address</label>
-              <input
-                id="newsletter-email"
-                type="email"
-                required
-                class="appearance-none min-w-0 w-full bg-white border border-gray-300 rounded-l-md py-2 px-4 text-base text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm"
-                placeholder="Enter your email"
-              />
-              <div class="rounded-md sm:mt-0 sm:ml-3 sm:flex-shrink-0">
-                <button
-                  type="submit"
-                  class="bg-[#002888] text-white px-5 py-2.5 rounded-md text-sm font-bold hover:bg-blue-900 transition-colors shadow-sm w-full flex items-center justify-center -ml-3 rounded-l-none"
-                >
-                  Subscribe
-                </button>
-              </div>
-            </form>
+            <NewsletterForm />
           </div>
         </div>
         <div
