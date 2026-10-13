@@ -122,6 +122,12 @@ export default defineNuxtConfig({
       // offers Paystack as the only delivery option, so shipping it before
       // Paystack can charge would leave delivery uncheckoutable.
       newCheckout: process.env.NUXT_PUBLIC_NEW_CHECKOUT === 'true',
+      // The mobile app, for /staffreferral. The package name is the Flutter
+      // project's placeholder until the app is published under its real id.
+      appPlayStoreUrl:
+        process.env.NUXT_PUBLIC_APP_PLAY_STORE_URL ||
+        'https://play.google.com/store/apps/details?id=com.example.solar_ecormerce_shopping',
+      appDeepLinkScheme: process.env.NUXT_PUBLIC_APP_DEEP_LINK_SCHEME || 'nsecormerce',
     },
   },
   supabase: {
