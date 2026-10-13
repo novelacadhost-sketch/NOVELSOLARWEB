@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const site = useSite()
+const supportHref = `https://wa.me/${useRuntimeConfig().public.whatsappNumber}`
 const { addToast } = useToast()
 const supabase = useSupabaseClient()
 const isLoading = ref(false)
@@ -241,24 +242,28 @@ useHead({
 
               <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100 mb-8">
                 <p class="text-lg text-slate-700 font-medium leading-relaxed">
-                  You are securely logged in to your {{ site.name }} account. Dashboard analytics and order
-                  history features are being initialized.
+                  You are signed in to your {{ site.name }} account. Your orders, including any you placed as a
+                  guest with this email address, are in your order history.
                 </p>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div
+                <NuxtLink
+                  to="/orders"
                   class="flex items-center gap-3 p-4 rounded-xl border border-slate-100 hover:border-[#3c59b0]/30 transition-colors bg-white"
                 >
                   <span class="material-symbols-outlined text-[#3c59b0]">history</span>
                   <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">Order History</span>
-                </div>
-                <div
+                </NuxtLink>
+                <NuxtLink
+                  :to="site.id === 'homes' ? '/shop' : '/quote'"
                   class="flex items-center gap-3 p-4 rounded-xl border border-slate-100 hover:border-[#3c59b0]/30 transition-colors bg-white"
                 >
                   <span class="material-symbols-outlined text-[#3c59b0]">receipt_long</span>
-                  <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">Technical Quotes</span>
-                </div>
+                  <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">{{
+                    site.id === 'homes' ? 'Shop' : 'Request a Quote'
+                  }}</span>
+                </NuxtLink>
               </div>
             </div>
           </div>
@@ -287,7 +292,9 @@ useHead({
                 </li>
                 <li>
                   <a
-                    href="#"
+                    :href="supportHref"
+                    target="_blank"
+                    rel="noopener"
                     class="flex items-center gap-3 text-slate-500 hover:text-[#3c59b0] transition-colors group"
                   >
                     <span class="material-symbols-outlined text-lg">support_agent</span>
@@ -320,10 +327,10 @@ useHead({
             >
               <div class="relative z-10">
                 <span class="material-symbols-outlined text-blue-200 mb-4 text-3xl">bolt</span>
-                <h4 class="font-black text-lg mb-2 uppercase tracking-tight">Technical Hub</h4>
+                <h4 class="font-black text-lg mb-2 uppercase tracking-tight">Need help?</h4>
                 <p class="text-blue-100 text-xs font-medium leading-relaxed opacity-80">
-                  Your dashboard is currently under active development. New monitoring tools coming
-                  soon.
+                  Our team is available Monday to Saturday. Quote your order number and we can find it
+                  straight away.
                 </p>
               </div>
               <div class="absolute -bottom-6 -right-6 text-white/5">

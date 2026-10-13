@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { z } from 'zod'
+import { saveLastOrder } from '~/utils/lastOrder'
 const site = useSite()
 const { cart, cartTotalAmount } = useCart()
 const { addToast } = useToast()
@@ -92,6 +93,22 @@ const checkoutSchema = z.object({
   note: z.string().optional(),
 })
 
+/** Saved before payment: the Paystack round trip comes back to /thank-you in this tab. */
+function rememberOrder(response: { orderId?: string; subtotal?: number; discountAmount?: number; total?: number } | null) {
+  if (!response?.orderId) return
+  saveLastOrder({
+    reference: response.orderId,
+    placedAt: new Date().toISOString(),
+    items: cart.value.map((item) => ({ name: item.name, quantity: item.quantity, image: item.image })),
+    subtotal: response.subtotal ?? null,
+    discount: response.discountAmount ?? null,
+    total: response.total ?? null,
+    fulfillment: selectedFulfillment.value === 'pickup' ? 'pickup' : 'delivery',
+    branch: selectedBranch.value?.name ?? null,
+    paymentMethod: paymentMethod.value,
+  })
+}
+
 const submitOrder = async () => {
   if (cart.value.length === 0) {
     addToast('Empty Cart', 'Please add some items to your cart.', 'error')
@@ -125,6 +142,10 @@ const submitOrder = async () => {
   isSubmitting.value = true
   try {
     const response = await useNuxtApp().$apiFetch<{
+      orderId?: string
+      subtotal?: number
+      discountAmount?: number
+      total?: number
       paymentUrl?: string | null
       paymentAccessCode?: string | null
       paymentReference?: string | null
@@ -150,6 +171,8 @@ const submitOrder = async () => {
         refCode: staffRef.read() ?? undefined,
       },
     })
+
+    rememberOrder(response)
 
     // Pay now: open Paystack over the page rather than navigating away.
     // resumeTransaction uses the access code the server got when it fixed the
@@ -192,12 +215,12 @@ const submitOrder = async () => {
     // that never comes.
     if (response?.paymentPending) {
       addToast('Order Placed', 'We could not start the payment. Our team will contact you to complete it.', 'info')
-      navigateTo('/thank-you?payment=pending')
+      navigateTo(`/thank-you?payment=pending&ref=${encodeURIComponent(response?.orderId ?? '')}`)
       return
     }
 
     addToast('Order Placed', `Your order was successfully sent to ${site.name}!`, 'success')
-    navigateTo('/thank-you')
+    navigateTo(`/thank-you?payment=store&ref=${encodeURIComponent(response?.orderId ?? '')}`)
   } catch (error) {
     // Out of stock is not a failure to apologise for — it is a customer we can
     // still serve. /api/checkout answers 409 INSUFFICIENT_STOCK with the short

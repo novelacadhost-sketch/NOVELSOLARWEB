@@ -613,7 +613,10 @@ export default defineEventHandler(async (event) => {
   }
 
   // 3. GENERATE PREMIUM EMAIL HTML (always runs regardless of CRM status)
-  const generatedOrderNumber = 'NS-' + Math.floor(100000 + Math.random() * 900000)
+  // The same reference as the Bitrix deal, Paystack and the customer's order
+  // history. It used to be a random NS-number stored nowhere, which support
+  // could not look up.
+  const generatedOrderNumber = orderId
 
   const orderData = {
     brand:

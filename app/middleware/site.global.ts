@@ -12,10 +12,13 @@ const HOMES_PATHS = [
   /^\/checkout$/,
   /^\/thank-you$/,
   /^\/account$/,
+  /^\/orders(\/[^/]+)?$/,
   /^\/login$/,
   /^\/confirm$/,
   /^\/404$/,
   /^\/(privacy|terms|returns|delivery)$/,
+  // Staff codes apply on both sites.
+  /^\/staffreferral(\/.*)?$/,
   // Dealer pricing applies on both sites, so dealers sign in here too.
   /^\/dealer\/(login|setup-account)$/,
   /^\/admin(\/.*)?$/,
