@@ -124,6 +124,17 @@ const handleLogout = async () => {
 
 const cards = computed(() => [
   {
+    to: '/admin/orders',
+    title: 'Orders',
+    subtitle: 'Website and app orders with payment status, promo codes, and anything that has not reached Bitrix.',
+    icon: 'receipt_long',
+    iconBg: 'bg-amber-100',
+    iconColor: 'text-amber-600',
+    decorClass: 'text-amber-500',
+    linkColor: 'text-amber-600',
+    disabled: false,
+  },
+  {
     to: '/admin/manage-products',
     title: 'Manage Products',
     subtitle: 'Update prices, edit technical specifications, adjust stock status, and delete old listings.',
