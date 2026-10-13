@@ -5,8 +5,10 @@ const route = useRoute()
 const { addToCart } = useCart()
 const { getProductImage } = useProductImage()
 const {
-  public: { whatsappNumber },
+  public: { whatsappNumber, baseUrl },
 } = useRuntimeConfig()
+// Read before the first await: composables are unavailable after it.
+const canonicalOrigin = site.id === 'homes' ? site.canonicalUrl : String(baseUrl).replace(/\/$/, '')
 const whatsappUrl = computed(() => `https://wa.me/${whatsappNumber}`)
 const user = useSupabaseUser()
 
@@ -92,6 +94,34 @@ useHead({
       content: product.value ? `Get the best price on ${product.value.NAME} at ${site.name}.` : '',
     },
   ],
+})
+
+// Product data for search engines. Retail price only: a signed-in dealer's
+// SSR render must not publish their price. No availability claim, because
+// stock in the page is a low-stock flag, not a reliable in/out of stock.
+const structuredData = computed(() => {
+  const p = product.value
+  if (!p?.NAME) return null
+  const origin = canonicalOrigin
+  const image = getProductImage(p)
+  const price = Number(String(p.PRICE ?? '').split('|')[0])
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: p.NAME,
+    url: `${origin}/shop/${route.params.id}`,
+    ...(image && !image.includes('placeholder') ? { image: image.startsWith('/') ? `${origin}${image}` : image } : {}),
+    ...(price > 0
+      ? { offers: { '@type': 'Offer', price: price.toFixed(2), priceCurrency: 'NGN', url: `${origin}/shop/${route.params.id}` } }
+      : {}),
+  }
+})
+useHead({
+  script: computed(() =>
+    structuredData.value
+      ? [{ type: 'application/ld+json', innerHTML: JSON.stringify(structuredData.value).replace(/</g, '\\u003c') }]
+      : [],
+  ),
 })
 </script>
 
@@ -295,7 +325,7 @@ useHead({
                 @click="activeTab = 'specs'"
               >
                 Specifications
-              </button>
+              </button>
             </div>
 
             <!-- Description Tab -->
@@ -333,7 +363,7 @@ useHead({
                 <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">list_alt</span>
                 <p class="text-slate-500 font-medium">No technical specifications available for this product.</p>
               </div>
-            </div>
+            </div>
           </div>
         </div>
       </div>

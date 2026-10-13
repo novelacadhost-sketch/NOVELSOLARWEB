@@ -60,21 +60,10 @@ export default defineNuxtConfig({
     '@nuxt/image',
     '@vueuse/nuxt',
     '@nuxt/content',
-    '@nuxtjs/sitemap',
     '@nuxtjs/supabase',
   ],
-  site: {
-    url: SITE_URL,
-    name: 'Novel Solar',
-  },
-  sitemap: {
-    strictNuxtContentPaths: true,
-    exclude: [
-      '/admin/**', // Keep the admin dashboard out of Google
-      '/checkout',
-      '/thank-you',
-    ],
-  },
+  // Sitemap and robots.txt are server routes (server/routes/), one per site by
+  // hostname; @nuxtjs/sitemap only knew one site URL and listed no products.
   image: {
     domains: ['nisl.bitrix24.com', 'res.cloudinary.com'],
     format: ['webp', 'avif'],

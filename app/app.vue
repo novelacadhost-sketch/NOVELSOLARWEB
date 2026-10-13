@@ -16,6 +16,20 @@ const description =
     ? 'Home appliances, fans and voltage stabilizers from Novel Home Essentials, Oyo. Freezers, fridges, air conditioners, TVs and more, with pickup or delivery.'
     : "Sourcing the world's best solar components for residential and commercial projects. Instant quotes, high-efficiency panels, and pickup or delivery from branches across Nigeria."
 
+// One canonical address per page: the production domain, no query string, so
+// filter and tracking parameters and the vercel.app alias do not split ranking.
+const route = useRoute()
+const canonicalOrigin =
+  site.id === 'homes' ? site.canonicalUrl : useRuntimeConfig().public.baseUrl.replace(/\/$/, '')
+useHead({
+  link: [
+    {
+      rel: 'canonical',
+      href: computed(() => `${canonicalOrigin}${route.path === '/' ? '/' : route.path.replace(/\/$/, '')}`),
+    },
+  ],
+})
+
 // nuxt.config's app.head.title is Novel Solar's; replace it as the fallback
 // chunk here, which any page's own title still overrides.
 if (site.id === 'homes') useHead({ title: 'Home Appliances in Oyo' })
