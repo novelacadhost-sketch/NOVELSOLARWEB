@@ -94,20 +94,19 @@ export default defineEventHandler(async (event) => {
   }
 
   if (site.id === 'solar') {
-    // Read the post files from Nuxt Content's storage rather than through
-    // #content/server: importing that pulls the whole app (layouts included)
-    // into the server's type check and broke it.
+    // Through Nuxt Content's own query route, the one the public blog uses.
+    // Not #content/server (importing it pulls the whole app, layouts included,
+    // into the server's type check) and not useStorage('content:source'),
+    // which is empty on Vercel: posts are bundled at build, not shipped as files.
     try {
-      const storage = useStorage('content:source')
-      // Keys carry the source name first (content:blog:post.md), so filter
-      // rather than asking for a 'blog' prefix.
-      for (const key of (await storage.getKeys()).filter((k) => /(?:^|:)blog:[^:]+\.md$/.test(k))) {
-        const file = key.split(':').pop() ?? ''
-        if (!file.endsWith('.md')) continue
-        const raw = String((await storage.getItem(key)) ?? '')
-        if (/^draft:\s*true\b/m.test(raw)) continue
-        const date = raw.match(/^date:\s*['"]?(\d{4}-\d{2}-\d{2})/m)?.[1]
-        add(`/blog/${file.slice(0, -3)}`, date)
+      const params = JSON.stringify({ where: [{ _dir: 'blog' }], only: ['_path', 'date', 'draft'] })
+      const posts = await $fetch<{ _path?: string; date?: string; draft?: boolean }[]>(
+        '/api/_content/query/sitemap.json',
+        { query: { _params: params } },
+      )
+      for (const post of posts ?? []) {
+        if (!post._path || post.draft === true) continue
+        add(post._path, typeof post.date === 'string' ? post.date : undefined)
       }
     } catch (error) {
       logger.warn('Sitemap', 'Blog posts left out', { error: error instanceof Error ? error.message : String(error) })

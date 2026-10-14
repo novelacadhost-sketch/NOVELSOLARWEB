@@ -77,7 +77,9 @@ function coerceFrontmatter(raw: Record<string, any>, fallbackSlug: string): Blog
 }
 
 export function parseMarkdownFile(raw: string, slug: string): BlogPostFile {
-  const parsed = matter(raw)
+  // A byte-order mark (left by some Windows editors) stops the front matter
+  // being recognised: itel-power-tank.md lost its title, image and date to one.
+  const parsed = matter(raw.replace(/^\uFEFF/, ''))
   return {
     slug,
     frontmatter: coerceFrontmatter(parsed.data || {}, slug),

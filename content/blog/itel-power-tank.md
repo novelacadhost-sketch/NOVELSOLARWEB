@@ -1,4 +1,4 @@
-﻿---
+---
 title: 'Itel Solar Power Tank (1kWh) – Price, Features & Full Review in Nigeria (2026 Guide)'
 description: 'In a world where staying connected is essential, access to reliable power can make all the difference.'
 date: '2026-03-04'
