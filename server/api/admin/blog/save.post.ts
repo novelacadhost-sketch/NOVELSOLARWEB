@@ -2,12 +2,12 @@ import { logger } from '../../../utils/logger'
 import {
   assertValidSlug,
   isValidSlug,
-  readLocalPost,
   relativeFilePathForSlug,
   serializePost,
   type BlogFrontmatter,
 } from '../../../utils/blogContent'
 import { adminToCommitAuthor, commitMessageFor, getRemoteFile, putRemoteFile } from '../../../utils/blogGithub'
+import { readPost } from '../../../utils/blogSource'
 
 interface SaveBody {
   slug: string
@@ -42,7 +42,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Post title is required.' })
   }
 
-  const collision = await readLocalPost(slug).catch(() => null)
+  // From the repo, not the disk: in production there is no content/blog on
+  // disk, so this never found a clash and a new post could overwrite one.
+  const collision = await readPost(slug).catch(() => null)
 
   // If a file already exists at the target slug, we MUST reject it,
   // UNLESS the user is updating this exact same post (originalSlug === slug).

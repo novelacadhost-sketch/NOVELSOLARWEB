@@ -28,8 +28,8 @@ export function getBlogGithubConfig(): GithubConfig {
   }
   return {
     token,
-    owner: process.env.BLOG_GITHUB_OWNER || 'dev-davies',
-    repo: process.env.BLOG_GITHUB_REPO || 'NovelSolar',
+    owner: process.env.BLOG_GITHUB_OWNER || 'novelacadhost-sketch',
+    repo: process.env.BLOG_GITHUB_REPO || 'NOVELSOLARWEB',
     branch: process.env.BLOG_GITHUB_BRANCH || 'master',
   }
 }
@@ -77,6 +77,22 @@ export async function getRemoteFile(filePath: string): Promise<{ sha: string; co
     return { sha: data.sha, content: decoded }
   } catch (err: any) {
     if (err?.statusCode === 404) return null
+    throw err
+  }
+}
+
+/** File names in a repo directory on the publishing branch; [] if the directory does not exist. */
+export async function listRemoteDirectory(dirPath: string): Promise<{ name: string; path: string }[]> {
+  const cfg = getBlogGithubConfig()
+  try {
+    const entries = await ghFetch<{ name: string; path: string; type: string }[]>(
+      `${contentsUrl(cfg, dirPath)}?ref=${encodeURIComponent(cfg.branch)}`,
+      { method: 'GET' },
+      cfg,
+    )
+    return (Array.isArray(entries) ? entries : []).filter((e) => e.type === 'file')
+  } catch (err: any) {
+    if (err?.statusCode === 404) return []
     throw err
   }
 }

@@ -1,7 +1,7 @@
-import { listLocalPosts } from '../../../utils/blogContent'
+import { listPosts } from '../../../utils/blogSource'
 
 export default defineEventHandler(async () => {
-  const posts = await listLocalPosts()
+  const posts = await listPosts()
   return {
     success: true,
     posts: posts.map(({ slug, frontmatter }) => ({
