@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { logger } from '../../utils/logger'
+import { findAuthUserByEmail } from '../../utils/authUsers'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ admin_email?: string; admin_username?: string }>(event)
@@ -45,8 +46,7 @@ export default defineEventHandler(async (event) => {
   const trimmedEmail = body.admin_email.trim().toLowerCase()
   const trimmedUsername = body.admin_username.trim()
 
-  const { data: existingUsers } = await supabase.auth.admin.listUsers()
-  const existingUser = existingUsers?.users?.find((user) => user.email?.toLowerCase() === trimmedEmail)
+  const existingUser = await findAuthUserByEmail(supabase, trimmedEmail)
 
   if (existingUser) {
     throw createError({
@@ -113,21 +113,26 @@ export default defineEventHandler(async (event) => {
   // lists by role — so without this the new admin shows up as a customer.
   await supabase.from('profiles').delete().eq('user_id', authData.user.id)
 
-  const redirectBaseUrl = config.public.baseUrl || 'http://localhost:3000'
-  await supabase.auth.admin
-    .generateLink({
-      type: 'recovery',
-      email: trimmedEmail,
-      options: {
-        redirectTo: `${redirectBaseUrl}/admin/login`,
-      },
-    })
-    .catch((error) => {
-      logger.error('CREATE-ADMIN', 'Failed to generate recovery link', { error })
-    })
+  // generateLink() only RETURNS a link; it sends nothing. This used it and
+  // then told the master admin a link had been sent, so no new admin ever got
+  // one. resetPasswordForEmail() emails it through Supabase's SMTP (Brevo),
+  // the same path as the admin "forgot password" screen.
+  const redirectBaseUrl = String(config.public.baseUrl || 'http://localhost:3000').replace(/\/$/, '')
+  const { error: linkError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+    redirectTo: `${redirectBaseUrl}/admin/reset-password`,
+  })
+  if (linkError) {
+    logger.error('CREATE-ADMIN', 'Failed to send the password link', { error: linkError.message })
+    return {
+      success: true,
+      linkSent: false,
+      message: `Admin "${trimmedUsername}" was created, but the password email could not be sent. Ask them to use "Forgot password" on the admin login page.`,
+    }
+  }
 
   return {
     success: true,
-    message: `Admin "${trimmedUsername}" created successfully. A password-reset link has been sent.`,
+    linkSent: true,
+    message: `Admin "${trimmedUsername}" created. A link to set their password has been emailed to ${trimmedEmail}.`,
   }
 })

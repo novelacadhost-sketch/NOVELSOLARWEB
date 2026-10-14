@@ -56,6 +56,20 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // One master admin could otherwise delete every other, leaving no one able
+  // to manage admins if that account were then lost or compromised. Demoting a
+  // master is a deliberate database change, not a button.
+  if (targetAdmin.is_master) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Master admin accounts cannot be deleted here.',
+    })
+  }
+
+  // Sign them out everywhere first: a session row outlives the account, and
+  // adminGuard only checks the session.
+  await supabase.from('admin_sessions').delete().eq('user_id', body.target_user_id)
+
   // Delete from admin_profiles first
   const { error: profileDeleteError } = await supabase
     .from('admin_profiles')

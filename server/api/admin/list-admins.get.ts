@@ -37,22 +37,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers()
-
-  if (usersError) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Failed to fetch admin emails.',
-    })
-  }
-
-  const adminsWithEmail = (admins || []).map((admin) => {
-    const authUser = usersData.users.find((user) => user.id === admin.user_id)
-    return {
-      ...admin,
-      email: authUser?.email || 'unknown',
-    }
-  })
+  // By id, not by scanning listUsers(): that returns the first 50 users only,
+  // so an admin beyond them showed as "unknown".
+  type AdminRow = { user_id: string; admin_username: string; is_master: boolean; created_at: string }
+  const adminsWithEmail = await Promise.all(
+    ((admins ?? []) as AdminRow[]).map(async (admin) => {
+      const { data } = await supabase.auth.admin.getUserById(admin.user_id)
+      return { ...admin, email: data?.user?.email || 'unknown' }
+    }),
+  )
 
   return {
     success: true,

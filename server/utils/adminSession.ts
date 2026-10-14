@@ -1,7 +1,18 @@
+import { createHash } from 'node:crypto'
 import { logger } from './logger'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 
 const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 // 24 hours
+
+/**
+ * The cookie carries the token; the table stores only its SHA-256, so a leaked
+ * copy of admin_sessions (a backup, a log, a stray SELECT) cannot be replayed
+ * as a live admin login. Rows written before this change hold the raw token,
+ * never match, and lapse within 24 hours: admins sign in once more.
+ */
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
 
 interface AdminSessionRecord {
   userId?: string
@@ -17,7 +28,7 @@ export async function createAdminSession(user?: { userId?: string; email?: strin
 
   const supabase = getSupabaseAdminClient()
   const { error } = await supabase.from('admin_sessions').insert({
-    token,
+    token: hashToken(token),
     user_id: user?.userId ?? null,
     email: user?.email ?? null,
     created_at: createdAt,
@@ -40,7 +51,7 @@ export async function getAdminSession(token?: string | null): Promise<AdminSessi
     const { data, error } = await supabase
       .from('admin_sessions')
       .select('user_id, email, created_at, expires_at')
-      .eq('token', token)
+      .eq('token', hashToken(token))
       .maybeSingle()
 
     if (error) {
@@ -54,7 +65,7 @@ export async function getAdminSession(token?: string | null): Promise<AdminSessi
       supabase
         .from('admin_sessions')
         .delete()
-        .eq('token', token)
+        .eq('token', hashToken(token))
         .then(() => {})
       return null
     }
@@ -81,7 +92,7 @@ export async function destroyAdminSession(token?: string | null) {
 
   try {
     const supabase = getSupabaseAdminClient()
-    await supabase.from('admin_sessions').delete().eq('token', token)
+    await supabase.from('admin_sessions').delete().eq('token', hashToken(token))
   } catch (storageError: any) {
     logger.error('AUTH', 'Admin session destroy failed', { error: storageError?.message || storageError })
   }

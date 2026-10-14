@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from '../../../utils/supabaseAdmin'
 import { logger } from '../../../utils/logger'
+import { findAuthUserByEmail } from '../../../utils/authUsers'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email?: string }>(event)
@@ -24,8 +25,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const supabase = getSupabaseAdminClient()
-    const { data: usersData } = await supabase.auth.admin.listUsers()
-    const authUser = usersData.users.find((user) => user.email?.toLowerCase() === trimmedEmail)
+    const authUser = await findAuthUserByEmail(supabase, trimmedEmail)
 
     if (authUser) {
       const { data: adminProfile } = await supabase
