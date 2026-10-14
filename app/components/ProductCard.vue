@@ -36,7 +36,7 @@ const displayPrice = computed(() => {
         use-nuxt-img
         :src="getProductImage(product)"
         :alt="product.NAME"
-        class="absolute inset-0 group-hover:scale-105 transition-transform duration-500"
+        class="w-full h-full group-hover:scale-105 transition-transform duration-500"
         loaded-class="bg-white"
         image-class="object-contain p-3"
       />
