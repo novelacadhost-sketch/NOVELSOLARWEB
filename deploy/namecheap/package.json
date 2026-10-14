@@ -1,0 +1,5 @@
+{
+  "name": "novelsolar-staging",
+  "private": true,
+  "main": "app.js"
+}

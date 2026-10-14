@@ -11,18 +11,29 @@ import type { H3Event } from 'h3'
  * value with every request gave each attempt its own rate-limit bucket, which
  * made every limit — admin login included — unlimited.
  *
- * If the app moves behind Cloudflare, or to a host whose proxy does not
- * overwrite these, revisit the order here before trusting it.
+ * Anywhere else (the Namecheap/LiteSpeed host) there is exactly one proxy, and
+ * it appends the address it saw to `x-forwarded-for`. Only that last entry is
+ * trustworthy; everything before it, and `x-real-ip`, came from the client.
+ *
+ * If the app moves behind Cloudflare, or gains a second proxy, revisit this
+ * before trusting it.
  */
 export function getClientIp(event: H3Event): string {
-  const header =
-    getHeader(event, 'x-vercel-forwarded-for') || getHeader(event, 'x-real-ip') || getHeader(event, 'x-forwarded-for')
-  const raw = header || event.node.req.socket.remoteAddress || ''
+  const raw = process.env.VERCEL ? vercelClientIp(event) : proxiedClientIp(event)
   return (
-    raw
-      .split(',')[0]!
+    (raw || event.node.req.socket.remoteAddress || '')
       .trim()
       .replace(/^\[|\]$/g, '')
       .replace(/^(\d+\.\d+\.\d+\.\d+):\d+$/, '$1') || 'unknown-ip'
   )
+}
+
+function vercelClientIp(event: H3Event): string | undefined {
+  const header =
+    getHeader(event, 'x-vercel-forwarded-for') || getHeader(event, 'x-real-ip') || getHeader(event, 'x-forwarded-for')
+  return header?.split(',')[0]
+}
+
+function proxiedClientIp(event: H3Event): string | undefined {
+  return getHeader(event, 'x-forwarded-for')?.split(',').pop()
 }

@@ -1,0 +1,106 @@
+name: Deploy staging (Namecheap)
+
+# Trial of the Namecheap Stellar Business host at staging.novelsolar.com, as a
+# free alternative to Vercel. Production stays on Vercel until this is proven.
+#
+# The build runs here, not on the server: a Nuxt build needs more memory than
+# a shared-hosting account allows. The server only receives .output and runs it
+# through cPanel's "Setup Node.js App". Secrets are not in the build; they live
+# in ~/novelsolar-staging.env on the server, read by deploy/namecheap/app.js.
+#
+# Runs on every push to master so blog posts (committed to master by the admin
+# editor, and bundled at build) reach staging the way Vercel's deploy hook does.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  # Two uploads at once would race on the .output swap.
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Skipped until the SSH details are configured, so forks and a half-set-up
+    # repo do not fail on every push.
+    if: vars.STAGING_SSH_HOST != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SSH_HOST: ${{ vars.STAGING_SSH_HOST }}
+      SSH_USER: ${{ vars.STAGING_SSH_USER }}
+      SSH_PORT: ${{ vars.STAGING_SSH_PORT || '21098' }}
+      APP_DIR: ${{ vars.STAGING_APP_DIR || 'novelsolar-staging' }}
+      STAGING_URL: https://staging.novelsolar.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build for a plain Node server
+        env:
+          NITRO_PRESET: node-server
+          # Read at build time: canonical links and the noindex header.
+          NUXT_PUBLIC_BASE_URL: ${{ env.STAGING_URL }}
+          # Placeholders for module init only; the real values come from the
+          # server's env file at runtime and override these.
+          NUXT_PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co'
+          NUXT_PUBLIC_SUPABASE_ANON_KEY: 'placeholder'
+          # The build prerenders, which runs the env check in 00.assert-env.ts.
+          SUPABASE_SERVICE_ROLE_KEY: 'placeholder'
+        run: npm run build
+
+      - name: Package
+        run: tar -czf release.tgz .output -C deploy/namecheap app.js package.json
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          # Pinned, not scanned: a scan at deploy time would trust whoever answers.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host staging\n  HostName %s\n  User %s\n  Port %s\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n' \
+            "$SSH_HOST" "$SSH_USER" "$SSH_PORT" > ~/.ssh/config
+
+      - name: Upload and switch over
+        run: |
+          scp release.tgz staging:"$APP_DIR/release.tgz"
+          ssh staging "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$HOME/$APP_DIR"
+          rm -rf .release && mkdir .release
+          tar -xzf release.tgz -C .release && rm release.tgz
+          mv -f .release/app.js .release/package.json .
+          # Swap the whole folder so the app never runs half old, half new.
+          rm -rf .output-old
+          if [ -d .output ]; then mv .output .output-old; fi
+          mv .release/.output .output
+          rm -rf .release .output-old
+          mkdir -p tmp && touch tmp/restart.txt
+          if command -v cloudlinux-selector >/dev/null; then
+            cloudlinux-selector restart --json --interpreter nodejs --app-root "$APP_DIR" >/dev/null || true
+          fi
+          REMOTE
+
+      - name: Check it answers
+        run: |
+          # The first request after a restart starts the app, which is slow.
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 60 "$STAGING_URL/" || true)
+            echo "Attempt $attempt: HTTP $code"
+            if [ "$code" = 200 ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error ::$STAGING_URL did not answer 200. Check ~/$APP_DIR/stderr.log on the server."
+          exit 1
