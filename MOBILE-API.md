@@ -1,6 +1,6 @@
 # NovelSolar — mobile client guide
 
-For the Flutter app. Everything here is verified against the live backend as of **2026-09-15**.
+For the Flutter app. Everything here is verified against the live backend as of **2026-09-15**; API base addresses updated **2026-10-14**.
 
 ---
 
@@ -27,11 +27,26 @@ await Supabase.initialize(url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY);
 | Value | Where |
 | --- | --- |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API. Ask Davies. |
-| API base (staging) | `https://novelsolarweb.vercel.app` |
-| API base (production) | `https://novelsolar.com` — not live yet, still WordPress |
+| API base (staging) | `https://staging.novelsolar.com` |
+| API base (production) | `https://novelsolar.com` — from **Sunday 1 November 2026**; WordPress until then |
 
 The anon key is public by design and is meant to ship in the app. The **service role key must
 never** appear in the app — it bypasses every security rule in the database.
+
+### The API base
+
+- **Keep it in one setting**, not repeated through the code, so moving from staging to production
+  is one change.
+- **Use `https://novelsolar.com` exactly: no `www`, no trailing slash.** `www.novelsolar.com`
+  answers with a redirect, and most HTTP clients follow a redirect by turning a POST into a GET and
+  dropping the `Authorization` header. Checkout and the enquiry forms then fail with errors that
+  look unrelated (a 404 for an endpoint that exists, or "sign in required").
+- **Test against staging now.** It runs on the same server software production will use from
+  1 November. It shares the **live** database and Bitrix: an order placed there is a real order and
+  creates a real deal, so prefer pay-at-store and tell Davies which deals to delete. Paystack on
+  staging uses test keys, so test cards work and real cards are not charged.
+- `https://novelsolarweb.vercel.app` keeps working for a few weeks after the cutover so older test
+  builds do not break, then goes away. Do not ship a build that uses it.
 
 ---
 
