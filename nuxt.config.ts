@@ -104,10 +104,6 @@ export default defineNuxtConfig({
     // Novel Home Essentials receipts. Unset = SMTP_FROM; set it only once the
     // domain is verified in Brevo, or its mail fails DMARC.
     smtpFromHomes: process.env.SMTP_FROM_HOMES,
-    blogGithubToken: process.env.BLOG_GITHUB_TOKEN,
-    blogGithubOwner: process.env.BLOG_GITHUB_OWNER || 'dev-davies',
-    blogGithubRepo: process.env.BLOG_GITHUB_REPO || 'NovelSolar',
-    blogGithubBranch: process.env.BLOG_GITHUB_BRANCH || 'master',
     paystackSecretKey: process.env.PAYSTACK_SECRET_KEY,
     // Comma-separated Bitrix user ids for stock requests. Unset = procurement
     // and sales support, as recorded in BITRIX_STAFF.

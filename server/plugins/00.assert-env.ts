@@ -44,15 +44,6 @@ export default defineNitroPlugin(() => {
     })
   }
 
-  // Setting the token without the owner/repo pair silently targets the
-  // upstream repo (dev-davies/NovelSolar) rather than this fork.
-  if (process.env.BLOG_GITHUB_TOKEN && !(process.env.BLOG_GITHUB_OWNER && process.env.BLOG_GITHUB_REPO)) {
-    logger.warn(
-      'Env Check',
-      'BLOG_GITHUB_TOKEN is set but BLOG_GITHUB_OWNER/BLOG_GITHUB_REPO are not — blog publishing will target the default dev-davies/NovelSolar, not this repository.',
-    )
-  }
-
   if (missingRequired.length) {
     logger.error('Env Check', 'Missing required environment variables — the app cannot function', {
       missing: missingRequired,
