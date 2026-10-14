@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
       const storage = useStorage('content:source')
       // Keys carry the source name first (content:blog:post.md), so filter
       // rather than asking for a 'blog' prefix.
-      for (const key of (await storage.getKeys()).filter((k) => /(^|:)blog:[^:]+\.md$/.test(k))) {
+      for (const key of (await storage.getKeys()).filter((k) => /(?:^|:)blog:[^:]+\.md$/.test(k))) {
         const file = key.split(':').pop() ?? ''
         if (!file.endsWith('.md')) continue
         const raw = String((await storage.getItem(key)) ?? '')

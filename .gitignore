@@ -64,3 +64,12 @@ wordpress/*.zip
 
 # Local partner-page drafts, not part of the WP plugin
 wordpress/pages/
+
+# Supabase CLI link state (project ref, pooler host). Local only.
+supabase/.temp/
+
+# One-off scripts kept on disk, not in the repo.
+check_supabase.ts
+query-bitrix-fields.ts
+scratch-bitrix-update.ts
+test-bitrix-download.js

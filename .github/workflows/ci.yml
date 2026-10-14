@@ -15,7 +15,7 @@ jobs:
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     # Env vars needed for nuxi prepare + typecheck (Nuxt modules
     # read these at init time; dummy values prevent crashes).
@@ -58,8 +58,8 @@ jobs:
 
           ERROR_COUNT=$(grep -c 'error TS' typecheck.log || true)
           # Measured 2026-10-13 with vue-tsc 3.3.11 / typescript 6.0.3, locally
-          # and with CI's dummy env (243). Lower it whenever the count drops.
-          BASELINE=243
+          # and with CI's dummy env (241). Lower it whenever the count drops.
+          BASELINE=241
 
           # vue-tsc exits non-zero whenever there are errors, which there are.
           # Non-zero with nothing counted means the tool itself fell over.
@@ -86,3 +86,12 @@ jobs:
           name: typecheck-log
           path: typecheck.log
           retention-days: 7
+
+      # ESLint errors fail the run; warnings (legacy any etc.) do not.
+      - name: Lint
+        run: npm run lint
+
+      # The same production build Vercel runs, so a commit that cannot build
+      # fails here rather than as a silent failed deployment.
+      - name: Build
+        run: npm run build
