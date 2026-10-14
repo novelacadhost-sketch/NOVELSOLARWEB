@@ -151,6 +151,12 @@ export default defineNuxtConfig({
     '/**': {
       headers: {
         'Content-Security-Policy': `frame-ancestors ${FRAME_ANCESTORS}`,
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        // Nothing uses the camera or microphone. Location stays available to
+        // the site itself for a future nearest-branch finder. Payment is left
+        // alone: the Paystack popup runs in an iframe and may need it.
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
         // Staging runs on a public vercel.app URL. Without this it gets
         // crawled and competes with the live site for the same content.
         // Self-disabling: once NUXT_PUBLIC_BASE_URL is the production

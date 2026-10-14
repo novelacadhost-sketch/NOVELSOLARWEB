@@ -1,8 +1,18 @@
+import { z } from 'zod'
 import { serverSupabaseUser } from '#supabase/server'
 import { resolveBitrixContactId, cacheProfileName } from '../../utils/bitrixContact'
 import { getAuthUserId } from '../../utils/authUserId'
 import { bitrixFetch } from '../../utils/bitrixAuth'
 import { logger } from '../../utils/logger'
+
+// Bounds match what the account page asks for. Anything else (an object, a
+// 10 MB string) was passed straight to the CRM contact.
+const profileSchema = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().max(80).optional().default(''),
+  phone: z.string().trim().min(7).max(30),
+  address: z.string().trim().max(500).optional().default(''),
+})
 
 export default defineEventHandler(async (event) => {
   const user = await serverSupabaseUser(event)
@@ -15,8 +25,18 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const body = await readBody(event)
-  const { firstName, lastName, phone, address } = body
+  const parsed = profileSchema.safeParse(await readBody(event))
+  if (!parsed.success) {
+    const labels: Record<string, string> = {
+      firstName: 'first name',
+      lastName: 'last name',
+      phone: 'phone number',
+      address: 'address',
+    }
+    const field = String(parsed.error.issues[0]?.path[0] ?? '')
+    throw createError({ statusCode: 400, statusMessage: `Please check your ${labels[field] ?? 'details'}.` })
+  }
+  const { firstName, lastName, phone, address } = parsed.data
 
   const contactId = await resolveBitrixContactId(userId, user.email ?? '')
 

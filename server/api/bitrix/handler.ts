@@ -154,6 +154,15 @@ export default defineEventHandler(async (event) => {
     return fail(event, 400, 'Missing Bitrix24 authentication tokens')
   }
 
+  // The install request names the portal it came from, and the handler calls
+  // that host with the token it was given. Only a Bitrix24 cloud portal is a
+  // legitimate answer; anything else would have this server make requests to a
+  // host of the caller's choosing.
+  if (typeof DOMAIN !== 'string' || !/^[a-z0-9-]+\.bitrix24\.(?:com|net|eu|de|ru|ua|by|kz|in|com\.br|es|fr|it|pl|uk)$/i.test(DOMAIN)) {
+    logger.warn('Bitrix Auth', 'Install request named a non-Bitrix24 domain', { domain: String(DOMAIN).slice(0, 100) })
+    return fail(event, 400, 'Unrecognised Bitrix24 portal')
+  }
+
   try {
     // 1. Fetch the user profile purely to decide where to redirect
     const userResponse = await $fetch<BitrixUserCurrentResponse>(`https://${DOMAIN}/rest/user.current?auth=${AUTH_ID}`)
