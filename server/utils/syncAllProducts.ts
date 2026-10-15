@@ -274,6 +274,7 @@ export async function syncAllProducts(): Promise<ProductSyncResult> {
             'PROPERTY_102',
             'PROPERTY_104',
             'PROPERTY_112',
+            'PROPERTY_272',
             'PROPERTY_184',
             'DETAIL_PICTURE',
             'PREVIEW_PICTURE',

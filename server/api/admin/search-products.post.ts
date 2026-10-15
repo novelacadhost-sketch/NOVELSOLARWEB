@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger'
-import { parseGallery, parseSpecs } from '../../utils/productFields'
+import { parseGallery, parseSpecs, propertyText } from '../../utils/productFields'
+import { BITRIX_PROPERTY } from '../../utils/bitrixProperties'
 import { getHiddenProductIds } from '../../utils/productVisibility'
 
 interface BitrixRawProduct {
@@ -8,8 +9,7 @@ interface BitrixRawProduct {
   PRICE?: string | number
   PROPERTY_184?: unknown
   CURRENCY_ID?: string
-  DESCRIPTION?: string
-  DESCRIPTION_TYPE?: string
+  PROPERTY_272?: unknown
   MEASURE?: string | number
   ACTIVE?: string
   PROPERTY_102?: unknown
@@ -57,8 +57,7 @@ export default defineEventHandler(async (event) => {
           'NAME',
           'PRICE',
           'PROPERTY_184',
-          'DESCRIPTION',
-          'DESCRIPTION_TYPE',
+          BITRIX_PROPERTY.DETAILED_DESCRIPTION,
           'MEASURE',
           'ACTIVE',
           'PROPERTY_102',
@@ -92,8 +91,7 @@ export default defineEventHandler(async (event) => {
         price: p.PRICE,
         dealerPrice: normalizeProperty(p.PROPERTY_184) ? Number(normalizeProperty(p.PROPERTY_184)) : null,
         currency: p.CURRENCY_ID || 'NGN',
-        description: p.DESCRIPTION,
-        descriptionType: p.DESCRIPTION_TYPE,
+        description: propertyText(p[BITRIX_PROPERTY.DETAILED_DESCRIPTION]),
         measure: p.MEASURE,
         // The website flag, not Bitrix's ACTIVE. A product can be active in
         // the CRM and hidden on the site, which is now the normal case.

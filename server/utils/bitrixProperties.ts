@@ -12,8 +12,19 @@ export const BITRIX_PROPERTY = {
   IMAGES_LEGACY: 'PROPERTY_44',
   /** "Cloudinary URL" — main image. 0/500 populated. */
   CLOUDINARY_URL: 'PROPERTY_102',
-  /** "Specification" — stringified specs array. 0/500 populated. */
+  /**
+   * "Specification" (HTML type). Either a JSON array of {label, value} (the
+   * admin editor) or an HTML list of `<strong>Label:</strong> value` items
+   * (the 2026-10-15 catalogue import). parseSpecs() reads both.
+   */
   SPECS: 'PROPERTY_104',
+  /**
+   * "Detailed Description", created 2026-10-15. The product's description. The
+   * built-in DESCRIPTION field was repurposed as the BRAND the same day
+   * (1,135 of 1,209 products held just a brand name there), so nothing of ours
+   * may write a description into DESCRIPTION.
+   */
+  DETAILED_DESCRIPTION: 'PROPERTY_272',
   /** "Gallery Image" — stringified URL array. 0/500 populated. */
   GALLERY: 'PROPERTY_112',
   /**

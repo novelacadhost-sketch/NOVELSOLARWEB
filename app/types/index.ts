@@ -14,6 +14,8 @@ export interface BitrixProduct {
   price?: number
   ACTIVE?: 'Y' | 'N'
   DETAIL_TEXT?: string
+  /** Cleaned HTML from Bitrix "Detailed Description" (/api/product/[id] only). */
+  detailedDescription?: string
   PROPERTY_102?: string | Array<{ value: string }>
   PROPERTY_44?: { showUrl?: string; downloadUrl?: string }
   PREVIEW_PICTURE?: string | { showUrl?: string; downloadUrl?: string }

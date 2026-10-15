@@ -3,7 +3,8 @@ import { resolveIsDealerFromEvent } from '../../utils/dealerCheck'
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { getHiddenProductIds } from '../../utils/productVisibility'
 import { isLowStock } from '../../utils/lowStock'
-import { parseGallery, parseSpecs, sanitizeRichText } from '../../utils/productFields'
+import { parseGallery, parseSpecs, productDescriptionHtml, sanitizeRichText } from '../../utils/productFields'
+import { BITRIX_PROPERTY } from '../../utils/bitrixProperties'
 import { getSectionMap } from '../../utils/bitrixSections'
 import { getSite } from '../../utils/site'
 import { siteSellsSection } from '#shared/sites'
@@ -54,10 +55,11 @@ export default defineEventHandler(async (event) => {
       // arrives as a clean list and a gallery holds only web addresses.
       product.PROPERTY_104 = JSON.stringify(parseSpecs(product.PROPERTY_104))
       product.PROPERTY_112 = JSON.stringify(parseGallery(product.PROPERTY_112))
-      // The page renders this with v-html. Descriptions can be edited in Bitrix
+      // The page renders this with v-html. Descriptions are edited in Bitrix
       // directly, where nothing of ours runs, so it is cleaned on the way out.
+      // DESCRIPTION is the brand now, not a description.
+      product.detailedDescription = productDescriptionHtml(product[BITRIX_PROPERTY.DETAILED_DESCRIPTION])
       if (typeof product.DESCRIPTION === 'string') product.DESCRIPTION = sanitizeRichText(product.DESCRIPTION)
-      if (typeof product.DETAIL_TEXT === 'string') product.DETAIL_TEXT = sanitizeRichText(product.DETAIL_TEXT)
 
       if (isDealer) {
         const dealerPrice = parseBitrixPrice(normalizeProperty(product.PROPERTY_184))

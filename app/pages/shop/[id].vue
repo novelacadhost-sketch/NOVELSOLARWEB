@@ -86,12 +86,26 @@ const galleryImages = computed(() => {
   }
 })
 
+// The description's opening sentence, which is what search results show.
+function metaDescription(p: BitrixProduct): string {
+  const lead = (p.detailedDescription || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!lead) return `Get the best price on ${p.NAME} at ${site.name}.`
+  return lead.length > 160 ? `${lead.slice(0, 157).replace(/\s+\S*$/, '')}…` : lead
+}
+
 useHead({
   title: product.value ? `${product.value.NAME} | ${site.name}` : 'Loading Product...',
   meta: [
     {
       name: 'description',
-      content: product.value ? `Get the best price on ${product.value.NAME} at ${site.name}.` : '',
+      content: product.value ? metaDescription(product.value) : '',
     },
   ],
 })
@@ -332,7 +346,7 @@ useHead({
             <div v-if="activeTab === 'description'" class="animate-fadeIn">
               <div
                 class="prose max-w-none text-slate-600 text-sm md:text-base leading-relaxed mb-8"
-                v-html="product?.DESCRIPTION || product?.DETAIL_TEXT || 'Ask our sales team for the full details of this product.'"
+                v-html="product?.detailedDescription || 'Ask our sales team for the full details of this product.'"
               />
             </div>
 

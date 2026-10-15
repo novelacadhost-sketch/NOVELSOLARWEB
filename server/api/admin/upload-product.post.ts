@@ -7,6 +7,7 @@ import {
 import type { BitrixResponse } from '../../types/bitrix'
 import { logger } from '../../utils/logger'
 import { cleanText, parseSpecs, sanitizeRichText } from '../../utils/productFields'
+import { BITRIX_PROPERTY } from '../../utils/bitrixProperties'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -50,6 +51,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // 3.5. Brand Integrity: Ensure the brand name is in the product title for shop filtering
+  const brandName = productBrand && productBrand !== 'general' ? productBrand.toUpperCase() : ''
   if (productBrand && productBrand !== 'general') {
     const brandLabel = productBrand.charAt(0).toUpperCase() + productBrand.slice(1)
     if (!productName.toLowerCase().includes(productBrand.toLowerCase())) {
@@ -84,8 +86,9 @@ export default defineEventHandler(async (event) => {
           CURRENCY_ID: 'NGN',
           ACTIVE: 'Y',
           MEASURE: measureId,
-          DESCRIPTION: productDescription,
-          DESCRIPTION_TYPE: 'html',
+          // DESCRIPTION holds the brand; the description has its own field.
+          ...(brandName ? { DESCRIPTION: brandName } : {}),
+          [BITRIX_PROPERTY.DETAILED_DESCRIPTION]: productDescription,
           PROPERTY_102: imageUrl, // Store Cloudinary URL directly in Custom Field
           PROPERTY_104: JSON.stringify(productSpecs),
           PROPERTY_112: JSON.stringify(galleryUrls), // Stringified gallery URL array

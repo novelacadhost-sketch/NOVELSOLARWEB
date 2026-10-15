@@ -3,6 +3,7 @@ import { getSupabaseAdminClient } from '../utils/supabaseAdmin'
 import { resolveIsDealerFromEvent } from '../utils/dealerCheck'
 import { bitrixFetch } from '../utils/bitrixAuth'
 import { normalizeProperty } from '../utils/normalizeProperty'
+import { productDescriptionHtml } from '../utils/productFields'
 import { getSectionMap } from '../utils/bitrixSections'
 import { getHiddenProductIds } from '../utils/productVisibility'
 import { getLowStockIds } from '../utils/lowStock'
@@ -96,7 +97,7 @@ export default defineEventHandler(async (event) => {
       name = p.NAME
       price = p.PRICE
       active = p.ACTIVE
-      description = normalizeProperty(p.DESCRIPTION)
+      description = productDescriptionHtml(p.PROPERTY_272)
       currency = p.CURRENCY_ID
     }
 
@@ -171,7 +172,7 @@ export default defineEventHandler(async (event) => {
           'PRICE',
           'PROPERTY_184',
           'CURRENCY_ID',
-          'DESCRIPTION',
+          'PROPERTY_272',
           'QUANTITY',
           'ACTIVE',
           // Required for the services filter and for sectionName below. Its

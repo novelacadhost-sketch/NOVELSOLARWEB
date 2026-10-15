@@ -1,5 +1,5 @@
 import { parseBitrixPrice } from './bitrixProperties'
-import { parseGallery, parseSpecs } from './productFields'
+import { parseGallery, parseSpecs, productDescriptionHtml } from './productFields'
 import { normalizeProperty } from './normalizeProperty'
 
 export interface BitrixProduct {
@@ -8,6 +8,7 @@ export interface BitrixProduct {
   PRICE?: string | number
   PROPERTY_184?: unknown
   DESCRIPTION?: unknown
+  PROPERTY_272?: unknown
   QUANTITY?: string | number
   ACTIVE?: string
   SECTION_ID?: string | number
@@ -70,8 +71,9 @@ export function normalizeBitrixProduct(product: BitrixProduct, sections?: Map<st
       ? Number(product.QUANTITY)
       : null
 
-  // 5. Parse description
-  const descriptionStr = normalizeProperty(product.DESCRIPTION)
+  // 5. Description: the Detailed Description property, cleaned HTML. Not
+  // DESCRIPTION, which holds the brand since 2026-10-15.
+  const descriptionStr = productDescriptionHtml(product.PROPERTY_272)
 
   // The section is the catalogue's real category.
   //
@@ -88,7 +90,7 @@ export function normalizeBitrixProduct(product: BitrixProduct, sections?: Map<st
     name: String(product.NAME || ''),
     price: Number(product.PRICE) || 0,
     dealer_price,
-    description: descriptionStr ? String(descriptionStr) : null,
+    description: descriptionStr || null,
     specs,
     gallery_urls,
     image_url,

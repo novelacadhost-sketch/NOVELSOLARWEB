@@ -9,6 +9,7 @@ import type { BitrixResponse } from '../../types/bitrix'
 import { logger } from '../../utils/logger'
 import { setProductHidden } from '../../utils/productVisibility'
 import { cleanText, parseGallery, parseSpecs, sanitizeRichText } from '../../utils/productFields'
+import { BITRIX_PROPERTY } from '../../utils/bitrixProperties'
 
 export default defineEventHandler(async (event) => {
   const contentType = getHeader(event, 'content-type') || ''
@@ -110,8 +111,8 @@ export default defineEventHandler(async (event) => {
       NAME: productName,
       PRICE: productPrice,
       PROPERTY_184: productDealerPrice || '',
-      DESCRIPTION: productDescription || '',
-      DESCRIPTION_TYPE: 'html',
+      // Not DESCRIPTION: that field is the brand now (see BITRIX_PROPERTY).
+      [BITRIX_PROPERTY.DETAILED_DESCRIPTION]: productDescription || '',
       // ACTIVE is deliberately NOT sent. Hiding a product is a website
       // decision; writing ACTIVE: 'N' deactivated it in Bitrix for sales,
       // quotes and the catalogue too, and the webhook then deleted it from the
