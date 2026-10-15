@@ -4,18 +4,18 @@
       <div class="w-16 h-16 rounded-full bg-orange-50 text-3xl flex items-center justify-center mx-auto mb-5">☀️</div>
       <h1 class="text-2xl font-black text-[#0B1F6B] mb-2">Welcome to {{ site.name }}</h1>
 
-      <p v-if="state === 'checking'" class="text-sm text-slate-500 mb-6">Checking your referral…</p>
+      <p v-if="state === 'checking'" class="text-sm text-slate-500 mb-6">Checking your coupon code…</p>
 
       <template v-else-if="state === 'valid'">
         <p class="text-sm text-slate-500 leading-relaxed mb-6">
-          A member of our team referred you. Your order will be credited to them{{ discountLine }}.
+          You have a coupon code. It is saved on this device for your next order{{ discountLine }}.
         </p>
         <div class="flex items-center gap-3 text-left bg-slate-100 border border-dashed border-slate-300 rounded-2xl p-4 mb-7">
           <div class="w-11 h-11 rounded-full bg-[#0B1F6B] text-white font-bold flex items-center justify-center shrink-0">
             <span class="material-symbols-outlined">badge</span>
           </div>
           <div>
-            <p class="text-sm font-bold text-slate-900">{{ site.name }} staff referral</p>
+            <p class="text-sm font-bold text-slate-900">{{ site.name }} coupon code</p>
             <span class="inline-block mt-1 text-xs font-bold text-[#E0533C] bg-[#E0533C]/10 px-2 py-0.5 rounded-md"
               >CODE: {{ code }}</span
             >
@@ -26,8 +26,8 @@
       <p v-else class="text-sm text-slate-500 leading-relaxed mb-6">
         {{
           code
-            ? 'This referral code is not active. You can still shop as normal.'
-            : 'This link has no referral code. You can still shop as normal.'
+            ? 'This coupon code is not active. You can still shop as normal.'
+            : 'This link has no coupon code. You can still shop as normal.'
         }}
       </p>
 
@@ -57,7 +57,7 @@
       </div>
 
       <p class="text-xs text-slate-400 mt-6">
-        No app? The website works the same way: your referral is remembered for 30 days on this device.
+        No app? The website works the same way: your coupon code is remembered for 30 days on this device.
       </p>
     </div>
   </div>
@@ -82,7 +82,7 @@
  * member. Opening the app is a button, not an automatic redirect: without the
  * app installed, a custom-scheme redirect fails with an error or nothing.
  */
-useHead({ title: 'Staff referral', meta: [{ name: 'robots', content: 'noindex' }] })
+useHead({ title: 'Coupon code', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const site = useSite()
 const route = useRoute()
@@ -115,10 +115,15 @@ function fromLink(): { code: string | null; firstName: string; lastName: string 
 const link = fromLink()
 const code = link.code
 
-const deepLink = computed(
-  () =>
-    `${config.appDeepLinkScheme}://code/${encodeURIComponent(code ?? '')}/${encodeURIComponent(link.firstName)}/${encodeURIComponent(link.lastName)}`,
-)
+// The app's home route with the referral as query parameters, the form the
+// app team asked for (2026-10-15); empty names are left out.
+const deepLink = computed(() => {
+  const params = new URLSearchParams()
+  if (code) params.set('staff_code', code)
+  if (link.firstName) params.set('first_name', link.firstName)
+  if (link.lastName) params.set('last_name', link.lastName)
+  return `${config.appDeepLinkScheme || 'nsecormerce'}:///?${params.toString()}`
+})
 const playStoreUrl = config.appPlayStoreUrl
 
 interface CodeCheck {
