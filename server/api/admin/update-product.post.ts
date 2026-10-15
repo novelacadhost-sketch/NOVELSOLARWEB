@@ -112,7 +112,9 @@ export default defineEventHandler(async (event) => {
       PRICE: productPrice,
       PROPERTY_184: productDealerPrice || '',
       // Not DESCRIPTION: that field is the brand now (see BITRIX_PROPERTY).
-      [BITRIX_PROPERTY.DETAILED_DESCRIPTION]: productDescription || '',
+      // An HTML-type property: a bare string is stored as TYPE TEXT, which
+      // Bitrix then shows with the tags visible.
+      [BITRIX_PROPERTY.DETAILED_DESCRIPTION]: { value: { TEXT: productDescription || '', TYPE: 'HTML' } },
       // ACTIVE is deliberately NOT sent. Hiding a product is a website
       // decision; writing ACTIVE: 'N' deactivated it in Bitrix for sales,
       // quotes and the catalogue too, and the webhook then deleted it from the

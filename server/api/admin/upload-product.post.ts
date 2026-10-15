@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
           MEASURE: measureId,
           // DESCRIPTION holds the brand; the description has its own field.
           ...(brandName ? { DESCRIPTION: brandName } : {}),
-          [BITRIX_PROPERTY.DETAILED_DESCRIPTION]: productDescription,
+          [BITRIX_PROPERTY.DETAILED_DESCRIPTION]: { value: { TEXT: productDescription, TYPE: 'HTML' } },
           PROPERTY_102: imageUrl, // Store Cloudinary URL directly in Custom Field
           PROPERTY_104: JSON.stringify(productSpecs),
           PROPERTY_112: JSON.stringify(galleryUrls), // Stringified gallery URL array

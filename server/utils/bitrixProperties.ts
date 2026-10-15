@@ -19,7 +19,8 @@ export const BITRIX_PROPERTY = {
    */
   SPECS: 'PROPERTY_104',
   /**
-   * "Detailed Description", created 2026-10-15. The product's description. The
+   * "Detailed Description", created 2026-10-15, HTML/text type: write it as
+   * { value: { TEXT, TYPE: 'HTML' } }. The product's description. The
    * built-in DESCRIPTION field was repurposed as the BRAND the same day
    * (1,135 of 1,209 products held just a brand name there), so nothing of ours
    * may write a description into DESCRIPTION.
