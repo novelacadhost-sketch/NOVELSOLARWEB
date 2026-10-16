@@ -132,6 +132,8 @@ interface CodeCheck {
   discountType: 'percent' | 'fixed' | null
   discountValue: number
   noDiscountReason: string | null
+  appliesTo?: 'all' | 'sections' | 'products'
+  appliesToLabel?: string | null
 }
 
 const { data: check, pending } = await useFetch<CodeCheck>('/api/promo-code', {
@@ -150,9 +152,10 @@ const state = computed<'checking' | 'valid' | 'invalid'>(() => {
 const discountLine = computed(() => {
   const c = check.value
   if (!c?.valid || c.noDiscountReason || !c.discountValue) return ''
-  return c.discountType === 'percent'
-    ? `, and you get ${c.discountValue}% off at checkout (terms apply)`
-    : `, and you get ₦${Math.round(c.discountValue).toLocaleString('en-NG')} off at checkout (terms apply)`
+  const amount =
+    c.discountType === 'percent' ? `${c.discountValue}%` : `₦${Math.round(c.discountValue).toLocaleString('en-NG')}`
+  const on = c.appliesTo && c.appliesTo !== 'all' && c.appliesToLabel ? ` ${c.appliesToLabel}` : ''
+  return `, and you get ${amount} off${on} at checkout (terms apply)`
 })
 
 watch(state, (now) => {

@@ -9,7 +9,7 @@ import { parseBitrixPrice } from '../utils/bitrixProperties'
 import { resolveIsDealerFromEvent, resolveUserIdFromEvent } from '../utils/dealerCheck'
 import { createOrderDeal, type OrderPromotion } from '../utils/orderDeal'
 import { queueOrderDeal } from '../utils/crmQueue'
-import { applyDiscount, describeTerms, REJECT_MESSAGES, resolvePromotion } from '../utils/promotions'
+import { applyDiscount, describeOffer, REJECT_MESSAGES, resolvePromotion } from '../utils/promotions'
 import { describePaymentMethod } from '../utils/paymentMethod'
 import { initialiseTransaction } from '../utils/paystack'
 import { fetchCatalogStock, type CatalogStock } from '../utils/catalogStock'
@@ -40,6 +40,8 @@ type TrustedCartItem = {
   price: number
   image: string
   quantity: number
+  /** The Bitrix section's name, which a promotion may target. */
+  sectionName: string | null
 }
 
 /** After the staff-code discount; `price` stays the undiscounted unit price. */
@@ -175,10 +177,11 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
   // A product outside this storefront's sections counts as unavailable here:
   // the Home Essentials site cannot sell a solar panel by posting its id.
   const site = getSite(event)
-  const sectionNames = site.sections ? await getSectionMap() : null
+  // Also gives each line its section name, which a targeted promotion needs.
+  const sectionNames = await getSectionMap()
   const unavailable = responses.flatMap((response, index) => {
     const product = response?.result
-    const onThisSite = !sectionNames || siteSellsSection(site, sectionNames.get(String(product?.SECTION_ID ?? '')))
+    const onThisSite = !site.sections || siteSellsSection(site, sectionNames.get(String(product?.SECTION_ID ?? '')))
     if (product && product.ACTIVE !== 'N' && onThisSite) return []
     return [{ id: String(validatedItems[index]!.productId), name: product?.NAME || null }]
   })
@@ -268,6 +271,7 @@ async function resolveTrustedCart(event: H3Event, submittedCart: SubmittedCartIt
       price,
       image,
       quantity,
+      sectionName: sectionNames.get(String(product.SECTION_ID ?? '')) ?? null,
     }
   })
 
@@ -490,10 +494,14 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const { cart, subtotal, discountAmount, total, belowMinimum, capped } = applyDiscount(trustedCart, resolved.terms)
+  const { cart, subtotal, discountAmount, total, belowMinimum, capped, notApplicable } = applyDiscount(
+    trustedCart,
+    resolved.terms,
+  )
   // Only knowable now the cart is priced: the code is fine, but this order is
-  // under its minimum. Any staff member is still credited.
-  const noDiscountReason = belowMinimum ? 'below_minimum' : resolved.noDiscountReason
+  // under its minimum, or holds nothing the discount covers. Any staff member
+  // is still credited.
+  const noDiscountReason = belowMinimum ? 'below_minimum' : notApplicable ? 'not_applicable' : resolved.noDiscountReason
   const promotion: OrderPromotion | null =
     resolved.status === 'applied' || resolved.staff
       ? {
@@ -501,7 +509,7 @@ export default defineEventHandler(async (event) => {
           staffBitrixId: resolved.staff?.bitrixUserId ?? null,
           code: resolved.status === 'applied' ? resolved.code : null,
           kind: resolved.status === 'applied' ? resolved.kind : null,
-          discountLabel: discountAmount > 0 && resolved.terms ? describeTerms(resolved.terms) : null,
+          discountLabel: discountAmount > 0 && resolved.terms ? describeOffer(resolved.terms) : null,
           discountPercent: discountAmount > 0 && resolved.terms?.type === 'percent' ? resolved.terms.value : 0,
           discountAmount,
           subtotal,

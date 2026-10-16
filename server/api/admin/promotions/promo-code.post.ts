@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { getSupabaseAdminClient } from '../../../utils/supabaseAdmin'
 import { normaliseCode } from '../../../utils/promotions'
 import { adminUuid, logPromotionChange } from '../../../utils/promotionAudit'
+import { promotionTargetSchema, targetColumns, toTarget } from '../../../utils/promotionTargetInput'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 const wholeNaira = (label: string) => z.number().int(`Use whole naira for ${label}.`).min(0).max(1_000_000_000)
@@ -22,6 +23,7 @@ const bodySchema = z
     oncePerCustomer: z.boolean(),
     allowDealers: z.boolean(),
     enabled: z.boolean(),
+    target: promotionTargetSchema,
   })
   .superRefine((b, ctx) => {
     const issue = (message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, message })
@@ -53,6 +55,9 @@ interface PromoCodeWrite {
   once_per_customer: boolean
   allow_dealers: boolean
   enabled: boolean
+  applies_to: string
+  target_sections: string[]
+  target_product_ids: string[]
   updated_at: string
   updated_by: string | null
   created_by?: string | null
@@ -76,6 +81,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Codes are 3 to 20 letters and numbers, with no spaces.' })
   }
 
+  const target = toTarget(b.target)
   const supabase = getSupabaseAdminClient()
 
   if (b.isNew) {
@@ -104,6 +110,7 @@ export default defineEventHandler(async (event) => {
     once_per_customer: b.oncePerCustomer,
     allow_dealers: b.allowDealers,
     enabled: b.enabled,
+    ...targetColumns(target),
     updated_at: new Date().toISOString(),
     updated_by: adminUuid(event),
   }
@@ -127,6 +134,7 @@ export default defineEventHandler(async (event) => {
     oncePerCustomer: b.oncePerCustomer,
     allowDealers: b.allowDealers,
     enabled: b.enabled,
+    target,
   })
 
   return { success: true, code }

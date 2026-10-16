@@ -1,6 +1,9 @@
 import { getSupabaseAdminClient } from '../../../utils/supabaseAdmin'
 import { MAX_DISCOUNT_PERCENT } from '../../../utils/promotions'
 import { isCountedOrder, PROMO_CODE_COLUMNS, toPromoCode, type PromoCodeRow } from '../../../utils/promoCodes'
+import { fetchProductSections } from '../../../utils/bitrixSections'
+import { logger } from '../../../utils/logger'
+import { toPromotionTarget } from '#shared/promotionTarget'
 
 const PAGE = 1000
 
@@ -17,7 +20,7 @@ export default defineEventHandler(async () => {
   const [settingsResult, codesResult, promoResult, changesResult] = await Promise.all([
     supabase
       .from('promotion_settings')
-      .select('discount_enabled, discount_percent, min_order_amount, max_discount_amount, updated_at')
+      .select('discount_enabled, discount_percent, min_order_amount, max_discount_amount, applies_to, target_sections, target_product_ids, updated_at')
       .eq('id', 1)
       .single(),
     supabase
@@ -69,7 +72,30 @@ export default defineEventHandler(async () => {
     discount_percent: number | string
     min_order_amount: number | string
     max_discount_amount: number | string
+    applies_to: string
+    target_sections: string[] | null
+    target_product_ids: string[] | null
     updated_at: string
+  }
+  const settingsTarget = toPromotionTarget(settings.applies_to, settings.target_sections, settings.target_product_ids)
+  const promoCodes = ((promoResult.data ?? []) as unknown as PromoCodeRow[]).map(toPromoCode)
+
+  // Names for every product a promotion targets, so the page can show them.
+  const targetedIds = [...new Set([settingsTarget, ...promoCodes.map((p) => p.target)].flatMap((t) => t.productIds))]
+  const productNames: Record<string, string> = {}
+  if (targetedIds.length) {
+    const { data } = await supabase.from('products').select('id, name').in('id', targetedIds)
+    for (const row of (data ?? []) as { id: string; name: string }[]) productNames[String(row.id)] = row.name
+  }
+
+  // The sections a promotion can target. The page still loads if Bitrix is slow.
+  let sections: string[] = []
+  try {
+    sections = [...new Set((await fetchProductSections()).map((s) => s.name))].sort((a, b) => a.localeCompare(b))
+  } catch (error) {
+    logger.warn('Promotions', 'Could not read product sections for the page', {
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   return {
@@ -78,12 +104,14 @@ export default defineEventHandler(async () => {
       discountPercent: Number(settings.discount_percent),
       minOrderAmount: Number(settings.min_order_amount),
       maxDiscountAmount: Number(settings.max_discount_amount),
+      target: settingsTarget,
       updatedAt: settings.updated_at,
     },
+    sections,
+    productNames,
     maxDiscountPercent: MAX_DISCOUNT_PERCENT,
     codes: codesResult.data ?? [],
-    promoCodes: ((promoResult.data ?? []) as unknown as PromoCodeRow[]).map((row) => {
-      const promo = toPromoCode(row)
+    promoCodes: promoCodes.map((promo) => {
       return {
         ...promo,
         startsOn: lagosDay(promo.startsAt),

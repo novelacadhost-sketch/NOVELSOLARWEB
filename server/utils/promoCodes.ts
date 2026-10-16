@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { logger } from './logger'
+import { toPromotionTarget, type PromotionTarget } from '#shared/promotionTarget'
 
 /**
  * Promo codes an admin creates on the Promotions page (NOVEL10 and the like),
@@ -20,6 +21,8 @@ export interface PromoCode {
   oncePerCustomer: boolean
   allowDealers: boolean
   enabled: boolean
+  /** The products the discount applies to. */
+  target: PromotionTarget
 }
 
 export interface PromoCodeRow {
@@ -35,11 +38,15 @@ export interface PromoCodeRow {
   once_per_customer: boolean
   allow_dealers: boolean
   enabled: boolean
+  applies_to: string
+  target_sections: string[] | null
+  target_product_ids: string[] | null
 }
 
 export const PROMO_CODE_COLUMNS =
   'code, description, discount_type, discount_value, min_order_amount, max_discount_amount, ' +
-  'starts_at, expires_at, usage_limit, once_per_customer, allow_dealers, enabled'
+  'starts_at, expires_at, usage_limit, once_per_customer, allow_dealers, enabled, ' +
+  'applies_to, target_sections, target_product_ids'
 
 export const PROMO_CODE_PATTERN = /^[A-Z0-9]{3,20}$/
 
@@ -57,6 +64,7 @@ export function toPromoCode(row: PromoCodeRow): PromoCode {
     oncePerCustomer: row.once_per_customer,
     allowDealers: row.allow_dealers,
     enabled: row.enabled,
+    target: toPromotionTarget(row.applies_to, row.target_sections, row.target_product_ids),
   }
 }
 

@@ -11,12 +11,18 @@ export interface PromoTerms {
   discountValue: number
   minOrderAmount: number
   maxDiscountAmount: number
+  /** 'all', or a narrower target whose covered cart lines are in eligibleProductIds. */
+  appliesTo: 'all' | 'sections' | 'products'
+  /** From /api/promo-code with the cart's ids. Null when not known. */
+  eligibleProductIds: string[] | null
 }
 
 export interface PromoPreview {
   amount: number
   belowMinimum: boolean
   capped: boolean
+  /** Nothing in the cart is covered by the code. */
+  notApplicable: boolean
 }
 
 const PROMO_CODE_PATTERN = /^[A-Z0-9]{3,20}$/
@@ -42,21 +48,38 @@ function spread(cart: Array<{ price: number; quantity: number }>, amount: number
   return perUnit
 }
 
-export function previewPromoDiscount(cart: Array<{ price: number; quantity: number }>, terms: PromoTerms | null): PromoPreview {
+export function previewPromoDiscount(
+  cart: Array<{ id: string | number; price: number; quantity: number }>,
+  terms: PromoTerms | null,
+): PromoPreview {
+  const none = (patch: Partial<PromoPreview> = {}): PromoPreview => ({
+    amount: 0,
+    belowMinimum: false,
+    capped: false,
+    notApplicable: false,
+    ...patch,
+  })
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  if (!terms || !(terms.discountValue > 0) || !(subtotal > 0)) return { amount: 0, belowMinimum: false, capped: false }
-  if (terms.minOrderAmount > 0 && subtotal < terms.minOrderAmount) return { amount: 0, belowMinimum: true, capped: false }
+  if (!terms || !(terms.discountValue > 0) || !(subtotal > 0)) return none()
 
-  const total = (perUnit: number[]) => perUnit.reduce((sum, d, i) => sum + d * cart[i]!.quantity, 0)
+  // Only covered lines take part; the minimum and the cap are measured on them.
+  // A narrower target with no answer yet previews nothing rather than too much.
+  const eligible = terms.appliesTo === 'all' ? null : new Set(terms.eligibleProductIds ?? [])
+  const lines = eligible ? cart.filter((item) => eligible.has(String(item.id))) : cart
+  const base = lines.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  if (!(base > 0)) return none({ notApplicable: true })
+  if (terms.minOrderAmount > 0 && base < terms.minOrderAmount) return none({ belowMinimum: true })
+
+  const total = (perUnit: number[]) => perUnit.reduce((sum, d, i) => sum + d * lines[i]!.quantity, 0)
 
   if (terms.discountType === 'fixed') {
-    return { amount: total(spread(cart, Math.min(Math.round(terms.discountValue), subtotal), subtotal)), belowMinimum: false, capped: false }
+    return none({ amount: total(spread(lines, Math.min(Math.round(terms.discountValue), base), base)) })
   }
 
-  const perUnit = cart.map((item) => (item.price > 0 ? Math.round((item.price * terms.discountValue) / 100) : 0))
+  const perUnit = lines.map((item) => (item.price > 0 ? Math.round((item.price * terms.discountValue) / 100) : 0))
   const amount = total(perUnit)
   if (terms.maxDiscountAmount > 0 && amount > terms.maxDiscountAmount) {
-    return { amount: total(spread(cart, Math.round(terms.maxDiscountAmount), subtotal)), belowMinimum: false, capped: true }
+    return none({ amount: total(spread(lines, Math.round(terms.maxDiscountAmount), base)), capped: true })
   }
-  return { amount, belowMinimum: false, capped: false }
+  return none({ amount })
 }

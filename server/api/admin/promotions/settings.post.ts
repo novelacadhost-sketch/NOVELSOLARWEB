@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { getSupabaseAdminClient } from '../../../utils/supabaseAdmin'
 import { clearPromotionSettingsCache, MAX_DISCOUNT_PERCENT } from '../../../utils/promotions'
 import { adminUuid, logPromotionChange } from '../../../utils/promotionAudit'
+import { promotionTargetSchema, targetColumns, toTarget } from '../../../utils/promotionTargetInput'
+import { toPromotionTarget } from '#shared/promotionTarget'
 
 const bodySchema = z.object({
   discountEnabled: z.boolean(),
@@ -16,6 +18,7 @@ const bodySchema = z.object({
   // Whole naira. 0 = no minimum / no cap.
   minOrderAmount: z.number().int('Use whole naira for the minimum order.').min(0).max(1_000_000_000),
   maxDiscountAmount: z.number().int('Use whole naira for the maximum discount.').min(0).max(1_000_000_000),
+  target: promotionTargetSchema,
 })
 
 /**
@@ -28,12 +31,13 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message || 'Invalid settings.' })
   }
-  const next = parsed.data
+  const { target: targetInput, ...next } = parsed.data
+  const target = toTarget(targetInput)
 
   const supabase = getSupabaseAdminClient()
   const { data: before } = await supabase
     .from('promotion_settings')
-    .select('discount_enabled, discount_percent, min_order_amount, max_discount_amount')
+    .select('discount_enabled, discount_percent, min_order_amount, max_discount_amount, applies_to, target_sections, target_product_ids')
     .eq('id', 1)
     .single()
   const previous = before as {
@@ -41,6 +45,9 @@ export default defineEventHandler(async (event) => {
     discount_percent: number | string
     min_order_amount: number | string
     max_discount_amount: number | string
+    applies_to: string
+    target_sections: string[] | null
+    target_product_ids: string[] | null
   } | null
 
   const { error } = await supabase
@@ -50,6 +57,7 @@ export default defineEventHandler(async (event) => {
       discount_percent: next.discountPercent,
       min_order_amount: next.minOrderAmount,
       max_discount_amount: next.maxDiscountAmount,
+      ...targetColumns(target),
       updated_at: new Date().toISOString(),
       updated_by: adminUuid(event),
     } as never)
@@ -66,10 +74,11 @@ export default defineEventHandler(async (event) => {
           discountPercent: Number(previous.discount_percent),
           minOrderAmount: Number(previous.min_order_amount),
           maxDiscountAmount: Number(previous.max_discount_amount),
+          target: toPromotionTarget(previous.applies_to, previous.target_sections, previous.target_product_ids),
         }
       : null,
-    to: next,
+    to: { ...next, target },
   })
 
-  return { success: true, settings: next }
+  return { success: true, settings: { ...next, target } }
 })

@@ -293,7 +293,7 @@ Response:
     "discountType": "percent",     // "percent" | "fixed" | null
     "discountValue": 1,            // the percent, or the naira for a fixed amount
     "discountPercent": 1,          // kept for older code: the rate given, 0 for fixed or none
-    "noDiscountReason": null,      // "dealer" | "disabled" | "below_minimum" when applied but nothing taken off
+    "noDiscountReason": null,      // "dealer" | "disabled" | "below_minimum" | "not_applicable" when applied but nothing taken off
     "capped": false,               // true = a percentage was brought down to its maximum
     "minOrderAmount": 0,           // the terms in force; 0 = no limit
     "maxDiscountAmount": 0,
@@ -317,6 +317,12 @@ take both:
   naira amount, a minimum order, a maximum discount, start and expiry dates, a total usage limit,
   once per customer, and whether dealers may use it.
 
+**What a discount applies to** (since 2026-10-16). Each promo code, and the staff code discount, applies
+to all products, to the products in some sections, or to hand-picked products. Only the covered
+items are discounted, and the minimum order and the maximum discount are measured on the covered
+items alone. A code whose products are not in the cart is still accepted (the staff member is
+still credited); it takes nothing off, with `noDiscountReason: "not_applicable"`.
+
 **Staff links.** The website remembers `?ref=DAFO12` on any page for 30 days. That staff member is
 credited for the order **even if the customer types a promo code instead**: they get the promo
 code's discount and the staff member keeps the credit. If your app links carry a `ref`, keep it
@@ -335,20 +341,28 @@ the same way and send it as `refCode`.
 - **Check the code as the customer types it:**
 
   ```http
-  GET /api/promo-code?code=NOVEL10        (/api/staff-code is the same thing)
+  GET /api/promo-code?code=NOVEL10&items=19736,20352   (/api/staff-code is the same thing)
   Authorization: Bearer <token>           // so a dealer gets the right answer
   ```
+  `items` is optional: the cart's product ids, comma-separated (up to 50). With it, the answer says
+  which of them the discount covers.
   ```jsonc
   { "valid": true, "code": "NOVEL10", "kind": "promo", "reason": null, "message": null,
     "discountType": "fixed", "discountValue": 5000, "discountPercent": 0,
-    "noDiscountReason": null, "minOrderAmount": 100000, "maxDiscountAmount": 0 }
+    "noDiscountReason": null, "minOrderAmount": 100000, "maxDiscountAmount": 0,
+    "appliesTo": "sections",          // "all" | "sections" | "products"
+    "appliesToLabel": "Inverter",      // the same in words, to show the customer
+    "eligibleProductIds": ["19736"] }  // of the items sent, those covered; null without items
   ```
+  Ask again when the cart's products change while a code is applied and `appliesTo` is not `all`.
   When `valid` is false, show `message`. It never says whose code it is, and it is rate limited
   (15 a minute). It cannot check once-per-customer (no email yet); checkout does, with the 409.
 - **To show the expected discount before checkout**, with the server's own arithmetic so your
   figure matches (`app/utils/promoDiscount.ts` in this repo is the reference):
-  1. `subtotal` = sum of price × quantity. If `minOrderAmount > 0` and `subtotal < minOrderAmount`,
-     the discount is 0; tell the customer how much more to spend.
+  0. Use only the covered lines: every line when `appliesTo` is `all`, otherwise the lines in
+     `eligibleProductIds`. The other lines are charged in full. No covered lines: no discount.
+  1. `subtotal` = sum of price × quantity **over the covered lines**. If `minOrderAmount > 0` and
+     `subtotal < minOrderAmount`, the discount is 0; tell the customer how much more to spend.
   2. **Percentage:** per unit `round(price × discountValue / 100)` in whole naira, times quantity,
      summed. If `maxDiscountAmount > 0` and the sum is over it, spread `maxDiscountAmount` instead
      (step 4).

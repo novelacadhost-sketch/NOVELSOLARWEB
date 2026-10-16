@@ -53,7 +53,7 @@ export interface OrderPromotion {
   /** Before the discount; `total` on the order is after it. */
   subtotal: number
   /** Set when a code was accepted but took nothing off. */
-  noDiscountReason?: 'dealer' | 'disabled' | 'below_minimum' | null
+  noDiscountReason?: 'dealer' | 'disabled' | 'below_minimum' | 'not_applicable' | null
   /** A percentage brought down to its cap. */
   capped?: boolean
 }
@@ -112,6 +112,7 @@ function describeDiscount(promotion: OrderPromotion): string {
   if (promotion.noDiscountReason === 'dealer') return `${which}: dealer order, no discount on dealer pricing`
   if (promotion.noDiscountReason === 'disabled') return `${which}: no discount running`
   if (promotion.noDiscountReason === 'below_minimum') return `${which}: order below the minimum for a discount`
+  if (promotion.noDiscountReason === 'not_applicable') return `${which}: no products in the order are covered by the discount`
   return `${which}: no discount applied`
 }
 

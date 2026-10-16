@@ -331,12 +331,14 @@ interface AppliedPromoCode extends PromoTerms {
   code: string
   kind: 'staff' | 'promo'
   noDiscountReason: 'dealer' | 'disabled' | null
+  /** What the code covers, in words: "all products", "Inverters". */
+  appliesToLabel: string
 }
 const promoCodeApplied = ref<AppliedPromoCode | null>(null)
 
 const promoDiscount = computed(() =>
   previewPromoDiscount(
-    cart.value.map((item) => ({ price: Number(item.price), quantity: Number(item.quantity) })),
+    cart.value.map((item) => ({ id: item.id, price: Number(item.price), quantity: Number(item.quantity) })),
     promoCodeApplied.value,
   ),
 )
@@ -347,9 +349,18 @@ const totalDue = computed(() => Number(cartTotalAmount.value) - promoDiscountAmo
 const promoLabel = computed(() => {
   const applied = promoCodeApplied.value
   if (!applied) return ''
-  return applied.discountType === 'fixed'
-    ? `₦${Math.round(applied.discountValue).toLocaleString()} off`
-    : `${applied.discountValue}% off`
+  const amount =
+    applied.discountType === 'fixed'
+      ? `₦${Math.round(applied.discountValue).toLocaleString()} off`
+      : `${applied.discountValue}% off`
+  return applied.appliesTo === 'all' ? amount : `${amount} ${applied.appliesToLabel}`
+})
+
+// The cart's product ids, sent with the code check so it can say which items a
+// targeted code covers. A change while such a code is applied asks again.
+const cartProductIds = computed(() => [...new Set(cart.value.map((item) => String(item.id)))].sort().join(','))
+watch(cartProductIds, () => {
+  if (promoCodeState.value === 'applied' && promoCodeApplied.value?.appliesTo !== 'all') applyPromoCode()
 })
 
 async function applyPromoCode() {
@@ -374,7 +385,10 @@ async function applyPromoCode() {
       noDiscountReason: 'dealer' | 'disabled' | null
       minOrderAmount: number
       maxDiscountAmount: number
-    }>('/api/promo-code', { query: { code } })
+      appliesTo?: 'all' | 'sections' | 'products'
+      appliesToLabel?: string | null
+      eligibleProductIds?: string[] | null
+    }>('/api/promo-code', { query: { code, items: cartProductIds.value } })
     if (!res.valid) {
       promoCodeState.value = 'invalid'
       promoCodeMessage.value = res.message || "We don't recognise that promo code."
@@ -389,6 +403,9 @@ async function applyPromoCode() {
       discountValue: Number(res.discountValue) || 0,
       minOrderAmount: Number(res.minOrderAmount) || 0,
       maxDiscountAmount: Number(res.maxDiscountAmount) || 0,
+      appliesTo: res.appliesTo ?? 'all',
+      appliesToLabel: res.appliesToLabel || 'all products',
+      eligibleProductIds: res.eligibleProductIds ?? null,
     }
     promoCodeState.value = 'applied'
     // A staff code typed here replaces one remembered from a link. A promo
@@ -897,11 +914,19 @@ onMounted(async () => {
                     promoDiscount.capped ? `, up to ₦${promoCodeApplied.maxDiscountAmount.toLocaleString()}` : ''
                   }}.
                 </template>
+                <template v-else-if="promoDiscount.notApplicable">
+                  Code {{ promoCodeApplied.code }} applies to {{ promoCodeApplied.appliesToLabel }}, and nothing in your
+                  cart is covered.
+                </template>
                 <template v-else-if="promoDiscount.belowMinimum">
-                  Code {{ promoCodeApplied.code }} applied. Orders of ₦{{
-                    promoCodeApplied.minOrderAmount.toLocaleString()
-                  }}
-                  or more get {{ promoLabel }}.
+                  Code {{ promoCodeApplied.code }} applied.
+                  <template v-if="promoCodeApplied.appliesTo === 'all'">
+                    Orders of ₦{{ promoCodeApplied.minOrderAmount.toLocaleString() }} or more get {{ promoLabel }}.
+                  </template>
+                  <template v-else>
+                    Spend ₦{{ promoCodeApplied.minOrderAmount.toLocaleString() }} or more on
+                    {{ promoCodeApplied.appliesToLabel }} to get {{ promoLabel }}.
+                  </template>
                 </template>
                 <template v-else-if="promoCodeApplied.noDiscountReason === 'dealer'">
                   Code {{ promoCodeApplied.code }} applied. Your dealer prices already include your discount.

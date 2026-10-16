@@ -2,6 +2,7 @@ import { getSupabaseAdminClient } from './supabaseAdmin'
 import { lookupStaffCode, type StaffCode } from './staffCodes'
 import { countPromoCodeUses, findPromoCode, PROMO_CODE_PATTERN } from './promoCodes'
 import { logger } from './logger'
+import { ALL_PRODUCTS, describeTarget, targetCovers, toPromotionTarget, type PromotionTarget } from '#shared/promotionTarget'
 
 /** The global terms that staff codes carry. Promo codes carry their own; see promoCodes.ts. */
 export interface PromotionSettings {
@@ -11,6 +12,8 @@ export interface PromotionSettings {
   minOrderAmount: number
   /** The discount never exceeds this. 0 = no cap. */
   maxDiscountAmount: number
+  /** The products the discount applies to. */
+  target: PromotionTarget
 }
 
 /** The typo guard from the migration, repeated so the admin form can say why. */
@@ -22,7 +25,13 @@ const CACHE_TTL_MS = 60_000
 let cache: { at: number; settings: PromotionSettings } | null = null
 
 /** Off if the settings cannot be read: an outage must never hand out money. */
-const FAIL_CLOSED: PromotionSettings = { discountEnabled: false, discountPercent: 0, minOrderAmount: 0, maxDiscountAmount: 0 }
+const FAIL_CLOSED: PromotionSettings = {
+  discountEnabled: false,
+  discountPercent: 0,
+  minOrderAmount: 0,
+  maxDiscountAmount: 0,
+  target: ALL_PRODUCTS,
+}
 
 const money = (value: unknown) => {
   const n = Number(value ?? 0)
@@ -35,7 +44,7 @@ export async function getPromotionSettings(fresh = false): Promise<PromotionSett
   try {
     const { data, error } = await getSupabaseAdminClient()
       .from('promotion_settings')
-      .select('discount_enabled, discount_percent, min_order_amount, max_discount_amount')
+      .select('discount_enabled, discount_percent, min_order_amount, max_discount_amount, applies_to, target_sections, target_product_ids')
       .eq('id', 1)
       .maybeSingle()
     if (error) throw error
@@ -45,6 +54,9 @@ export async function getPromotionSettings(fresh = false): Promise<PromotionSett
       discount_percent: number | string
       min_order_amount: number | string
       max_discount_amount: number | string
+      applies_to: string
+      target_sections: string[] | null
+      target_product_ids: string[] | null
     } | null
     const percent = Number(row?.discount_percent ?? 0)
     const settings: PromotionSettings = {
@@ -52,6 +64,7 @@ export async function getPromotionSettings(fresh = false): Promise<PromotionSett
       discountPercent: Number.isFinite(percent) ? Math.min(Math.max(percent, 0), MAX_DISCOUNT_PERCENT) : 0,
       minOrderAmount: money(row?.min_order_amount),
       maxDiscountAmount: money(row?.max_discount_amount),
+      target: toPromotionTarget(row?.applies_to, row?.target_sections, row?.target_product_ids),
     }
     cache = { at: Date.now(), settings }
     return settings
@@ -77,6 +90,8 @@ export interface DiscountTerms {
   value: number
   minOrderAmount: number
   maxDiscountAmount: number
+  /** The products it applies to. The minimum and the cap are measured on those alone. */
+  target: PromotionTarget
 }
 
 /** Why a typed code was refused. Checkout answers 409 with it; see checkout.post.ts. */
@@ -102,8 +117,11 @@ export const REJECT_MESSAGES: Record<RejectReason, string> = {
   unavailable: "We couldn't check this promo code just now. Please try again.",
 }
 
-/** Why an accepted code took nothing off. 'below_minimum' is only known once the cart is priced. */
-export type NoDiscountReason = 'dealer' | 'disabled' | 'below_minimum'
+/**
+ * Why an accepted code took nothing off. 'below_minimum' and 'not_applicable'
+ * (nothing in the cart is covered) are only known once the cart is priced.
+ */
+export type NoDiscountReason = 'dealer' | 'disabled' | 'below_minimum' | 'not_applicable'
 
 export interface ResolvedPromotion {
   /** The typed code, normalised. Null when none was typed. */
@@ -180,6 +198,7 @@ export async function resolvePromotion(input: ResolvePromotionInput): Promise<Re
         value: settings.discountPercent,
         minOrderAmount: settings.minOrderAmount,
         maxDiscountAmount: settings.maxDiscountAmount,
+        target: settings.target,
       },
     })
   }
@@ -218,6 +237,7 @@ export async function resolvePromotion(input: ResolvePromotionInput): Promise<Re
       value: promo.discountValue,
       minOrderAmount: promo.minOrderAmount,
       maxDiscountAmount: promo.discountType === 'percent' ? promo.maxDiscountAmount : 0,
+      target: promo.target,
     },
   })
 }
@@ -231,6 +251,16 @@ export interface DiscountedTotals<T> {
   belowMinimum: boolean
   /** A percentage reached the cap and was brought down to it. */
   capped: boolean
+  /** Nothing in the cart is covered by the discount's target. */
+  notApplicable: boolean
+}
+
+/** A priced cart line. The id and section decide whether a targeted discount covers it. */
+export interface DiscountableItem {
+  id: string | number
+  price: number
+  quantity: number
+  sectionName?: string | null
 }
 
 /**
@@ -277,43 +307,68 @@ export function unitDiscount(unitPrice: number, percent: number): number {
  *
  * A fixed amount never takes more than the order is worth, and a percentage
  * over its cap is brought down to the cap.
+ *
+ * Only the lines the target covers take part. The minimum, the cap and a fixed
+ * amount are all measured on those lines, so the database's guard (a fixed
+ * code's minimum is above its amount) still means no order can be made free.
  */
-export function applyDiscount<T extends { price: number; quantity: number }>(
-  cart: T[],
-  terms: DiscountTerms | null,
-): DiscountedTotals<T> {
+export function applyDiscount<T extends DiscountableItem>(cart: T[], terms: DiscountTerms | null): DiscountedTotals<T> {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const none = (belowMinimum: boolean): DiscountedTotals<T> => ({
+  const none = (patch: Partial<DiscountedTotals<T>> = {}): DiscountedTotals<T> => ({
     cart: cart.map((item) => ({ ...item, discount: 0 })),
     subtotal,
     discountAmount: 0,
     total: subtotal,
-    belowMinimum,
+    belowMinimum: false,
     capped: false,
+    notApplicable: false,
+    ...patch,
   })
 
-  if (!terms || !(terms.value > 0) || !(subtotal > 0)) return none(false)
-  if (terms.minOrderAmount > 0 && subtotal < terms.minOrderAmount) return none(true)
+  if (!terms || !(terms.value > 0) || !(subtotal > 0)) return none()
 
-  let perUnit: number[]
+  const covered = cart.flatMap((item, i) => (targetCovers(terms.target, item) ? [i] : []))
+  const lines = covered.map((i) => cart[i]!)
+  const base = lines.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  if (!(base > 0)) return none({ notApplicable: true })
+  if (terms.minOrderAmount > 0 && base < terms.minOrderAmount) return none({ belowMinimum: true })
+
+  let coveredPerUnit: number[]
   let capped = false
   if (terms.type === 'fixed') {
-    perUnit = spread(cart, Math.min(Math.round(terms.value), subtotal), subtotal)
+    coveredPerUnit = spread(lines, Math.min(Math.round(terms.value), base), base)
   } else {
-    perUnit = cart.map((item) => unitDiscount(item.price, terms.value))
-    const amount = perUnit.reduce((sum, d, i) => sum + d * cart[i]!.quantity, 0)
+    coveredPerUnit = lines.map((item) => unitDiscount(item.price, terms.value))
+    const amount = coveredPerUnit.reduce((sum, d, k) => sum + d * lines[k]!.quantity, 0)
     if (terms.maxDiscountAmount > 0 && amount > terms.maxDiscountAmount) {
-      perUnit = spread(cart, Math.round(terms.maxDiscountAmount), subtotal)
+      coveredPerUnit = spread(lines, Math.round(terms.maxDiscountAmount), base)
       capped = true
     }
   }
+  const perUnit = cart.map(() => 0)
+  covered.forEach((i, k) => (perUnit[i] = coveredPerUnit[k]!))
 
-  const lines = cart.map((item, i) => ({ ...item, discount: perUnit[i]! }))
-  const discountAmount = lines.reduce((sum, item) => sum + item.discount * item.quantity, 0)
-  return { cart: lines, subtotal, discountAmount, total: subtotal - discountAmount, belowMinimum: false, capped }
+  const discounted = cart.map((item, i) => ({ ...item, discount: perUnit[i]! }))
+  const discountAmount = discounted.reduce((sum, item) => sum + item.discount * item.quantity, 0)
+  return {
+    cart: discounted,
+    subtotal,
+    discountAmount,
+    total: subtotal - discountAmount,
+    belowMinimum: false,
+    capped,
+    notApplicable: false,
+  }
 }
 
 /** "1%", "10%" or "₦5,000 off", for receipts, deals and staff messages. */
 export function describeTerms(terms: Pick<DiscountTerms, 'type' | 'value'>): string {
   return terms.type === 'fixed' ? `₦${Math.round(terms.value).toLocaleString()} off` : `${terms.value}%`
+}
+
+/** describeTerms() plus what it applies to when that is not everything: "10% off Inverters", "₦5,000 off 3 selected products". */
+export function describeOffer(terms: Pick<DiscountTerms, 'type' | 'value' | 'target'>): string {
+  if (terms.target.appliesTo === 'all') return describeTerms(terms)
+  const amount = terms.type === 'fixed' ? `₦${Math.round(terms.value).toLocaleString()}` : `${terms.value}%`
+  return `${amount} off ${describeTarget(terms.target)}`
 }

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ALL_PRODUCTS, describeTarget, type PromotionTarget } from '#shared/promotionTarget'
+
 definePageMeta({ middleware: 'admin' })
 useHead({ title: 'Promotions | Novel Solar Admin' })
 
@@ -33,8 +35,23 @@ interface ReportRow {
 
 const isLoading = ref(true)
 const maxPercent = ref(20)
-const saved = reactive({ discountEnabled: false, discountPercent: 1, minOrderAmount: 0, maxDiscountAmount: 0 })
-const form = reactive({ discountEnabled: false, discountPercent: 1, minOrderAmount: 0, maxDiscountAmount: 0 })
+const saved = reactive({
+  discountEnabled: false,
+  discountPercent: 1,
+  minOrderAmount: 0,
+  maxDiscountAmount: 0,
+  target: ALL_PRODUCTS as PromotionTarget,
+})
+const form = reactive({
+  discountEnabled: false,
+  discountPercent: 1,
+  minOrderAmount: 0,
+  maxDiscountAmount: 0,
+  target: ALL_PRODUCTS as PromotionTarget,
+})
+// For the Applies-to pickers: every Bitrix section, and names for products already targeted.
+const sections = ref<string[]>([])
+const productNames = ref<Record<string, string>>({})
 const isSaving = ref(false)
 const codes = ref<StaffCodeRow[]>([])
 const changes = ref<ChangeRow[]>([])
@@ -56,6 +73,7 @@ interface PromoCodeRow {
   oncePerCustomer: boolean
   allowDealers: boolean
   enabled: boolean
+  target: PromotionTarget
   uses: number
   discountGiven: number
 }
@@ -73,6 +91,7 @@ interface PromoForm {
   oncePerCustomer: boolean
   allowDealers: boolean
   enabled: boolean
+  target: PromotionTarget
 }
 
 const promoCodes = ref<PromoCodeRow[]>([])
@@ -94,6 +113,7 @@ function blankPromo(): PromoForm {
     oncePerCustomer: true,
     allowDealers: false,
     enabled: true,
+    target: ALL_PRODUCTS,
   }
 }
 
@@ -116,15 +136,25 @@ function editPromo(p: PromoCodeRow) {
     oncePerCustomer: p.oncePerCustomer,
     allowDealers: p.allowDealers,
     enabled: p.enabled,
+    target: p.target,
   }
   isNewPromo.value = false
 }
 
-/** "10% off orders of ₦50,000 or more, up to ₦10,000" or "₦5,000 off orders of ₦100,000 or more". */
-function describePromo(p: Pick<PromoCodeRow, 'discountType' | 'discountValue' | 'minOrderAmount' | 'maxDiscountAmount'>) {
+/**
+ * "10% off orders of ₦50,000 or more, up to ₦10,000", or for a narrower target
+ * "10% off Inverters, from ₦50,000 of them".
+ */
+function describePromo(
+  p: Pick<PromoCodeRow, 'discountType' | 'discountValue' | 'minOrderAmount' | 'maxDiscountAmount' | 'target'>,
+) {
   const what = p.discountType === 'fixed' ? `${naira(p.discountValue)} off` : `${p.discountValue}% off`
-  const min = p.minOrderAmount > 0 ? ` orders of ${naira(p.minOrderAmount)} or more` : ' any order'
   const cap = p.discountType === 'percent' && p.maxDiscountAmount > 0 ? `, up to ${naira(p.maxDiscountAmount)}` : ''
+  if (p.target.appliesTo !== 'all') {
+    const min = p.minOrderAmount > 0 ? `, from ${naira(p.minOrderAmount)} of them` : ''
+    return `${what} ${describeTarget(p.target)}${min}${cap}`
+  }
+  const min = p.minOrderAmount > 0 ? ` orders of ${naira(p.minOrderAmount)} or more` : ' any order'
   return `${what}${min}${cap}`
 }
 
@@ -139,8 +169,20 @@ function promoStatus(p: PromoCodeRow): { label: string; tone: string } {
   return { label: 'Live', tone: 'bg-emerald-100 text-emerald-700' }
 }
 
+/** Why a target cannot be saved, or null. */
+function targetProblem(t: PromotionTarget): string | null {
+  if (t.appliesTo === 'sections' && !t.sections.length) return 'Choose at least one section, or apply it to all products.'
+  if (t.appliesTo === 'products' && !t.productIds.length) return 'Choose at least one product, or apply it to all products.'
+  return null
+}
+
 async function savePromo(form: PromoForm | null = promoForm.value, isNew = isNewPromo.value) {
   if (!form) return
+  const problem = targetProblem(form.target)
+  if (problem) {
+    addToast('Not saved', problem, 'error')
+    return
+  }
   const value = Number(form.discountValue)
   if (!(value > 0)) {
     addToast('Not saved', 'Enter the discount.', 'error')
@@ -169,6 +211,7 @@ async function savePromo(form: PromoForm | null = promoForm.value, isNew = isNew
         oncePerCustomer: form.oncePerCustomer,
         allowDealers: form.allowDealers,
         enabled: form.enabled,
+        target: form.target,
       },
     })
     addToast('Saved', `${res.code} is saved. Checkouts use it within a moment.`, 'success')
@@ -202,14 +245,25 @@ const settingsChanged = computed(
     form.discountEnabled !== saved.discountEnabled ||
     Number(form.discountPercent) !== saved.discountPercent ||
     Number(form.minOrderAmount) !== saved.minOrderAmount ||
-    Number(form.maxDiscountAmount) !== saved.maxDiscountAmount,
+    Number(form.maxDiscountAmount) !== saved.maxDiscountAmount ||
+    JSON.stringify(form.target) !== JSON.stringify(saved.target),
 )
 
 /** "1% off orders of ₦50,000 or more, up to ₦10,000 each" — the rule as a customer would read it. */
-function describeTerms(t: { discountEnabled: boolean; discountPercent: number; minOrderAmount: number; maxDiscountAmount: number }) {
+function describeTerms(t: {
+  discountEnabled: boolean
+  discountPercent: number
+  minOrderAmount: number
+  maxDiscountAmount: number
+  target?: PromotionTarget
+}) {
   if (!t.discountEnabled) return 'no discount'
-  const min = Number(t.minOrderAmount) > 0 ? ` of ${naira(t.minOrderAmount)} or more` : ''
   const cap = Number(t.maxDiscountAmount) > 0 ? `, up to ${naira(t.maxDiscountAmount)} each` : ''
+  if (t.target && t.target.appliesTo !== 'all') {
+    const min = Number(t.minOrderAmount) > 0 ? `, from ${naira(t.minOrderAmount)} of them` : ''
+    return `${t.discountPercent}% off ${describeTarget(t.target)}${min}${cap}`
+  }
+  const min = Number(t.minOrderAmount) > 0 ? ` of ${naira(t.minOrderAmount)} or more` : ''
   return `${t.discountPercent}% off orders${min}${cap}`
 }
 
@@ -227,7 +281,15 @@ async function load() {
   isLoading.value = true
   try {
     const res = await useNuxtApp().$apiFetch<{
-      settings: { discountEnabled: boolean; discountPercent: number; minOrderAmount: number; maxDiscountAmount: number }
+      settings: {
+        discountEnabled: boolean
+        discountPercent: number
+        minOrderAmount: number
+        maxDiscountAmount: number
+        target: PromotionTarget
+      }
+      sections: string[]
+      productNames: Record<string, string>
       maxDiscountPercent: number
       codes: StaffCodeRow[]
       promoCodes: PromoCodeRow[]
@@ -236,6 +298,8 @@ async function load() {
     Object.assign(saved, res.settings)
     Object.assign(form, res.settings)
     maxPercent.value = res.maxDiscountPercent
+    sections.value = res.sections ?? []
+    productNames.value = res.productNames ?? {}
     codes.value = res.codes
     promoCodes.value = res.promoCodes
     changes.value = res.changes
@@ -262,6 +326,11 @@ async function saveSettings() {
     addToast('Not saved', 'The minimum order and maximum discount must be whole naira, 0 or more.', 'error')
     return
   }
+  const problem = targetProblem(form.target)
+  if (problem) {
+    addToast('Not saved', problem, 'error')
+    return
+  }
   const summary = form.discountEnabled
     ? `Customers with a staff code will get ${describeTerms({ ...form, discountPercent: percent, minOrderAmount, maxDiscountAmount })} from now on.`
     : 'No customer will get a discount. Staff are still credited for their codes.'
@@ -271,7 +340,13 @@ async function saveSettings() {
   try {
     await useNuxtApp().$apiFetch('/api/admin/promotions/settings', {
       method: 'POST',
-      body: { discountEnabled: form.discountEnabled, discountPercent: percent, minOrderAmount, maxDiscountAmount },
+      body: {
+        discountEnabled: form.discountEnabled,
+        discountPercent: percent,
+        minOrderAmount,
+        maxDiscountAmount,
+        target: form.target,
+      },
     })
     addToast('Saved', 'New checkouts use this within about a minute.', 'success')
     await load()
@@ -501,6 +576,13 @@ function describeChange(change: ChangeRow): string {
             {{ isSaving ? 'Saving…' : 'Save' }}
           </button>
         </div>
+        <AdminPromotionTargetPicker
+          v-model="form.target"
+          class="mt-4"
+          :sections="sections"
+          :product-names="productNames"
+          :disabled="isSaving"
+        />
         <p class="mt-4 text-xs text-slate-500">
           Currently:
           <strong :class="saved.discountEnabled ? 'text-emerald-700' : 'text-slate-700'">{{ describeTerms(saved) }}</strong>
@@ -623,6 +705,14 @@ function describeChange(change: ChangeRow): string {
               >
             </label>
           </div>
+
+          <AdminPromotionTargetPicker
+            v-model="promoForm.target"
+            class="mt-4"
+            :sections="sections"
+            :product-names="productNames"
+            :disabled="isSavingPromo"
+          />
 
           <div class="mt-4 flex flex-wrap gap-6 text-sm font-bold text-slate-700">
             <label class="flex items-center gap-2">
