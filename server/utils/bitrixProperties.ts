@@ -80,9 +80,9 @@ export const BITRIX_DEAL = {
   /**
    * "Referred by (staff code)" — an employee field, value is the Bitrix user
    * id. Created by this app on 2026-10-08 for staff codes; filterable in the
-   * deal list, which is how sales are reported per staff member. Deliberately
-   * not ASSIGNED_BY_ID: the responsible person is what routes a deal to the
-   * branch, and a referral must not pull it away.
+   * deal list, which is how sales are reported per staff member. Since
+   * 2026-10-16 the credited staff member is ALSO the deal's responsible
+   * person (ASSIGNED_BY_ID), at Davies' direction; see createOrderDeal().
    */
   REFERRED_BY_FIELD: 'UF_CRM_REFERRED_BY',
 } as const
@@ -122,6 +122,12 @@ export const BITRIX_STAFF = {
   PROCUREMENT: 44,
   /** #26 Yetunde Oni — Head of Pre-Sales (Audit & Sales Support). Calls the customer. */
   SALES_SUPPORT: 26,
+  /**
+   * #10 "Stock Admin" — the user the app's Bitrix webhook acts as (verified with
+   * `profile`, 2026-10-16). Responsible for website deals no staff member is
+   * credited on; it was already that by default, as the deal's creator.
+   */
+  STOCK_ADMIN: 10,
 } as const
 
 /**

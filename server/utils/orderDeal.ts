@@ -1,6 +1,6 @@
 import { logger } from './logger'
 import { bitrixFetch } from './bitrixAuth'
-import { BITRIX_DEAL, BITRIX_SOURCE } from './bitrixProperties'
+import { BITRIX_DEAL, BITRIX_SOURCE, BITRIX_STAFF } from './bitrixProperties'
 import { findOrCreateBitrixContact, resolveBitrixContactId } from './bitrixContact'
 import { commentOnDeal, notifyBranchManagerOfOrder } from './branchManagerNotify'
 import { describeFulfillment, describePaymentMethod } from './paymentMethod'
@@ -290,6 +290,10 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
 
   if (contactId) fields.CONTACT_ID = contactId
   if (staffBitrixId) fields[BITRIX_DEAL.REFERRED_BY_FIELD] = staffBitrixId
+  // The staff member whose code (typed, or from their link) is credited owns
+  // the deal; with no code it stays with Stock Admin. Set explicitly rather
+  // than left to the default, so a change of webhook user cannot move it.
+  fields.ASSIGNED_BY_ID = staffBitrixId ?? BITRIX_STAFF.STOCK_ADMIN
 
   const branchId = branchElementId(order.branch)
   if (branchId) fields[BITRIX_DEAL.BRANCH_FIELD] = branchId
