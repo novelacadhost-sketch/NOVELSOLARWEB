@@ -1,6 +1,8 @@
 import { logger } from './logger'
 import { bitrixFetch } from './bitrixAuth'
 import { messageStaff } from './staffMessage'
+import { resolveStoreForBranch } from './branchWarehouse'
+import { BITRIX_BRANCH_LIST } from './bitrixProperties'
 
 /**
  * Tells the branch manager that a web order has landed and needs its warehouse
@@ -24,8 +26,8 @@ import { messageStaff } from './staffMessage'
  * without a deploy. All 38 branches the website offers carry one.
  */
 
-const BRANCH_IBLOCK_ID = 28
-const BRANCH_IBLOCK_TYPE_ID = 'lists'
+const BRANCH_IBLOCK_ID = BITRIX_BRANCH_LIST.IBLOCK_ID
+const BRANCH_IBLOCK_TYPE_ID = BITRIX_BRANCH_LIST.IBLOCK_TYPE_ID
 /** "Branch Manager" on a Branch list element. Matches lib/branch-people.js in the inventory repo. */
 const BRANCH_MANAGER_PROPERTY = 'PROPERTY_126'
 
@@ -49,50 +51,6 @@ function propertyUserIds(property: unknown): number[] {
       ? Object.values(property as Record<string, unknown>)
       : [property]
   return raw.map(Number).filter((n) => Number.isInteger(n) && n > 0)
-}
-
-const normalise = (value: unknown) =>
-  String(value ?? '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-
-// The store list is ~49 rows and changes rarely. Short TTL so a newly created
-// store is picked up without a redeploy.
-const STORE_CACHE_TTL_MS = 60_000
-let storeCache: { at: number; stores: { id: number; title: string }[] } | null = null
-
-async function fetchStores(): Promise<{ id: number; title: string }[]> {
-  if (storeCache && Date.now() - storeCache.at < STORE_CACHE_TTL_MS) return storeCache.stores
-
-  const response = await bitrixFetch<{ result?: { stores?: { id: number; title: string; active?: string }[] } }>(
-    'catalog.store.list',
-    { method: 'POST', body: { select: ['id', 'title', 'active'] } },
-  )
-  const stores = (response.result?.stores ?? [])
-    .filter((s) => s.active !== 'N')
-    .map((s) => ({ id: Number(s.id), title: String(s.title).trim() }))
-
-  storeCache = { at: Date.now(), stores }
-  return stores
-}
-
-/**
- * Branch name -> catalog store, by exact title match.
- *
- * Deliberately the same rule as `resolveStoreByName` in the inventory repo,
- * and deliberately NOT a second copy of web-branch-map.csv — one mapping that
- * can drift is enough. No match means the message simply omits the warehouse
- * name rather than naming a wrong one.
- */
-async function resolveStoreForBranch(branchName: string): Promise<{ id: number; title: string } | null> {
-  try {
-    const stores = await fetchStores()
-    const matches = stores.filter((s) => normalise(s.title) === normalise(branchName))
-    return matches.length === 1 ? matches[0]! : null
-  } catch {
-    return null
-  }
 }
 
 export interface BranchOrderNotification {

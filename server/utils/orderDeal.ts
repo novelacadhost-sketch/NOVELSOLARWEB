@@ -3,6 +3,7 @@ import { bitrixFetch } from './bitrixAuth'
 import { BITRIX_DEAL, BITRIX_SOURCE, BITRIX_STAFF } from './bitrixProperties'
 import { findOrCreateBitrixContact, resolveBitrixContactId } from './bitrixContact'
 import { commentOnDeal, notifyBranchManagerOfOrder } from './branchManagerNotify'
+import { resolveBranchWarehouse, type BranchStore } from './branchWarehouse'
 import { describeFulfillment, describePaymentMethod } from './paymentMethod'
 import { messageStaff } from './staffMessage'
 import { staffNameFor } from './staffCodes'
@@ -138,7 +139,11 @@ function branchElementId(branch: Record<string, unknown> | null | undefined): st
   return /^\d+$/.test(text) ? text : null
 }
 
-function buildComments(order: OrderDealInput, staffName: string | null): string {
+/**
+ * warehouse: undefined = no branch on the order (no line); null = a branch whose
+ * warehouse could not be matched; otherwise the store to select.
+ */
+function buildComments(order: OrderDealInput, staffName: string | null, warehouse?: BranchStore | null): string {
   const items = order.cart
     .map((item) => {
       const label = item.name || `product #${productIdOf(item) ?? 'unknown'}`
@@ -158,6 +163,13 @@ function buildComments(order: OrderDealInput, staffName: string | null): string 
     `Website: ${SITES[order.site ?? 'solar'].name}`,
     `Fulfillment: ${describeFulfillment(isPickup)}`,
     `Branch: ${branchLabel}`,
+    ...(warehouse === undefined
+      ? []
+      : [
+          warehouse
+            ? `Warehouse: ${warehouse.title} (select this on each product line)`
+            : 'Warehouse: not matched automatically - select the branch warehouse on each product line',
+        ]),
     `Payment: ${describePaymentMethod(order.paymentMethod, isPickup)}`,
   ]
 
@@ -273,8 +285,14 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
   const staffBitrixId = order.promotion?.staffBitrixId ?? null
   const staffName = staffBitrixId ? await staffNameFor(staffBitrixId) : null
 
+  const branchId = branchElementId(order.branch)
+  // The product line's warehouse cannot be written over REST, so the deal names
+  // the one to select. Never fatal: a failed lookup says "not matched" and the
+  // order carries on.
+  const warehouse = branchId ? ((await resolveBranchWarehouse(branchId))?.store ?? null) : undefined
+
   const name = `${order.customer.firstName || 'Guest'} ${order.customer.lastName || ''}`.trim()
-  const summary = buildComments(order, staffName)
+  const summary = buildComments(order, staffName, warehouse)
   const fields: Record<string, unknown> = {
     // Both sites share Product Sales; the title is what tells them apart in the list.
     TITLE: `${order.site === 'homes' ? 'Home Essentials Order' : 'Web Order'}: ${name} (${order.orderId})${order.recovered ? ' [RECOVERED]' : ''}`,
@@ -295,7 +313,6 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
   // than left to the default, so a change of webhook user cannot move it.
   fields.ASSIGNED_BY_ID = staffBitrixId ?? BITRIX_STAFF.STOCK_ADMIN
 
-  const branchId = branchElementId(order.branch)
   if (branchId) fields[BITRIX_DEAL.BRANCH_FIELD] = branchId
 
   const response = await bitrixFetch<{ result?: string | number; error?: string; error_description?: string }>(

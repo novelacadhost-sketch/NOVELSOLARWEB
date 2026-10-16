@@ -87,6 +87,12 @@ export const BITRIX_DEAL = {
   REFERRED_BY_FIELD: 'UF_CRM_REFERRED_BY',
 } as const
 
+/** The "Branch" universal list (iblock 28); BITRIX_DEAL.BRANCH_FIELD points at its elements. */
+export const BITRIX_BRANCH_LIST = {
+  IBLOCK_ID: 28,
+  IBLOCK_TYPE_ID: 'lists',
+} as const
+
 /**
  * The product catalog, where stock actually lives.
  *
