@@ -8,6 +8,7 @@ import { getSectionMap } from '../utils/bitrixSections'
 import { getHiddenProductIds, getVisibilityVersion } from '../utils/productVisibility'
 import { getLowStockIds } from '../utils/lowStock'
 import { getSite } from '../utils/site'
+import { groupIdForSection } from '#shared/productCategories'
 
 export default defineCachedEventHandler(
   async (event) => {
@@ -18,6 +19,10 @@ export default defineCachedEventHandler(
     const q = ((queryParams.q as string) || '').trim()
     const brand = ((queryParams.brand as string) || '').trim()
     const start = Number.parseInt((queryParams.start as string) || '0', 10) || 0
+    // ?perGroup=N: up to N products from EVERY shop category instead of a page of
+    // 50. The phone shop shows a few products per category; filling those rows
+    // from the first 50 left most categories with one to three products.
+    const perGroup = Math.min(Math.max(Number.parseInt(String(queryParams.perGroup ?? '0'), 10) || 0, 0), 8)
 
     // Comma-separated Bitrix section names. The client owns the merchandising —
     // which sections make up "Inverters" lives in app/utils/productCategories.ts
@@ -199,6 +204,35 @@ export default defineCachedEventHandler(
       // ordered by id descending
       filtered.sort((a, b) => Number(b.ID) - Number(a.ID))
 
+      if (perGroup) {
+        // A dozen newest candidates per category, then the pictured, in-stock
+        // ones first, so the preview is not a row of placeholders.
+        const candidates = new Map<string, any[]>()
+        for (const p of filtered) {
+          const group = groupIdForSection(sectionOf(p, p).name, site.id)
+          if (!group) continue
+          const list = candidates.get(group) ?? []
+          if (list.length < perGroup * 3) list.push(p)
+          candidates.set(group, list)
+        }
+        const picked = [...candidates.values()].flat()
+        await loadMirroredImages(picked.map((p) => String(p.ID)))
+        const pictured = (m: MappedProduct) => Boolean(m.imageUrl || m.PROPERTY_102 || m.DETAIL_PICTURE)
+        return [...candidates.values()].flatMap((list) =>
+          list
+            .map((p) => mapProduct(p, false))
+            .map((m, index) => ({ m, index }))
+            .sort(
+              (a, b) =>
+                Number(pictured(b.m)) - Number(pictured(a.m)) ||
+                Number(a.m.lowStock) - Number(b.m.lowStock) ||
+                a.index - b.index,
+            )
+            .slice(0, perGroup)
+            .map(({ m }) => m),
+        )
+      }
+
       const paginated = filtered.slice(start, start + 50)
       await loadMirroredImages(paginated.map((p) => String(p.ID)))
       return paginated.map((p) => mapProduct(p, false))
@@ -282,7 +316,8 @@ export default defineCachedEventHandler(
       const vis = await getVisibilityVersion()
       // v7: the low-stock threshold dropped from 10 to 3. Bumped so cached
       // bodies flagging the old half of the catalogue are not served on.
-      return `inventory-v7:${getSite(event).id}:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}`
+      const per = Math.min(Math.max(Number.parseInt(String(query.perGroup ?? '0'), 10) || 0, 0), 8)
+      return `inventory-v7:${getSite(event).id}:${isDealer ? 'dealer' : 'retail'}:${filters}:${sections}:${svc}:${vis}:${start}:${per}`
     },
     // Was relying on Nitro's defaults, which serve a stale entry indefinitely
     // while revalidating — that is why the wrong results persisted rather than

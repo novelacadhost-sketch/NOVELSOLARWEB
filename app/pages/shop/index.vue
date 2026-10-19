@@ -76,7 +76,7 @@
         </div>
 
         <template v-else>
-          <div class="md:hidden space-y-10">
+          <div v-if="showOverview" class="md:hidden space-y-10">
             <div v-for="category in categories" :key="category.id">
               <template v-if="getProductsForCategory(category.id).length > 0">
                 <div
@@ -101,7 +101,15 @@
             </div>
           </div>
 
-          <div class="hidden md:block">
+          <div :class="showOverview ? 'hidden md:block' : ''">
+            <button
+              v-if="!showOverview"
+              type="button"
+              class="md:hidden mb-4 flex items-center gap-1 text-sm font-bold text-[#002888]"
+              @click="backToOverview"
+            >
+              <span class="material-symbols-outlined text-base">arrow_back</span> All categories
+            </button>
             <div
               class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 gap-2"
             >
@@ -158,6 +166,7 @@
 
 <script setup lang="ts">
 import { excludeServiceProducts } from '~/utils/productFilters'
+import type { BitrixProduct } from '~/types'
 import { categoryGroupsFor, groupIdForSection, isExcludedSection, orderSections } from '~/utils/productCategories'
 import { watch, computed, ref } from 'vue'
 
@@ -341,6 +350,18 @@ const clearFilters = () => {
   maxPrice.value = PRICE_SLIDER_TOP
 }
 
+/**
+ * Phones have no filter sidebar: they show a few products per category until a
+ * category ("See All") or a search is chosen, then the full list. The overview
+ * used to show at all times on phones, so See All did nothing visible.
+ */
+const showOverview = computed(() => selectedCategory.value === 'all' && !searchQuery.value)
+const backToOverview = () => {
+  searchQuery.value = ''
+  selectedCategory.value = 'all'
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 // The "See All" button magic: Applies filter and scrolls top natively
 const selectCategoryAndScroll = (catId) => {
   selectedCategory.value = catId
@@ -383,8 +404,19 @@ const sectionRuns = computed(() => {
 })
 
 
+/**
+ * The phone shop's per-category rows. Drawn from the whole catalogue (the
+ * server picks up to four per category), not from the first page of 50, which
+ * left most categories showing one to three products.
+ */
+const { data: previewData } = await useFetch<BitrixProduct[]>('/api/inventory', {
+  key: 'shop-category-preview',
+  query: { perGroup: 4 },
+  headers: useRequestHeaders(['cookie']),
+})
 const getProductsForCategory = (categoryId) => {
-  const products = getProductsArray()
+  const preview = excludeServiceProducts(previewData.value ?? [])
+  const products = preview.length ? preview : getProductsArray()
   return products.filter((product) => matchesCategory(product, categoryId)).slice(0, 4)
 }
 
