@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { EDITABLE_IMAGE_PAGES } from '~/utils/editablePages'
+import { HERO_SLIDES_FALLBACK } from '~/utils/homeHeroSlides'
 
 definePageMeta({ middleware: 'admin' })
 useHead({ title: 'Edit Pages | Novel Solar Admin' })
@@ -22,6 +23,13 @@ interface BlockSlot {
   label: string
   help: string
   hasCopy: boolean
+  /** Shows a "Link" box. Only where the page uses the link. */
+  hasLink?: boolean
+  /**
+   * What the site shows while nothing is saved. Loaded into the editor so the
+   * admin sees, reorders and removes the real banners instead of an empty list.
+   */
+  builtIn?: Partial<Block>[]
 }
 
 interface PageDef {
@@ -47,8 +55,11 @@ const PAGES: PageDef[] = [
       {
         slot: 'hero',
         label: 'Hero banner carousel',
-        help: 'The rotating banners at the top of the homepage. Wide images work best — around 1600×900.',
-        hasCopy: true,
+        help: 'The rotating banners at the top of the homepage. Wide images work best — around 1600×900. Any wording must be part of the picture itself.',
+        // The homepage shows the picture only, so heading and paragraph boxes would do nothing.
+        hasCopy: false,
+        hasLink: true,
+        builtIn: HERO_SLIDES_FALLBACK.map((s) => ({ image_url: s.image, alt: s.title })),
       },
     ],
     images: [],
@@ -83,6 +94,8 @@ const allPages = computed<PageDef[]>(() => [
 const route = useRoute()
 const selectedPage = ref<string>(String(route.query.page ?? 'home'))
 const slots = ref<Record<string, Block[]>>({})
+/** Slots currently showing the built-in list because nothing has been saved. */
+const showingBuiltIn = ref<Record<string, boolean>>({})
 const isLoading = ref(true)
 const isSaving = ref<string | null>(null)
 const busyImage = ref<string | null>(null)
@@ -100,9 +113,13 @@ async function load() {
       query: { page: selectedPage.value },
     })
     const next: Record<string, Block[]> = {}
+    const builtIn: Record<string, boolean> = {}
     for (const def of currentPage.value?.blockSlots ?? []) {
-      next[def.slot] = (res.slots?.[def.slot] ?? []).map((b) => ({ ...emptyBlock(), ...b }))
+      const saved = res.slots?.[def.slot] ?? []
+      builtIn[def.slot] = !saved.length && Boolean(def.builtIn?.length)
+      next[def.slot] = (builtIn[def.slot] ? def.builtIn! : saved).map((b) => ({ ...emptyBlock(), ...b }))
     }
+    showingBuiltIn.value = builtIn
     for (const original of currentPage.value?.images ?? []) {
       next[original] = (res.slots?.[original] ?? []).map((b) => ({ ...emptyBlock(), ...b }))
     }
@@ -221,7 +238,13 @@ async function saveBlocks(slot: string) {
   isSaving.value = slot
   try {
     await saveSlot(slot, blocks)
-    addToast('Saved', 'The page is updated. Refresh the site to see it.', 'success')
+    addToast(
+      'Saved',
+      blocks.length
+        ? 'The page is updated. Refresh the site to see it.'
+        : 'List cleared, so the site is back to its built-in banners.',
+      'success',
+    )
     await load()
   } catch {
     addToast('Save failed', 'The changes were not saved.', 'error')
@@ -271,8 +294,12 @@ async function saveBlocks(slot: string) {
           </button>
         </div>
 
-        <p v-if="!blocksFor(def.slot).length" class="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
-          Nothing set here yet, so the site is showing its built-in banners. Add an item below to take over.
+        <p v-if="showingBuiltIn[def.slot]" class="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
+          These are the banners on the site now. Remove, reorder or add banners, then press Save. Your list then
+          replaces them. Saving an empty list brings these back.
+        </p>
+        <p v-else-if="!blocksFor(def.slot).length" class="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
+          Nothing set here yet, so the site is showing its built-in content. Add an item below to take over.
         </p>
 
         <div
@@ -299,6 +326,7 @@ async function saveBlocks(slot: string) {
 
             <div class="min-w-[16rem] flex-1 space-y-2">
               <input v-model="block.alt" placeholder="Image description (for screen readers)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <input v-if="def.hasLink" v-model="block.link" placeholder="Link when clicked, e.g. /shop or /category/inverters (blank = /shop)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
               <template v-if="def.hasCopy">
                 <input v-model="block.eyebrow" placeholder="Small label above the heading" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <input v-model="block.title" placeholder="Heading" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
