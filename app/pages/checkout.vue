@@ -3,6 +3,13 @@ import { z } from 'zod'
 import { saveLastOrder } from '~/utils/lastOrder'
 const site = useSite()
 const { cart, cartTotalAmount } = useCart()
+// The cart lives in localStorage, so the server always renders it empty. Deciding
+// "empty or not" before mount made the browser hydrate the checkout form into the
+// empty-cart markup on a direct load or refresh, which broke the whole layout.
+const cartReady = ref(false)
+onMounted(() => {
+  cartReady.value = true
+})
 const { addToast } = useToast()
 const { payWithPopup } = usePaystackPopup()
 
@@ -458,7 +465,9 @@ onMounted(async () => {
 
 <template>
   <main class="max-w-6xl mx-auto w-full px-4 md:px-6 py-8 md:py-12">
-    <div v-if="cart.length === 0" class="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
+    <div v-if="!cartReady" class="py-20 text-center text-sm text-gray-400">Loading your cart…</div>
+
+    <div v-else-if="cart.length === 0" class="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
       <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
         <span class="material-symbols-outlined text-4xl text-gray-300">shopping_cart</span>
       </div>

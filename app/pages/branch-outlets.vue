@@ -330,8 +330,10 @@ const initMap = () => {
     scrollWheelZoom: false,
   }).setView(selectedBranch.value.coords, 12)
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
+  // Carto's keyless basemaps now return an "API key required" watermark on every tile.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map)
 
   L.control

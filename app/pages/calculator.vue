@@ -61,7 +61,5 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({
-  title: 'Solar Load Calculator - NovelSolar',
-})
+useHead({ title: 'Solar Load Calculator' })
 </script>

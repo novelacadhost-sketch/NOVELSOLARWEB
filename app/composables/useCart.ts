@@ -11,21 +11,35 @@ export interface CartItem {
   quantity: number
 }
 
-export const useCart = () => {
-  // useLocalStorage safely synchronizes with the browser natively
-  const cart = useLocalStorage<CartItem[]>('novel-cart-data', [])
-  const isCartOpen = useState<boolean>('novel-cart-open', () => false)
-
-  // Auto-sanitize any corrupted cart items from older sessions where image was saved as an array
-  if (cart.value && Array.isArray(cart.value)) {
-    cart.value.forEach((item: any) => {
-      if (Array.isArray(item.image) && item.image.length > 0) {
-        item.image = item.image[0].value || '/images/placeholder.png'
-      } else if (typeof item.image === 'object' && item.image !== null) {
-        item.image = item.image.value || item.image.showUrl || '/images/placeholder.png'
-      }
-    })
+/** Parses the stored cart, repairing items from older sessions that saved the image as an array or object. */
+function readCart(raw: string): CartItem[] {
+  let items: unknown
+  try {
+    items = JSON.parse(raw)
+  } catch {
+    return []
   }
+  if (!Array.isArray(items)) return []
+  for (const item of items as { image: unknown }[]) {
+    const image = item.image as { value?: string; showUrl?: string }[] | { value?: string; showUrl?: string } | null
+    if (Array.isArray(image) && image.length > 0) {
+      item.image = image[0]?.value || '/images/placeholder.png'
+    } else if (typeof image === 'object' && image !== null && !Array.isArray(image)) {
+      item.image = image.value || image.showUrl || '/images/placeholder.png'
+    }
+  }
+  return items as CartItem[]
+}
+
+export const useCart = () => {
+  // initOnMounted: the server always renders an empty cart, so the browser's first
+  // render must too, or hydration mismatches. Without it a direct load of
+  // /checkout poured the checkout form into the empty-cart markup.
+  const cart = useLocalStorage<CartItem[]>('novel-cart-data', [], {
+    initOnMounted: true,
+    serializer: { read: readCart, write: (v) => JSON.stringify(v) },
+  })
+  const isCartOpen = useState<boolean>('novel-cart-open', () => false)
 
   const toggleCart = () => {
     isCartOpen.value = !isCartOpen.value

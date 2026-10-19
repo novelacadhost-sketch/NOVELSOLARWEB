@@ -42,9 +42,9 @@ const displayPrice = computed(() => {
       />
     </div>
 
-    <div class="p-6 flex-1 flex flex-col justify-center">
+    <div class="p-3 sm:p-6 flex-1 flex flex-col justify-center">
       <h3
-        class="font-bold text-slate-900 text-sm md:text-base leading-snug line-clamp-2 group-hover:text-[#002888] transition-colors"
+        class="font-bold text-slate-900 text-sm md:text-base leading-snug line-clamp-3 md:line-clamp-2 break-words group-hover:text-[#002888] transition-colors"
       >
         {{ product.NAME || product.name || product.title }}
       </h3>

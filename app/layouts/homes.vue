@@ -102,11 +102,11 @@
       </div>
     </header>
 
-    <main class="flex-1 pb-20 md:pb-0">
+    <main class="flex-1">
       <slot />
     </main>
 
-    <footer class="bg-[#13294b] text-stone-300 mt-16">
+    <footer class="bg-[#13294b] text-stone-300 mt-16 pb-20 md:pb-0">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p class="text-white text-lg font-black">{{ site.name }}</p>
