@@ -1,4 +1,12 @@
-import { isFulfilmentStep, orderKind, stepDetail, stepLabel, stepsFor, type FulfilmentStep } from '#shared/orderProgress'
+import {
+  FULFILMENT_STEPS,
+  isFulfilmentStep,
+  orderKind,
+  stepDetail,
+  stepLabel,
+  stepsFor,
+  type FulfilmentStep,
+} from '#shared/orderProgress'
 
 /**
  * How an order is described to the person who placed it, and to staff.
@@ -42,19 +50,45 @@ export interface OrderItemRow {
 
 export type StatusTone = 'ok' | 'warn' | 'bad' | 'info'
 
+/**
+ * orders.status values that mean the money is in. 'confirmed' is the website's;
+ * the others were added to the enum for the mobile app's admin screen, which
+ * writes its own progress into orders.status (seen 2026-10-20) and so replaces
+ * 'confirmed' on paid orders. An order cannot be shipping unless it was paid.
+ */
+const PAID_STATUSES = new Set(['confirmed', 'paid', 'processing', 'order_prepared', 'shipping', 'ready_for_pickup'])
+
 /** A Paystack order still unpaid after this long is treated as abandoned. */
 const PAYMENT_WINDOW_MS = 60 * 60_000
 
-export function describeOrderStatus(order: Pick<OrderRow, 'status' | 'payment_method' | 'created_at'>): {
+/**
+ * Whether staff have recorded the money as received: the order is at
+ * 'payment confirmed' or later, or, for a pay-at-store pickup, 'paid and
+ * picked up'. Covers a customer who paid by transfer after the card payment
+ * failed, which Paystack never sees.
+ */
+function staffConfirmedPayment(
+  order: Pick<OrderRow, 'payment_method' | 'fulfillment' | 'fulfilment_status'>,
+): boolean {
+  if (!isFulfilmentStep(order.fulfilment_status)) return false
+  const at = FULFILMENT_STEPS.indexOf(order.fulfilment_status)
+  if (orderKind(order).payAtStore) return order.fulfilment_status === 'completed'
+  return at >= FULFILMENT_STEPS.indexOf('payment_confirmed')
+}
+
+export function describeOrderStatus(
+  order: Pick<OrderRow, 'status' | 'payment_method' | 'created_at' | 'fulfillment' | 'fulfilment_status'>,
+): {
   label: string
   tone: StatusTone
 } {
   if (order.status === 'cancelled') return { label: 'Cancelled', tone: 'bad' }
   if (order.status === 'failed') return { label: 'Failed', tone: 'bad' }
+  if (staffConfirmedPayment(order)) return { label: 'Paid', tone: 'ok' }
 
   const paystack = String(order.payment_method ?? '').toLowerCase() === 'paystack'
   if (paystack) {
-    if (order.status === 'confirmed') return { label: 'Paid', tone: 'ok' }
+    if (PAID_STATUSES.has(order.status)) return { label: 'Paid', tone: 'ok' }
     const age = Date.now() - new Date(order.created_at).getTime()
     return age > PAYMENT_WINDOW_MS
       ? { label: 'Payment not completed', tone: 'bad' }
@@ -62,6 +96,7 @@ export function describeOrderStatus(order: Pick<OrderRow, 'status' | 'payment_me
   }
 
   if (order.status === 'confirmed') return { label: 'Confirmed', tone: 'ok' }
+  if (PAID_STATUSES.has(order.status)) return { label: 'Paid', tone: 'ok' }
   return { label: 'Pay at collection', tone: 'info' }
 }
 
@@ -77,7 +112,7 @@ export function describeOrderProgress(
   const kind = orderKind(order)
   const cancelled = order.status === 'cancelled' || order.status === 'failed'
   let step: FulfilmentStep = isFulfilmentStep(order.fulfilment_status) ? order.fulfilment_status : 'received'
-  const paidOnline = String(order.payment_method ?? '').toLowerCase() === 'paystack' && order.status === 'confirmed'
+  const paidOnline = String(order.payment_method ?? '').toLowerCase() === 'paystack' && PAID_STATUSES.has(order.status)
   if (step === 'received' && paidOnline) step = 'payment_confirmed'
   if (kind.fulfilment === 'pickup' && step === 'out_for_delivery') step = 'at_fulfilment_centre'
   if (kind.payAtStore && step === 'payment_confirmed') step = 'received'

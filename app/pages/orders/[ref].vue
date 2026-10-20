@@ -189,8 +189,9 @@ const paymentText = computed(() => {
   const o = order.value
   if (!o) return ''
   if (o.paymentMethod === 'paystack') {
-    return o.status.label === 'Paid' ? 'Paid online (Paystack)' : 'Online payment (Paystack) not yet received'
+    return o.status.label === 'Paid' ? 'Payment received' : 'Online payment (Paystack) not yet received'
   }
+  if (o.status.label === 'Paid') return 'Payment received'
   return o.fulfillment === 'pickup' ? 'Pay at the store when you collect' : 'To be arranged with our team'
 })
 </script>
