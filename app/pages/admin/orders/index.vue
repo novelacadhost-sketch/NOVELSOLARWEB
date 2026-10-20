@@ -106,6 +106,9 @@
                       :class="STATUS_TONE_CLASSES[order.status.tone]"
                       >{{ order.status.label }}</span
                     >
+                    <p v-if="order.progress && !order.progress.cancelled" class="mt-1 text-xs text-slate-500 whitespace-nowrap">
+                      {{ order.progress.label }}
+                    </p>
                   </td>
                 </tr>
               </tbody>
@@ -205,6 +208,7 @@ interface AdminOrder {
   reference: string
   createdAt: string
   status: { label: string; tone: string }
+  progress?: { label: string; cancelled: boolean }
   fulfillment: 'pickup' | 'delivery'
   branch: string | null
   total: number

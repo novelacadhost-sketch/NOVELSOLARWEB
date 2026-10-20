@@ -497,6 +497,30 @@ reach the CRM — still show the customer a confirmation.
 
 ---
 
+### Order progress (where an order is)
+
+Staff move each order through these steps by hand on the admin Orders page. They are in
+`public.orders.fulfilment_status`, readable on the customer's own orders like every other column, with
+`fulfilment_updated_at` holding when it last changed:
+
+| `fulfilment_status` | Show | Pickup | Delivery |
+|---|---|---|---|
+| `received` | Order received — "We are confirming your payment." | ✓ | ✓ |
+| `payment_confirmed` | Payment confirmed | ✓ | ✓ |
+| `preparing` | Preparing order | ✓ | ✓ |
+| `shipped` | Order shipped | ✓ | ✓ |
+| `at_fulfilment_centre` | At fulfilment centre — ready for pickup / ready for delivery | ✓ | ✓ |
+| `out_for_delivery` | Out for delivery | — | ✓ |
+| `completed` | **Picked up** (pickup) / **Delivered** (delivery) | ✓ | ✓ |
+
+- It is separate from `status`, which stays the payment state (`pending` / `confirmed` / …). Do not
+  infer one from the other, with one exception the website also applies: a Paystack order whose
+  `status` is `confirmed` but whose step is still `received` should read **Payment confirmed**.
+- Pickup orders never use `out_for_delivery`; leave that step out of a pickup order's tracker.
+- A `cancelled` or `failed` `status` overrides the step: show the order as cancelled.
+- Each change is also an `order_events` row whose `message` is the step's label, so a timeline built
+  from `order_events` shows them in order.
+
 ## 6. Enquiry forms
 
 All `POST`. **A guest may send these without signing in** — no token, no CSRF header, nothing.

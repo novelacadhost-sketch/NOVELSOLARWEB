@@ -67,8 +67,8 @@
               <span class="font-black text-slate-900">{{ formatNaira(order.total) }}</span>
               <span
                 class="text-xs font-bold px-2.5 py-1 rounded-full border"
-                :class="STATUS_TONE_CLASSES[order.status.tone]"
-                >{{ order.status.label }}</span
+                :class="STATUS_TONE_CLASSES[orderBadge(order).tone]"
+                >{{ orderBadge(order).label }}</span
               >
             </div>
           </NuxtLink>
@@ -80,12 +80,14 @@
 
 <script setup lang="ts">
 import { STATUS_TONE_CLASSES, formatNaira, formatOrderDate } from '~/utils/money'
+import { orderBadge } from '~/utils/orderBadge'
 
 interface OrderSummary {
   id: string
   reference: string
   createdAt: string
   status: { label: string; tone: string }
+  progress: { label: string; cancelled: boolean }
   fulfillment: 'pickup' | 'delivery'
   branch: string | null
   total: number

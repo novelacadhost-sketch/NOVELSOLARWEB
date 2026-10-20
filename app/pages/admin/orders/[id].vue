@@ -27,6 +27,44 @@
       <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 space-y-6">
           <section class="bg-white rounded-3xl border border-slate-200 p-6">
+            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+              <h2 class="font-black text-slate-900">Order status</h2>
+              <span v-if="order.progress.cancelled" class="text-sm font-bold text-red-600">Order cancelled</span>
+            </div>
+            <p class="text-sm text-slate-500 mb-4">
+              The customer sees this in their order history. Tap a step to move the order there.
+            </p>
+            <ol class="space-y-2">
+              <li v-for="step in order.progress.steps" :key="step.key">
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors disabled:opacity-60"
+                  :class="
+                    step.current
+                      ? 'border-[#002888] bg-[#002888] text-white'
+                      : step.done
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+                  "
+                  :disabled="savingStep !== null || step.current"
+                  @click="setStep(step.key)"
+                >
+                  <span class="material-symbols-outlined text-lg">{{
+                    step.current ? 'radio_button_checked' : step.done ? 'check_circle' : 'radio_button_unchecked'
+                  }}</span>
+                  <span class="flex-1">{{ step.label }}</span>
+                  <span v-if="savingStep === step.key" class="text-xs font-medium">Saving…</span>
+                </button>
+              </li>
+            </ol>
+            <ul v-if="statusChanges.length" class="mt-4 space-y-1 text-xs text-slate-500">
+              <li v-for="(change, i) in statusChanges" :key="i">
+                {{ change.message }} · {{ formatOrderDate(change.at) }}<span v-if="change.changedBy"> · {{ change.changedBy }}</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="bg-white rounded-3xl border border-slate-200 p-6">
             <h2 class="font-black text-slate-900 mb-4">Items</h2>
             <ul class="divide-y divide-slate-100">
               <li v-for="(item, i) in order.items" :key="i" class="flex items-center gap-4 py-3">
@@ -70,8 +108,8 @@
             <p class="text-sm text-slate-600 mb-3">
               {{ order.paymentMethod === 'paystack' ? 'Online via Paystack' : 'Pay at store on collection' }}
             </p>
-            <ul v-if="order.events.length" class="space-y-3 text-sm">
-              <li v-for="(event, i) in order.events" :key="i" class="bg-slate-50 rounded-2xl p-3">
+            <ul v-if="paymentEvents.length" class="space-y-3 text-sm">
+              <li v-for="(event, i) in paymentEvents" :key="i" class="bg-slate-50 rounded-2xl p-3">
                 <p class="font-bold text-slate-800">{{ event.message || event.status }}</p>
                 <p class="text-xs text-slate-500">{{ formatOrderDate(event.at) }}</p>
                 <p v-if="event.paystack?.reference" class="text-xs text-slate-500 mt-1">
@@ -164,15 +202,46 @@ interface AdminOrderDetail {
   staffBitrixId: number | null
   items: { productId: string | null; name: string; quantity: number; unitPrice: number; unitDiscount: number; image: string | null }[]
   customer: { name: string | null; email: string | null; phone: string | null; address: string | null; hasAccount: boolean }
-  events: { status: string; message: string | null; at: string; paystack: { reference: unknown; channel: unknown } | null }[]
+  progress: {
+    step: string
+    label: string
+    cancelled: boolean
+    steps: { key: string; label: string; done: boolean; current: boolean }[]
+  }
+  events: {
+    status: string
+    message: string | null
+    at: string
+    changedBy: string | null
+    paystack: { reference: unknown; channel: unknown } | null
+  }[]
   outbox: { id: string; status: string; attempts: number; last_error: string | null }[]
 }
 
 const route = useRoute()
-const { data, pending, error } = await useFetch<{ order: AdminOrderDetail }>(
+const { data, pending, error, refresh } = await useFetch<{ order: AdminOrderDetail }>(
   `/api/admin/orders/${route.params.id}`,
   { headers: useRequestHeaders(['cookie']) },
 )
 const order = computed(() => data.value?.order ?? null)
+
+// Status changes carry who made them; everything else is the payment trail.
+const statusChanges = computed(() => (order.value?.events ?? []).filter((e) => e.changedBy))
+const paymentEvents = computed(() => (order.value?.events ?? []).filter((e) => !e.changedBy))
+
+const { addToast } = useToast()
+const savingStep = ref<string | null>(null)
+async function setStep(step: string) {
+  savingStep.value = step
+  try {
+    await useNuxtApp().$apiFetch(`/api/admin/orders/${route.params.id}/fulfilment`, { method: 'POST', body: { step } })
+    await refresh()
+  } catch (err) {
+    const message = (err as { data?: { statusMessage?: string } })?.data?.statusMessage
+    addToast('Not updated', message || 'The order status could not be changed.', 'error')
+  } finally {
+    savingStep.value = null
+  }
+}
 
 </script>

@@ -35,8 +35,8 @@
             </div>
             <span
               class="text-sm font-bold px-3 py-1.5 rounded-full border"
-              :class="STATUS_TONE_CLASSES[order.status.tone]"
-              >{{ order.status.label }}</span
+              :class="STATUS_TONE_CLASSES[badge.tone]"
+              >{{ badge.label }}</span
             >
           </div>
 
@@ -53,6 +53,36 @@
               <dd class="text-slate-900">{{ paymentText }}</dd>
             </div>
           </dl>
+        </div>
+
+        <div
+          v-if="order.progress && !order.progress.cancelled"
+          class="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 mb-4"
+        >
+          <h2 class="font-black text-slate-900">{{ order.progress.label }}</h2>
+          <p class="text-sm text-slate-500 mb-5">
+            {{ order.progress.detail }}
+            <template v-if="order.progress.updatedAt">Updated {{ formatOrderDate(order.progress.updatedAt) }}.</template>
+          </p>
+          <ol class="relative ml-3 border-l-2 border-slate-200 space-y-4">
+            <li v-for="step in order.progress.steps" :key="step.key" class="relative pl-6">
+              <span
+                class="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full border-2"
+                :class="
+                  step.current
+                    ? 'border-[#002888] bg-[#002888]'
+                    : step.done
+                      ? 'border-emerald-500 bg-emerald-500'
+                      : 'border-slate-300 bg-white'
+                "
+              />
+              <span
+                class="text-sm"
+                :class="step.current ? 'font-black text-[#002888]' : step.done ? 'font-bold text-slate-800' : 'text-slate-400'"
+                >{{ step.label }}</span
+              >
+            </li>
+          </ol>
         </div>
 
         <div class="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 mb-4">
@@ -120,6 +150,7 @@
 
 <script setup lang="ts">
 import { STATUS_TONE_CLASSES, formatNaira, formatOrderDate } from '~/utils/money'
+import { orderBadge } from '~/utils/orderBadge'
 
 interface OrderDetail {
   id: string
@@ -135,6 +166,13 @@ interface OrderDetail {
   promoCode: string | null
   items: { productId: string | null; name: string; quantity: number; unitPrice: number; unitDiscount: number; image: string | null }[]
   events: { message: string; at: string }[]
+  progress: {
+    label: string
+    detail: string
+    cancelled: boolean
+    updatedAt: string | null
+    steps: { key: string; label: string; done: boolean; current: boolean }[]
+  }
 }
 
 const route = useRoute()
@@ -145,6 +183,7 @@ const { data, pending, error } = await useFetch<{ order: OrderDetail }>(
   { headers: useRequestHeaders(['cookie']) },
 )
 const order = computed(() => data.value?.order ?? null)
+const badge = computed(() => (order.value ? orderBadge(order.value) : { label: '', tone: 'info' }))
 
 const paymentText = computed(() => {
   const o = order.value

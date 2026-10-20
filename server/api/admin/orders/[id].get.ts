@@ -50,6 +50,26 @@ export default defineEventHandler(async (event) => {
     ? outboxQuery.or(`source_id.eq.${id},payload->>orderId.eq.${ref.replace(/[,()]/g, '')}`)
     : outboxQuery.eq('source_id', id))) as { data: Record<string, unknown>[] | null }
 
+  // Status changes record the admin's id; show their username.
+  const adminIds = [
+    ...new Set(
+      (data.order_events ?? []).map((e) => e.meta?.by).filter((v): v is string => typeof v === 'string' && v !== 'cron'),
+    ),
+  ]
+  const adminNames = new Map<string, string>()
+  if (adminIds.length) {
+    const { data: admins } = (await supabase
+      .from('admin_profiles')
+      .select('user_id, admin_username')
+      .in('user_id', adminIds)) as { data: { user_id: string; admin_username: string | null }[] | null }
+    for (const a of admins ?? []) if (a.admin_username) adminNames.set(a.user_id, a.admin_username)
+  }
+  const changedBy = (meta: Record<string, unknown> | null) => {
+    if (!meta?.fulfilment_status) return null
+    const by = typeof meta.by === 'string' ? meta.by : ''
+    return by === 'cron' ? 'System' : adminNames.get(by) || 'Admin'
+  }
+
   return {
     order: {
       ...presentOrder(data, data.order_items ?? []),
@@ -67,8 +87,10 @@ export default defineEventHandler(async (event) => {
           status: e.status,
           message: e.message,
           at: e.created_at,
-          // Payment facts staff need to match a bank statement; nothing more.
-          paystack: e.meta
+          // Who moved the order along (status changes), or the payment facts staff
+          // need to match a bank statement; nothing more.
+          changedBy: changedBy(e.meta),
+          paystack: e.meta?.reference
             ? {
                 reference: e.meta.reference ?? null,
                 channel: e.meta.channel ?? null,
