@@ -1,6 +1,6 @@
 import { getSupabaseAdminClient } from '../../../../utils/supabaseAdmin'
 import { logger } from '../../../../utils/logger'
-import { isFulfilmentStep, stepLabel, type Fulfilment } from '#shared/orderProgress'
+import { isFulfilmentStep, orderKind, stepLabel, stepNotAllowed } from '#shared/orderProgress'
 
 /**
  * Move an order to a fulfilment step (admin Orders page). The customer sees it
@@ -18,17 +18,22 @@ export default defineEventHandler(async (event) => {
   const supabase = getSupabaseAdminClient()
   const { data: order } = (await supabase
     .from('orders')
-    .select('id, status, fulfillment, fulfilment_status')
+    .select('id, status, fulfillment, payment_method, fulfilment_status')
     .eq('id', id)
     .maybeSingle()) as {
-    data: { id: string; status: string; fulfillment: string | null; fulfilment_status: string | null } | null
+    data: {
+      id: string
+      status: string
+      fulfillment: string | null
+      payment_method: string | null
+      fulfilment_status: string | null
+    } | null
   }
   if (!order) throw createError({ statusCode: 404, statusMessage: 'Order not found.' })
 
-  const fulfilment: Fulfilment = order.fulfillment === 'pickup' ? 'pickup' : 'delivery'
-  if (step === 'out_for_delivery' && fulfilment === 'pickup') {
-    throw createError({ statusCode: 400, statusMessage: 'A pickup order cannot be out for delivery.' })
-  }
+  const kind = orderKind(order)
+  const notAllowed = stepNotAllowed(step, kind)
+  if (notAllowed) throw createError({ statusCode: 400, statusMessage: notAllowed })
   if (order.fulfilment_status === step) return { success: true, step }
 
   const now = new Date().toISOString()
@@ -48,7 +53,7 @@ export default defineEventHandler(async (event) => {
   const { error: eventError } = await supabase.from('order_events').insert({
     order_id: id,
     status: order.status,
-    message: stepLabel(step, fulfilment),
+    message: stepLabel(step, kind),
     meta: { fulfilment_status: step, by },
   } as never)
   if (eventError) logger.warn('AdminOrders', 'Fulfilment event not recorded', { id, error: eventError.message })

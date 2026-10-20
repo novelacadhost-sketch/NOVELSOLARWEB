@@ -505,18 +505,20 @@ Staff move each order through these steps by hand on the admin Orders page. They
 
 | `fulfilment_status` | Show | Pickup | Delivery |
 |---|---|---|---|
-| `received` | Order received — "We are confirming your payment." | ✓ | ✓ |
-| `payment_confirmed` | Payment confirmed | ✓ | ✓ |
+| `received` | Order received — "We are confirming your payment." (pay at store: "You will pay when you collect.") | ✓ | ✓ |
+| `payment_confirmed` | Payment confirmed | ✓ (not pay at store) | ✓ |
 | `preparing` | Preparing order | ✓ | ✓ |
 | `shipped` | Order shipped | ✓ | ✓ |
 | `at_fulfilment_centre` | At fulfilment centre — ready for pickup / ready for delivery | ✓ | ✓ |
 | `out_for_delivery` | Out for delivery | — | ✓ |
-| `completed` | **Picked up** (pickup) / **Delivered** (delivery) | ✓ | ✓ |
+| `completed` | **Picked up** (pickup) / **Paid and picked up** (pickup, pay at store) / **Delivered** (delivery) | ✓ | ✓ |
 
 - It is separate from `status`, which stays the payment state (`pending` / `confirmed` / …). Do not
   infer one from the other, with one exception the website also applies: a Paystack order whose
   `status` is `confirmed` but whose step is still `received` should read **Payment confirmed**.
 - Pickup orders never use `out_for_delivery`; leave that step out of a pickup order's tracker.
+- Pickup orders paid at the store (`payment_method` `pay_at_store`) never use `payment_confirmed`: they pay
+  at the counter, so staff go straight to `completed` ("Paid and picked up"). Leave that step out too.
 - A `cancelled` or `failed` `status` overrides the step: show the order as cancelled.
 - Each change is also an `order_events` row whose `message` is the step's label, so a timeline built
   from `order_events` shows them in order.

@@ -1,11 +1,4 @@
-import {
-  isFulfilmentStep,
-  stepDetail,
-  stepLabel,
-  stepsFor,
-  type Fulfilment,
-  type FulfilmentStep,
-} from '#shared/orderProgress'
+import { isFulfilmentStep, orderKind, stepDetail, stepLabel, stepsFor, type FulfilmentStep } from '#shared/orderProgress'
 
 /**
  * How an order is described to the person who placed it, and to staff.
@@ -75,29 +68,31 @@ export function describeOrderStatus(order: Pick<OrderRow, 'status' | 'payment_me
 /**
  * Where the order is. A paid Paystack order still at 'received' reads as
  * 'payment confirmed', since nobody needs to confirm a card payment by hand.
+ * Steps that do not apply to the order (out for delivery on a pickup, payment
+ * confirmed on pay-at-store) read as the step before them.
  */
 export function describeOrderProgress(
   order: Pick<OrderRow, 'status' | 'payment_method' | 'fulfillment' | 'fulfilment_status' | 'fulfilment_updated_at'>,
 ) {
-  const fulfilment: Fulfilment = order.fulfillment === 'pickup' ? 'pickup' : 'delivery'
+  const kind = orderKind(order)
   const cancelled = order.status === 'cancelled' || order.status === 'failed'
   let step: FulfilmentStep = isFulfilmentStep(order.fulfilment_status) ? order.fulfilment_status : 'received'
   const paidOnline = String(order.payment_method ?? '').toLowerCase() === 'paystack' && order.status === 'confirmed'
   if (step === 'received' && paidOnline) step = 'payment_confirmed'
-  // A pickup order is never out for delivery; treat a stray value as the step before.
-  if (fulfilment === 'pickup' && step === 'out_for_delivery') step = 'at_fulfilment_centre'
+  if (kind.fulfilment === 'pickup' && step === 'out_for_delivery') step = 'at_fulfilment_centre'
+  if (kind.payAtStore && step === 'payment_confirmed') step = 'received'
 
-  const steps = stepsFor(fulfilment)
+  const steps = stepsFor(kind)
   const current = steps.indexOf(step)
   return {
     step,
-    label: cancelled ? 'Cancelled' : stepLabel(step, fulfilment),
-    detail: cancelled ? 'This order was cancelled.' : stepDetail(step, fulfilment),
+    label: cancelled ? 'Cancelled' : stepLabel(step, kind),
+    detail: cancelled ? 'This order was cancelled.' : stepDetail(step, kind),
     cancelled,
     updatedAt: order.fulfilment_updated_at,
     steps: steps.map((key, index) => ({
       key,
-      label: stepLabel(key, fulfilment),
+      label: stepLabel(key, kind),
       done: !cancelled && index <= current,
       current: !cancelled && index === current,
     })),
