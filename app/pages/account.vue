@@ -5,13 +5,34 @@ const { addToast } = useToast()
 const supabase = useSupabaseClient()
 const isLoading = ref(false)
 const isLoadingProfile = ref(true)
-const profile = ref({
+interface DealerAccount {
+  approved: boolean
+  status: 'none' | 'pending' | 'approved' | 'rejected'
+  businessName: string | null
+  approvedAt: string | null
+}
+const profile = ref<{
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  address: string
+  dealer?: DealerAccount | null
+}>({
   firstName: '',
   lastName: '',
   email: '',
   phone: '',
   address: '',
+  dealer: null,
 })
+
+const dealer = computed(() => profile.value.dealer ?? null)
+const dealerSince = computed(() =>
+  dealer.value?.approvedAt
+    ? new Date(dealer.value.approvedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null,
+)
 
 // Form state for updates
 const form = ref({
@@ -238,6 +259,31 @@ useHead({
                   </p>
                   <h2 class="text-2xl font-black text-slate-900">Welcome, {{ profile.firstName }}!</h2>
                 </div>
+              </div>
+
+              <div
+                v-if="dealer"
+                class="mb-8 rounded-2xl border p-6"
+                :class="dealer.approved ? 'border-blue-100 bg-blue-50' : 'border-amber-100 bg-amber-50'"
+              >
+                <div class="flex flex-wrap items-center gap-3">
+                  <span
+                    class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black uppercase tracking-widest"
+                    :class="dealer.approved ? 'bg-[#002888] text-white' : 'bg-amber-200 text-amber-900'"
+                  >
+                    <span class="material-symbols-outlined text-sm">{{ dealer.approved ? 'verified' : 'hourglass_top' }}</span>
+                    {{ dealer.approved ? 'Approved dealer' : 'Dealer account not active' }}
+                  </span>
+                  <span v-if="dealer.businessName" class="font-bold text-slate-900">{{ dealer.businessName }}</span>
+                </div>
+                <p v-if="dealer.approved" class="mt-3 text-sm text-slate-700">
+                  Dealer prices are shown across the shop and applied at checkout while you are signed in.
+                  <template v-if="dealerSince">Dealer since {{ dealerSince }}.</template>
+                </p>
+                <p v-else class="mt-3 text-sm text-slate-700">
+                  You are seeing retail prices because your dealer account is not active. Please contact us and we
+                  will look into it.
+                </p>
               </div>
 
               <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100 mb-8">

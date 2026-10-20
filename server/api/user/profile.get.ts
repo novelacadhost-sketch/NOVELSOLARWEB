@@ -5,6 +5,7 @@ import { claimGuestOrders } from '../../utils/claimGuestOrders'
 import type { BearerUser } from '../../utils/bearerAuth'
 import { bitrixFetch } from '../../utils/bitrixAuth'
 import { logger } from '../../utils/logger'
+import { getDealerAccount } from '../../utils/dealerAccount'
 
 interface CachedProfile {
   data: {
@@ -46,6 +47,8 @@ export default defineEventHandler(async (event) => {
   // signed in before this shipped would otherwise never be checked.
   await claimGuestOrders(userId, email)
 
+  const dealer = await getDealerAccount(userId)
+
   let contactId: string
   try {
     contactId = await resolveBitrixContactId(userId, email)
@@ -57,13 +60,13 @@ export default defineEventHandler(async (event) => {
       error: error instanceof Error ? error.message : error,
       userId,
     })
-    return { firstName: 'Valued', lastName: 'Customer', email, phone: '', address: '', isTemporary: true }
+    return { firstName: 'Valued', lastName: 'Customer', email, phone: '', address: '', isTemporary: true, dealer }
   }
 
   const cacheKey = `profile:${contactId}`
   const cachedProfile = (await useStorage('cache').getItem(cacheKey)) as CachedProfile | null
   if (cachedProfile && cachedProfile.expires > Date.now()) {
-    return cachedProfile.data
+    return { ...cachedProfile.data, dealer }
   }
 
   try {
@@ -95,7 +98,7 @@ export default defineEventHandler(async (event) => {
     // Bitrix stays the only copy of those.
     await cacheProfileName(userId, profileData.firstName, profileData.lastName)
 
-    return profileData
+    return { ...profileData, dealer }
   } catch (error) {
     logger.error('PROFILE', 'Fetch error', { contactId, error })
     throw createError({
