@@ -73,3 +73,6 @@ check_supabase.ts
 query-bitrix-fields.ts
 scratch-bitrix-update.ts
 test-bitrix-download.js
+
+# Bulk product photos staged for upload to Bitrix (961 files, not part of the app)
+All Products/

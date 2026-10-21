@@ -108,6 +108,9 @@ export default defineNuxtConfig({
     // Comma-separated Bitrix user ids for stock requests. Unset = procurement
     // and sales support, as recorded in BITRIX_STAFF.
     stockRequestNotifyUserIds: process.env.STOCK_REQUEST_NOTIFY_USER_IDS || '',
+    // Shared secret for the supplier photo-review tool. Unset = the tool is
+    // off, which is why it has no default: staging sets it, nowhere else does.
+    photoReviewToken: process.env.PHOTO_REVIEW_TOKEN || '',
     public: {
       // Safe to ship: Paystack's public key is designed for the browser.
       // The SECRET key must never appear here.

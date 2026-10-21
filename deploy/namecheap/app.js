@@ -37,6 +37,9 @@ const RUNTIME_NAMES = {
   SMTP_FROM_HOMES: 'NUXT_SMTP_FROM_HOMES',
   PAYSTACK_SECRET_KEY: 'NUXT_PAYSTACK_SECRET_KEY',
   STOCK_REQUEST_NOTIFY_USER_IDS: 'NUXT_STOCK_REQUEST_NOTIFY_USER_IDS',
+  // Supplier photo-review tool. Staging is the only host it answers on, so
+  // this is the only place the token is ever set.
+  PHOTO_REVIEW_TOKEN: 'NUXT_PHOTO_REVIEW_TOKEN',
   PAYSTACK_PUBLIC_KEY: 'NUXT_PUBLIC_PAYSTACK_PUBLIC_KEY',
   // @nuxtjs/supabase: public.supabase.key and supabase.secretKey.
   NUXT_PUBLIC_SUPABASE_ANON_KEY: 'NUXT_PUBLIC_SUPABASE_KEY',
