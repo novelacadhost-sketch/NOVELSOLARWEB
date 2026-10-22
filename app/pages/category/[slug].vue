@@ -99,6 +99,10 @@ const categorySlug = computed(() => (route.params.slug || '').toString())
  */
 const group = computed(() => CATEGORY_GROUPS.find((g) => g.id === categorySlug.value.toLowerCase()) ?? null)
 
+// An unknown category (an old link such as /category/power-banks) used to send
+// no section filter, so it listed the whole catalogue under the wrong heading.
+if (!group.value) await navigateTo('/shop', { redirectCode: 301 })
+
 const activeFilter = ref('All')
 
 // The sub-filters ARE the Bitrix sections, so "Hybrid / Regular / Solar

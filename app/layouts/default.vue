@@ -48,7 +48,7 @@
               <NuxtLink
                 v-for="category in productMenu"
                 :key="category.title"
-                :to="getCategoryLink(category.title)"
+                :to="category.link"
                 class="block px-6 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#002888] transition-colors"
                 @click="closeDesktopMenu"
               >
@@ -442,7 +442,7 @@
                 <NuxtLink
                   v-for="category in productMenu"
                   :key="category.title"
-                  :to="getCategoryLink(category.title)"
+                  :to="category.link"
                   class="block text-gray-900 hover:text-[#002888] transition-colors font-bold text-base"
                   @click="isMobileMenuOpen = false"
                 >
@@ -652,29 +652,14 @@
           <div>
             <h3 class="text-sm font-semibold text-gray-800 uppercase tracking-wider mb-4">Product Categories</h3>
             <ul class="space-y-3">
-              <li>
-                <NuxtLink to="/category/solar-panels" class="text-sm text-gray-500 hover:text-primary transition-colors"
-                  >Solar Panels</NuxtLink
-                >
+              <li v-for="category in footerCategories" :key="category.link">
+                <NuxtLink :to="category.link" class="text-sm text-gray-500 hover:text-primary transition-colors">{{
+                  category.title
+                }}</NuxtLink>
               </li>
               <li>
-                <NuxtLink to="/category/inverters" class="text-sm text-gray-500 hover:text-primary transition-colors"
-                  >Inverters</NuxtLink
-                >
-              </li>
-              <li>
-                <NuxtLink to="/category/lighting" class="text-sm text-gray-500 hover:text-primary transition-colors"
-                  >Lighting</NuxtLink
-                >
-              </li>
-              <li>
-                <NuxtLink to="/category/power-banks" class="text-sm text-gray-500 hover:text-primary transition-colors"
-                  >Power Banks</NuxtLink
-                >
-              </li>
-              <li>
-                <NuxtLink to="/category/accessories" class="text-sm text-gray-500 hover:text-primary transition-colors"
-                  >Accessories</NuxtLink
+                <NuxtLink to="/shop" class="text-sm font-semibold text-[#002888] hover:underline"
+                  >Shop all products &rarr;</NuxtLink
                 >
               </li>
             </ul>
@@ -863,6 +848,7 @@
 
 <script setup lang="ts">
 import { LEGAL_LINKS } from '~/utils/legal'
+import { CATEGORY_GROUPS } from '~/utils/productCategories'
 
 const supabaseUser = useSupabaseUser()
 const supabase = useSupabaseClient()
@@ -913,15 +899,6 @@ const handleSearch = () => {
 }
 
 const appConfig = useAppConfig()
-const fallbackProductMenu = [
-  { title: 'Solar Panels' },
-  { title: 'Inverters' },
-  { title: 'Batteries' },
-  { title: 'Charge Controllers' },
-  { title: 'Lighting' },
-  { title: 'Power Banks' },
-  { title: 'Accessories' },
-]
 const fallbackServicesMenu = [
   { title: 'Power & Load Audit Service', link: '/services/audit' },
   { title: 'Inverter, Solar Panel & Battery Installation', link: '/services/installation' },
@@ -940,9 +917,12 @@ const fallbackSupportMenu = [
   { title: 'Contact Us', link: '/contact' },
 ]
 
-const productMenu = computed(() =>
-  appConfig.nav?.productMenu?.length ? appConfig.nav.productMenu : fallbackProductMenu,
-)
+// The shop's own category list, so the menu always matches it. A hand-kept
+// list here had fallen behind: six categories were missing and "Power Banks"
+// pointed at a category that no longer exists.
+const productMenu = CATEGORY_GROUPS.map((g) => ({ title: g.name, link: `/category/${g.id}` }))
+const FOOTER_CATEGORY_IDS = ['solar-panels', 'inverters', 'batteries', 'lighting', 'accessories']
+const footerCategories = productMenu.filter((c) => FOOTER_CATEGORY_IDS.some((id) => c.link.endsWith(`/${id}`)))
 const servicesMenu = computed(() =>
   appConfig.nav?.servicesMenu?.length ? appConfig.nav.servicesMenu : fallbackServicesMenu,
 )
@@ -987,7 +967,6 @@ const showAdminBackBar = computed(() => {
 })
 const isBlogRoute = computed(() => route.path === '/blog' || route.path.startsWith('/blog/'))
 
-const getCategoryLink = (title: string) => `/category/${title.toLowerCase().replace(/\s+/g, '-')}`
 
 const { cartItemCount, toggleCart } = useCart()
 

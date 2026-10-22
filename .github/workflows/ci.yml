@@ -58,8 +58,8 @@ jobs:
 
           ERROR_COUNT=$(grep -c 'error TS' typecheck.log || true)
           # Measured 2026-10-13 with vue-tsc 3.3.11 / typescript 6.0.3, locally
-          # and with CI's dummy env (240, 2026-10-19). Lower it whenever the count drops.
-          BASELINE=240
+          # and with CI's dummy env (238, 2026-10-22). Lower it whenever the count drops.
+          BASELINE=238
 
           # vue-tsc exits non-zero whenever there are errors, which there are.
           # Non-zero with nothing counted means the tool itself fell over.
