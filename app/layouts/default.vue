@@ -427,28 +427,37 @@
           <template v-for="link in mobileMenuSections" :key="link.title">
             <!-- Simplified Product in Mobile Menu -->
             <div v-if="link.title === 'Product'" class="px-6 py-4 border-b border-gray-50">
-              <NuxtLink
-                to="/shop"
-                class="flex items-center justify-between group/mob-prod"
-                @click="isMobileMenuOpen = false"
-              >
-                <div
-                  class="text-[#002888] text-[10px] font-black uppercase tracking-widest mb-4 group-hover/mob-prod:underline"
+              <!-- The words go to the shop; the + opens the categories, like the sections below. -->
+              <div class="flex items-center justify-between mb-2">
+                <NuxtLink
+                  to="/shop"
+                  class="text-[#002888] font-black text-base hover:underline"
+                  @click="isMobileMenuOpen = false"
                 >
                   Shop All Products &rarr;
-                </div>
-              </NuxtLink>
-              <nav class="space-y-4">
+                </NuxtLink>
+                <button
+                  type="button"
+                  class="-mr-3 flex h-10 w-10 items-center justify-center text-gray-500 font-light text-xl leading-none transition-transform duration-300"
+                  :class="{ 'rotate-45': openMobileSections[link.title] }"
+                  :aria-expanded="Boolean(openMobileSections[link.title])"
+                  aria-label="Show product categories"
+                  @click="toggleMobileSection(link.title)"
+                >
+                  +
+                </button>
+              </div>
+              <div v-show="openMobileSections[link.title]" class="pl-4 border-l-2 border-primary/10 ml-1 space-y-1">
                 <NuxtLink
                   v-for="category in productMenu"
                   :key="category.title"
                   :to="category.link"
-                  class="block text-gray-900 hover:text-[#002888] transition-colors font-bold text-base"
+                  class="block text-gray-600 py-2.5 text-sm hover:text-primary transition-colors"
                   @click="isMobileMenuOpen = false"
                 >
                   {{ category.title }}
                 </NuxtLink>
-              </nav>
+              </div>
             </div>
             <!-- Special Handling for Services in Mobile Menu -->
             <div v-else-if="link.title === 'Services'" class="px-6 py-4 border-b border-gray-50">
