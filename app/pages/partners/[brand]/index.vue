@@ -57,6 +57,7 @@ const componentMap: Record<string, any> = {
   yinergy: defineAsyncComponent(() => import('~/components/partners/PartnerYinergy.vue')),
   livoltek: defineAsyncComponent(() => import('~/components/partners/PartnerLivoltek.vue')),
   hithium: defineAsyncComponent(() => import('~/components/partners/PartnerHithium.vue')),
+  powerchina: defineAsyncComponent(() => import('~/components/partners/PartnerPowerchina.vue')),
 }
 
 const slug = computed(() => String(route.params.brand ?? '').toLowerCase())

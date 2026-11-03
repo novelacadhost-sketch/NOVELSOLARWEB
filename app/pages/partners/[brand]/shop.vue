@@ -94,6 +94,7 @@ const brandBanner = computed(() => {
   if (b === 'itel') return '/images/logo-new-novel.-itel.png'
   if (b === 'livoltek') return '/images/livoltekpartner.png'
   if (b === 'hithium') return '/images/hithium_partner.png'
+  if (b === 'powerchina') return '/images/powerchina_partner.jpg'
   if (['haisic', 'yinergy'].includes(b)) {
     // Assets are named like 'Haisic_partner.png'
     return `/images/${brand.value.charAt(0).toUpperCase() + brand.value.slice(1)}_partner.png`

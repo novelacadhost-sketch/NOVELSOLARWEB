@@ -117,6 +117,12 @@ const partners = [
     desc: 'Smart solar solutions and EV chargers integrating seamlessly into modern homes.',
     logo: '/images/livoltek_logo.png',
   },
+  {
+    name: 'PowerChina',
+    slug: 'powerchina',
+    desc: 'LiFePO4 lithium batteries and hybrid inverters for dependable home and business backup.',
+    logo: '/images/powerchina.png',
+  },
 ]
 
 useHead({

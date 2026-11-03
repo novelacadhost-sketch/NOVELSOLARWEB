@@ -920,6 +920,7 @@ const fallbackPartnersMenu = [
   { title: 'Yinergy', link: '/partners/yinergy' },
   { title: 'Hithium', link: '/partners/hithium' },
   { title: 'Livoltek', link: '/partners/livoltek' },
+  { title: 'PowerChina', link: '/partners/powerchina' },
 ]
 const fallbackSupportMenu = [
   { title: 'FAQ', link: '/faq' },
