@@ -163,6 +163,11 @@ export default defineNuxtConfig({
         ...(IS_PRODUCTION_DOMAIN ? {} : { 'X-Robots-Tag': 'noindex, nofollow' }),
       },
     },
+    // Old WordPress addresses, kept working after novelsolar.com moved to this app.
+    '/powerchina': { redirect: { to: '/partners/powerchina', statusCode: 301 } },
+    '/powerchina/': { redirect: { to: '/partners/powerchina', statusCode: 301 } },
+    '/powerchinastore': { redirect: { to: '/partners/powerchina/shop', statusCode: 301 } },
+    '/powerchinastore/': { redirect: { to: '/partners/powerchina/shop', statusCode: 301 } },
   },
   nitro: {
     experimental: { tasks: true },
