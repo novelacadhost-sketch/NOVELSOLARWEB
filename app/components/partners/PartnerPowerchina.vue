@@ -29,7 +29,15 @@
           captures excess day energy and provides uninterrupted power during grid outages.
         </p>
         <div class="max-w-2xl mx-auto mb-10 rounded-2xl bg-white/10 border border-white/20 px-6 py-5">
-          <p class="text-lg md:text-xl font-black mb-1">Sun dey shine, make your power dey work! ☀️</p>
+          <p class="text-lg md:text-xl font-black mb-1 inline-flex items-center justify-center gap-2 flex-wrap">
+            Sun dey shine, make your power dey work!
+            <svg class="w-6 h-6 md:w-7 md:h-7 text-[#FDB813] shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="5" fill="currentColor" />
+              <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M12 1.5v2.5M12 20v2.5M1.5 12h2.5M20 12h2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8" />
+              </g>
+            </svg>
+          </p>
           <p class="text-slate-200 font-medium">
             With PowerChina Inverter + Lithium Battery + Solar Panels, you fit reduce your dependence on NEPA and
             generator.
