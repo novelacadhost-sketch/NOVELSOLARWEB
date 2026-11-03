@@ -43,7 +43,12 @@ export const EDITABLE_IMAGE_PAGES: EditablePage[] = [
   {
     page: 'partners/powerchina',
     label: 'Partner — PowerChina',
-    images: ['/images/powerchina_partner.jpg'],
+    images: [
+      '/images/powerchina_partner.jpg',
+      '/images/powerchina_mou_signing.jpg',
+      '/images/powerchina_10kwh.webp',
+      '/images/powerchina_16kwh.webp',
+    ],
   },
   {
     page: 'partners/itel',
