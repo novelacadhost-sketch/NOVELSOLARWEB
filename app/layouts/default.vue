@@ -852,6 +852,7 @@
     <LazyCartDrawer />
     <!-- Global WhatsApp Floating Button -->
     <WhatsAppFloating />
+    <BackHomeButton />
   </div>
 </template>
 

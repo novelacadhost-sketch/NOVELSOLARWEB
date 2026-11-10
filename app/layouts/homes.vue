@@ -175,6 +175,7 @@
 
     <LazyCartDrawer />
     <WhatsAppFloating />
+    <BackHomeButton color="#1d4f91" />
   </div>
 </template>
 
