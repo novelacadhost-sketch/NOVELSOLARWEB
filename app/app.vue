@@ -1,5 +1,7 @@
 <template>
   <ErrorBoundary>
+    <!-- A page waits for its data before it shows, so without this a click looks ignored. -->
+    <NuxtLoadingIndicator :color="site.id === 'homes' ? '#1d4f91' : '#002888'" :height="3" />
     <NuxtLayout :name="site.id === 'homes' ? 'homes' : undefined">
       <NuxtPage />
     </NuxtLayout>
