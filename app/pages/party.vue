@@ -12,6 +12,15 @@
             Novelty match: {{ PARTY.matchDate }}, {{ PARTY.matchTime }}
           </span>
         </div>
+        <p
+          class="mt-5 text-sm font-semibold rounded-2xl px-4 py-3 border"
+          :class="closed ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-amber-50 border-amber-200 text-amber-900'"
+        >
+          <template v-if="closed">Registration closed at {{ PARTY.closesLabel }}.</template>
+          <template v-else>
+            Registration closes at {{ PARTY.closesLabel }}. If you need to change your answers, do it before then.
+          </template>
+        </p>
       </header>
 
       <!-- Step 1: who are you -->
@@ -23,7 +32,11 @@
         <div>
           <h2 class="text-lg font-black text-slate-900 mb-1">Register for the party</h2>
           <p class="text-sm text-slate-500">
-            Enter your full name. Already registered? Enter it again to change your answers.
+            {{
+              closed
+                ? 'Enter your full name to see what you registered.'
+                : 'Enter your full name. Already registered? Enter it again to change your answers.'
+            }}
           </p>
         </div>
         <label class="flex flex-col gap-1.5" for="party-name">
@@ -220,7 +233,13 @@
           <h2 class="text-xl font-black text-slate-900 mb-1">
             {{ form.attending ? `See you there, ${firstName}` : `Thanks for letting us know, ${firstName}` }}
           </h2>
-          <p class="text-sm text-slate-500">Your RSVP is saved. You can come back to this page to change it.</p>
+          <p class="text-sm text-slate-500">
+            {{
+              closed
+                ? 'Your RSVP is saved. Registration has closed, so it can no longer be changed.'
+                : `Your RSVP is saved. You can come back to this page to change it until ${PARTY.closesLabel}.`
+            }}
+          </p>
         </div>
         <dl v-if="form.attending" class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm bg-slate-50 rounded-2xl p-5">
           <dt class="text-slate-500">Coming</dt>
@@ -235,6 +254,7 @@
           <dd class="font-semibold text-slate-900">{{ form.lane4Stay ? LANE4_STAYS[form.lane4Stay] : 'Not staying' }}</dd>
         </dl>
         <button
+          v-if="!closed"
           type="button"
           class="w-full py-3 rounded-2xl border-2 border-slate-200 text-slate-800 font-bold hover:bg-slate-50 transition"
           @click="step = 'form'"
@@ -254,6 +274,7 @@ import {
   MAX_CHILDREN,
   PARTY,
   hourLabel,
+  partyRsvpClosed,
   type Lane4Stay,
   type PartyRsvp,
 } from '#shared/party'
@@ -328,6 +349,7 @@ const savedAt = ref<string | null>(null)
 const busy = ref(false)
 const error = ref('')
 const form = reactive<FormState>(blankForm())
+const closed = ref(partyRsvpClosed())
 
 const lane4Options: { value: Lane4Stay | null; label: string }[] = [
   { value: null, label: 'No, not staying' },
@@ -390,6 +412,11 @@ async function identify() {
       method: 'POST',
       body: { name: name.value },
     })
+    closed.value = partyRsvpClosed()
+    if (closed.value && !res.rsvp) {
+      error.value = `Registration closed at ${PARTY.closesLabel}, and we have no RSVP from you.`
+      return
+    }
     firstName.value = res.firstName
     fill(res.rsvp)
     step.value = res.rsvp ? 'done' : 'form'
@@ -415,6 +442,7 @@ async function save() {
     fill(res.rsvp)
     step.value = 'done'
   } catch (err) {
+    if ((err as { statusCode?: number })?.statusCode === 403) closed.value = true
     error.value = messageOf(err, 'Could not save your RSVP. Please try again.')
   } finally {
     busy.value = false

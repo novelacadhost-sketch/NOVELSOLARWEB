@@ -1,7 +1,7 @@
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
 import { RSVP_COLUMNS, rowToRsvp, verifyPartyStaff, type PartyRsvpRow } from '../../utils/partyRsvp'
 import { logger } from '../../utils/logger'
-import { PARTY_EVENT, parsePartyRsvp } from '#shared/party'
+import { PARTY, PARTY_EVENT, parsePartyRsvp, partyRsvpClosed } from '#shared/party'
 
 /**
  * POST /api/party/rsvp { code, name, attending, adultGuests, children, arriveHour,
@@ -11,6 +11,12 @@ import { PARTY_EVENT, parsePartyRsvp } from '#shared/party'
  */
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
+  if (partyRsvpClosed()) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: `Registration closed at ${PARTY.closesLabel}. Answers can no longer be changed.`,
+    })
+  }
   const body = await readBody(event)
   const staff = await verifyPartyStaff(body)
 

@@ -13,7 +13,14 @@ export const PARTY = {
   matchDate: 'Sunday 20 December',
   matchTime: '2pm',
   apartment: 'Lane 4',
+  // After this nobody can register or change an RSVP. Lagos time (UTC+1).
+  closesAt: '2026-11-19T12:00:00+01:00',
+  closesLabel: '12 noon on Thursday 19 November',
 } as const
+
+export function partyRsvpClosed(now: Date = new Date()): boolean {
+  return now.getTime() >= new Date(PARTY.closesAt).getTime()
+}
 
 export const MAX_ADULT_GUESTS = 10
 export const MAX_CHILDREN = 10
