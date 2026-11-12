@@ -201,6 +201,17 @@ const cards = computed(() => [
     disabled: false,
   },
   {
+    to: '/admin/party',
+    title: 'Party RSVPs',
+    subtitle: 'Who is coming to the end-of-year party, their guests and children, and Lane 4 stays.',
+    icon: 'celebration',
+    iconBg: 'bg-amber-100',
+    iconColor: 'text-amber-600',
+    decorClass: 'text-amber-500',
+    linkColor: 'text-amber-600',
+    disabled: false,
+  },
+  {
     to: '/admin/manage-dealers',
     title: 'Dealer Applications',
     subtitle: 'Review incoming dealer applications, manage wholesale pricing access, and track setup invitations.',
