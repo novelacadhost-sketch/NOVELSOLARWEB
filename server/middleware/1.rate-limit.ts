@@ -27,8 +27,8 @@ function getRateLimitConfig(path: string, isAnonymous: boolean) {
   if (path === '/api/promo-code' || path === '/api/staff-code') {
     return { maxRequests: 15, windowSizeInSeconds: 60, bucket: 'promo-code' }
   }
-  // Staff codes can be guessed; the name check needs a low ceiling to mean anything.
-  if (path.startsWith('/api/party/')) return { maxRequests: 15, windowSizeInSeconds: 60, bucket: 'party' }
+  // Staff sign in by name. Offices share one IP, so this has to allow a room of people registering at once.
+  if (path.startsWith('/api/party/')) return { maxRequests: 60, windowSizeInSeconds: 60, bucket: 'party' }
   if (path.startsWith('/api/admin/')) return { maxRequests: 60, windowSizeInSeconds: 60, bucket: 'admin' }
   return { maxRequests: 100, windowSizeInSeconds: 60, bucket: 'api' }
 }

@@ -1,6 +1,59 @@
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { logger } from './logger'
-import { PARTY_EVENT, type Lane4Stay, type PartyChild, type PartyRsvp } from '#shared/party'
+import { PARTY_EVENT, type Lane4Stay, type PartyChild, type PartyReportRow, type PartyRsvp } from '#shared/party'
+
+/**
+ * SHA-256 of the secret in HR's results link (/party-results#<secret>). Only
+ * the hash is in this public repo; the secret itself was handed to Davies.
+ * To issue a new link, generate a fresh secret and replace this hash.
+ */
+const RESULTS_KEY_SHA256 = '8170c15acf75678c840c2a4a6e98ddd908de50f2146e56321aaa5c527ea17291'
+
+export function isPartyResultsKey(key: unknown): boolean {
+  if (typeof key !== 'string' || !key) return false
+  const given = createHash('sha256').update(key).digest()
+  return timingSafeEqual(given, Buffer.from(RESULTS_KEY_SHA256, 'hex'))
+}
+
+/** Every RSVP for the party, newest first, with the staff member's name. */
+export async function listPartyRsvps(): Promise<PartyReportRow[]> {
+  const supabase = getSupabaseAdminClient()
+  const { data, error } = (await supabase
+    .from('party_rsvps')
+    .select(RSVP_COLUMNS)
+    .eq('event', PARTY_EVENT)
+    .order('updated_at', { ascending: false })
+    .range(0, 999)) as { data: PartyRsvpRow[] | null; error: { message: string } | null }
+
+  if (error) {
+    logger.error('Party', 'RSVP list failed', { error: error.message })
+    throw createError({ statusCode: 500, statusMessage: 'Could not load RSVPs.' })
+  }
+
+  const rows = data ?? []
+  const staff = new Map<string, { first_name: string; last_name: string; job_title: string | null }>()
+  if (rows.length) {
+    const { data: people } = (await supabase
+      .from('staff_codes')
+      .select('code, first_name, last_name, job_title')
+      .in(
+        'code',
+        rows.map((r) => r.staff_code),
+      )) as { data: { code: string; first_name: string; last_name: string; job_title: string | null }[] | null }
+    for (const p of people ?? []) staff.set(p.code, p)
+  }
+
+  return rows.map((row) => {
+    const person = staff.get(row.staff_code)
+    return {
+      staffCode: row.staff_code,
+      name: person ? `${person.first_name} ${person.last_name}`.trim() : row.staff_code,
+      jobTitle: person?.job_title ?? null,
+      ...rowToRsvp(row),
+    }
+  })
+}
 
 export interface PartyRsvpRow {
   event: string

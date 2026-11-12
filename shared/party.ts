@@ -47,6 +47,14 @@ export interface PartyRsvp {
   lane4Stay: Lane4Stay | null
 }
 
+/** One RSVP as the admin and HR reports show it. */
+export interface PartyReportRow extends PartyRsvp {
+  staffCode: string
+  name: string
+  jobTitle: string | null
+  updatedAt: string
+}
+
 /** 13 -> "1pm", 22 -> "10pm". */
 export function hourLabel(hour: number): string {
   const h = hour % 12 === 0 ? 12 : hour % 12
