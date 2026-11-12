@@ -6,6 +6,7 @@ export interface PartyRsvpRow {
   event: string
   staff_code: string
   attending: boolean
+  match_only: boolean
   adult_guests: number
   children: PartyChild[]
   arrive_hour: number | null
@@ -17,11 +18,12 @@ export interface PartyRsvpRow {
 }
 
 export const RSVP_COLUMNS =
-  'event, staff_code, attending, adult_guests, children, arrive_hour, leave_hour, novelty_match, lane4_stay, created_at, updated_at'
+  'event, staff_code, attending, match_only, adult_guests, children, arrive_hour, leave_hour, novelty_match, lane4_stay, created_at, updated_at'
 
 export function rowToRsvp(row: PartyRsvpRow): PartyRsvp & { updatedAt: string } {
   return {
     attending: row.attending,
+    matchOnly: row.match_only,
     adultGuests: row.adult_guests,
     children: Array.isArray(row.children) ? row.children : [],
     arriveHour: row.arrive_hour,

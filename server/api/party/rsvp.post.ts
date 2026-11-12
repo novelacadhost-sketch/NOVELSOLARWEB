@@ -31,6 +31,7 @@ export default defineEventHandler(async (event) => {
         event: PARTY_EVENT,
         staff_code: staff.code,
         attending: rsvp.attending,
+        match_only: rsvp.matchOnly,
         adult_guests: rsvp.adultGuests,
         children: rsvp.children,
         arrive_hour: rsvp.arriveHour,

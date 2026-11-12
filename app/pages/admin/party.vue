@@ -39,7 +39,7 @@
       </div>
 
       <!-- Totals -->
-      <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <section class="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div v-for="tile in tiles" :key="tile.label" class="bg-white rounded-2xl border border-slate-200 p-5">
           <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ tile.label }}</p>
           <p class="text-3xl font-black text-slate-900 tabular-nums mt-1">{{ tile.value }}</p>
@@ -130,8 +130,14 @@
                 <td class="px-5 py-3">
                   <span
                     class="px-2 py-0.5 rounded-full text-xs font-bold"
-                    :class="r.attending ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'"
-                    >{{ r.attending ? 'Yes' : 'No' }}</span
+                    :class="
+                      !r.attending
+                        ? 'bg-slate-100 text-slate-500'
+                        : r.matchOnly
+                          ? 'bg-sky-100 text-sky-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                    "
+                    >{{ comingLabel(r) }}</span
                   >
                 </td>
                 <td class="px-5 py-3 text-right tabular-nums">{{ r.attending ? r.adultGuests : '' }}</td>
@@ -179,24 +185,36 @@ const filtered = computed(() => {
 
 const sum = (rows: AdminRsvp[], pick: (r: AdminRsvp) => number) => rows.reduce((n, r) => n + pick(r), 0)
 
+const groupSize = (r: AdminRsvp) => 1 + r.adultGuests + r.children.length
+const atParty = computed(() => coming.value.filter((r) => !r.matchOnly))
+const atMatch = computed(() => coming.value.filter((r) => r.noveltyMatch))
+
+const comingLabel = (r: AdminRsvp) => (!r.attending ? 'No' : r.matchOnly ? 'Sports only' : 'Party')
+
 const tiles = computed(() => {
   const staff = coming.value.length
-  const adults = sum(coming.value, (r) => r.adultGuests)
-  const children = sum(coming.value, (r) => r.children.length)
+  const sportsOnly = staff - atParty.value.length
   const declined = rsvps.value.length - staff
   return [
-    { label: 'Staff coming', value: staff, note: `${declined} can't make it` },
-    { label: 'Adult guests', value: adults, note: 'Not counting staff' },
-    { label: 'Children', value: children, note: 'Registered separately' },
     {
-      label: 'Total people',
-      value: staff + adults + children,
-      note: `${sum(coming.value, (r) => (r.noveltyMatch ? 1 : 0))} staff at the match`,
+      label: 'Staff coming',
+      value: staff,
+      note: `${atParty.value.length} party, ${sportsOnly} sports only, ${declined} can't make it`,
+    },
+    { label: 'Adult guests', value: sum(coming.value, (r) => r.adultGuests), note: 'Not counting staff' },
+    { label: 'Children', value: sum(coming.value, (r) => r.children.length), note: 'Registered separately' },
+    {
+      label: 'At the party',
+      value: sum(atParty.value, groupSize),
+      note: `People on ${PARTY.partyDate}`,
+    },
+    {
+      label: 'At the match',
+      value: sum(atMatch.value, groupSize),
+      note: `People on ${PARTY.matchDate}`,
     },
   ]
 })
-
-const groupSize = (r: AdminRsvp) => 1 + r.adultGuests + r.children.length
 
 const hourly = computed(() =>
   Array.from({ length: PARTY.endHour - PARTY.startHour }, (_, i) => {
@@ -243,7 +261,7 @@ function downloadCsv() {
     r.name,
     r.staffCode,
     r.jobTitle ?? '',
-    r.attending ? 'Yes' : 'No',
+    comingLabel(r),
     r.attending ? r.adultGuests : '',
     r.attending ? r.children.length : '',
     r.children.map((c) => c.age).join(' '),

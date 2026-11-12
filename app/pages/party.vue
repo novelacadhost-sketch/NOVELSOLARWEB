@@ -81,24 +81,24 @@
 
         <fieldset class="flex flex-col gap-3">
           <legend class="text-sm font-bold text-slate-700 mb-3">Are you coming?</legend>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-2">
             <button
-              v-for="opt in [
-                { value: true, label: 'Yes, I\'ll be there' },
-                { value: false, label: 'No, I can\'t make it' },
-              ]"
-              :key="String(opt.value)"
+              v-for="opt in attendanceOptions"
+              :key="opt.value"
               type="button"
-              class="px-4 py-3 rounded-xl border-2 text-sm font-bold transition"
+              class="px-4 py-3 rounded-xl border-2 text-left transition"
               :class="
-                form.attending === opt.value
+                choice === opt.value
                   ? 'border-[#0B1F6B] bg-[#0B1F6B] text-white'
                   : 'border-slate-200 text-slate-700 hover:border-slate-300'
               "
-              :aria-pressed="form.attending === opt.value"
-              @click="form.attending = opt.value"
+              :aria-pressed="choice === opt.value"
+              @click="choice = opt.value"
             >
-              {{ opt.label }}
+              <span class="block text-sm font-bold">{{ opt.label }}</span>
+              <span class="block text-xs" :class="choice === opt.value ? 'text-blue-100' : 'text-slate-500'">{{
+                opt.note
+              }}</span>
             </button>
           </div>
         </fieldset>
@@ -148,7 +148,7 @@
           </section>
 
           <!-- Time -->
-          <section class="flex flex-col gap-3 border-t border-slate-100 pt-6">
+          <section v-if="!form.matchOnly" class="flex flex-col gap-3 border-t border-slate-100 pt-6">
             <h3 class="text-sm font-bold text-slate-700">When will you be there on {{ PARTY.partyDate }}?</h3>
             <p class="text-xs text-slate-500 -mt-2">
               The party runs from {{ hourLabel(PARTY.startHour) }} to {{ hourLabel(PARTY.endHour) }}.
@@ -178,7 +178,7 @@
           </section>
 
           <!-- Match -->
-          <section class="flex flex-col gap-3 border-t border-slate-100 pt-6">
+          <section v-if="!form.matchOnly" class="flex flex-col gap-3 border-t border-slate-100 pt-6">
             <h3 class="text-sm font-bold text-slate-700">Novelty match, {{ PARTY.matchDate }} at {{ PARTY.matchTime }}</h3>
             <label class="flex items-center gap-3 text-sm text-slate-700" for="party-match">
               <input id="party-match" v-model="form.noveltyMatch" type="checkbox" class="w-5 h-5 accent-[#0B1F6B]" >
@@ -244,12 +244,18 @@
         <dl v-if="form.attending" class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm bg-slate-50 rounded-2xl p-5">
           <dt class="text-slate-500">Coming</dt>
           <dd class="font-semibold text-slate-900">{{ partySummary }}</dd>
-          <dt class="text-slate-500">Time</dt>
-          <dd class="font-semibold text-slate-900">
-            {{ hourLabel(form.arriveHour ?? PARTY.startHour) }} to {{ hourLabel(form.leaveHour ?? PARTY.endHour) }}
-          </dd>
-          <dt class="text-slate-500">Match</dt>
-          <dd class="font-semibold text-slate-900">{{ form.noveltyMatch ? 'Yes' : 'No' }}</dd>
+          <template v-if="form.matchOnly">
+            <dt class="text-slate-500">Event</dt>
+            <dd class="font-semibold text-slate-900">Sports only: {{ PARTY.matchDate }}, {{ PARTY.matchTime }}</dd>
+          </template>
+          <template v-else>
+            <dt class="text-slate-500">Party</dt>
+            <dd class="font-semibold text-slate-900">
+              {{ hourLabel(form.arriveHour ?? PARTY.startHour) }} to {{ hourLabel(form.leaveHour ?? PARTY.endHour) }}
+            </dd>
+            <dt class="text-slate-500">Match</dt>
+            <dd class="font-semibold text-slate-900">{{ form.noveltyMatch ? 'Yes' : 'No' }}</dd>
+          </template>
           <dt class="text-slate-500">{{ PARTY.apartment }}</dt>
           <dd class="font-semibold text-slate-900">{{ form.lane4Stay ? LANE4_STAYS[form.lane4Stay] : 'Not staying' }}</dd>
         </dl>
@@ -324,6 +330,7 @@ const Stepper = defineComponent({
 
 interface FormState {
   attending: boolean | null
+  matchOnly: boolean
   adultGuests: number
   children: { age: number | null }[]
   arriveHour: number | null
@@ -334,6 +341,7 @@ interface FormState {
 
 const blankForm = (): FormState => ({
   attending: null,
+  matchOnly: false,
   adultGuests: 0,
   children: [],
   arriveHour: PARTY.startHour,
@@ -350,6 +358,27 @@ const busy = ref(false)
 const error = ref('')
 const form = reactive<FormState>(blankForm())
 const closed = ref(partyRsvpClosed())
+
+type Choice = 'party' | 'match' | 'no'
+
+const attendanceOptions: { value: Choice; label: string; note: string }[] = [
+  {
+    value: 'party',
+    label: "Yes, I'll be at the party",
+    note: `${PARTY.partyDate}, and the match on Sunday if you like`,
+  },
+  { value: 'match', label: 'Sports only', note: `Just the novelty match: ${PARTY.matchDate}, ${PARTY.matchTime}` },
+  { value: 'no', label: "No, I can't make it", note: 'Not coming to either' },
+]
+
+const choice = computed<Choice | null>({
+  get: () => (form.attending === null ? null : !form.attending ? 'no' : form.matchOnly ? 'match' : 'party'),
+  set: (value) => {
+    form.attending = value !== 'no'
+    form.matchOnly = value === 'match'
+    if (value === 'match') form.noveltyMatch = true
+  },
+})
 
 const lane4Options: { value: Lane4Stay | null; label: string }[] = [
   { value: null, label: 'No, not staying' },
@@ -384,6 +413,7 @@ function fill(rsvp: (PartyRsvp & { updatedAt: string }) | null) {
   if (!rsvp) return
   Object.assign(form, {
     attending: rsvp.attending,
+    matchOnly: rsvp.matchOnly ?? false,
     adultGuests: rsvp.adultGuests,
     children: rsvp.children.map((c) => ({ age: c.age })),
     arriveHour: rsvp.arriveHour ?? PARTY.startHour,

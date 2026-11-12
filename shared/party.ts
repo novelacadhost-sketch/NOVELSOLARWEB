@@ -37,6 +37,8 @@ export interface PartyChild {
 
 export interface PartyRsvp {
   attending: boolean
+  /** Coming to the Sunday match only, not the Saturday party. */
+  matchOnly: boolean
   adultGuests: number
   children: PartyChild[]
   arriveHour: number | null
@@ -70,6 +72,7 @@ export function parsePartyRsvp(input: unknown): { rsvp: PartyRsvp } | { error: s
     return {
       rsvp: {
         attending: false,
+        matchOnly: false,
         adultGuests: 0,
         children: [],
         arriveHour: null,
@@ -94,9 +97,11 @@ export function parsePartyRsvp(input: unknown): { rsvp: PartyRsvp } | { error: s
     children.push({ age })
   }
 
-  const arriveHour = wholeNumber(body.arriveHour, PARTY.startHour, PARTY.endHour - 1)
-  const leaveHour = wholeNumber(body.leaveHour, PARTY.startHour + 1, PARTY.endHour)
-  if (arriveHour === null || leaveHour === null || arriveHour >= leaveHour) {
+  // Match-only staff are not at the party, so they have no party hours.
+  const matchOnly = body.matchOnly === true
+  const arriveHour = matchOnly ? null : wholeNumber(body.arriveHour, PARTY.startHour, PARTY.endHour - 1)
+  const leaveHour = matchOnly ? null : wholeNumber(body.leaveHour, PARTY.startHour + 1, PARTY.endHour)
+  if (!matchOnly && (arriveHour === null || leaveHour === null || arriveHour >= leaveHour)) {
     return {
       error: `Please choose when you will arrive and leave, between ${hourLabel(PARTY.startHour)} and ${hourLabel(PARTY.endHour)}.`,
     }
@@ -110,11 +115,12 @@ export function parsePartyRsvp(input: unknown): { rsvp: PartyRsvp } | { error: s
   return {
     rsvp: {
       attending: true,
+      matchOnly,
       adultGuests,
       children,
       arriveHour,
       leaveHour,
-      noveltyMatch: body.noveltyMatch === true,
+      noveltyMatch: matchOnly || body.noveltyMatch === true,
       lane4Stay: lane4Stay as Lane4Stay | null,
     },
   }
