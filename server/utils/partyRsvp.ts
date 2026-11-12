@@ -39,16 +39,18 @@ export async function listPartyRsvps(): Promise<PartyReportRow[]> {
       .select('code, first_name, last_name, job_title')
       .in(
         'code',
-        rows.map((r) => r.staff_code),
+        rows.flatMap((r) => (r.staff_code ? [r.staff_code] : [])),
       )) as { data: { code: string; first_name: string; last_name: string; job_title: string | null }[] | null }
     for (const p of people ?? []) staff.set(p.code, p)
   }
 
   return rows.map((row) => {
-    const person = staff.get(row.staff_code)
+    const person = row.staff_code ? staff.get(row.staff_code) : undefined
     return {
+      id: row.id,
       staffCode: row.staff_code,
-      name: person ? `${person.first_name} ${person.last_name}`.trim() : row.staff_code,
+      onBitrix: Boolean(row.staff_code),
+      name: person ? `${person.first_name} ${person.last_name}`.trim() : (row.full_name ?? row.staff_code ?? ''),
       jobTitle: person?.job_title ?? null,
       ...rowToRsvp(row),
     }
@@ -56,8 +58,12 @@ export async function listPartyRsvps(): Promise<PartyReportRow[]> {
 }
 
 export interface PartyRsvpRow {
+  id: string
   event: string
-  staff_code: string
+  /** Set for Bitrix staff; null for someone not on Bitrix, who has full_name instead. */
+  staff_code: string | null
+  full_name: string | null
+  name_key: string | null
   attending: boolean
   match_only: boolean
   adult_guests: number
@@ -71,7 +77,7 @@ export interface PartyRsvpRow {
 }
 
 export const RSVP_COLUMNS =
-  'event, staff_code, attending, match_only, adult_guests, children, arrive_hour, leave_hour, novelty_match, lane4_stay, created_at, updated_at'
+  'id, event, staff_code, full_name, name_key, attending, match_only, adult_guests, children, arrive_hour, leave_hour, novelty_match, lane4_stay, created_at, updated_at'
 
 export function rowToRsvp(row: PartyRsvpRow): PartyRsvp & { updatedAt: string } {
   return {
@@ -98,15 +104,26 @@ const words = (value: unknown) =>
     .map((w) => w.replace(/[^a-z]/g, ''))
     .filter(Boolean)
 
+/** Who an RSVP belongs to: a Bitrix staff member, or someone not on Bitrix known by name. */
+export type PartyGuest =
+  | { kind: 'staff'; code: string; firstName: string }
+  | { kind: 'unlisted'; fullName: string; nameKey: string; firstName: string }
+
 /**
- * Who is filling in the form: the staff member whose first name AND surname are
- * both in the full name typed, in either order, with any middle names ignored.
- * The staff code is the row's key but staff never type it. Two current staff
- * with the same name cannot be told apart, so that is refused rather than
- * guessed. Rate limited in 1.rate-limit.ts.
+ * Who is filling in the form. First, the staff member whose first name AND
+ * surname are both in the full name typed, in either order, with middle names
+ * ignored. Two current staff with the same name cannot be told apart, so that
+ * is refused rather than guessed.
+ *
+ * With no match, the answer is a 404 with code NOT_ON_STAFF_LIST, unless the
+ * person has said they are not on Bitrix (`notOnBitrix: true`); then they are
+ * known by the name they typed. A name that does match Bitrix always resolves
+ * to the staff member, so nobody ends up registered twice. Rate limited in
+ * 1.rate-limit.ts.
  */
-export async function verifyPartyStaff(body: unknown): Promise<{ code: string; firstName: string }> {
-  const typed = new Set(words((body as Record<string, unknown> | null)?.name))
+export async function identifyPartyGuest(body: unknown): Promise<PartyGuest> {
+  const input = (body ?? {}) as Record<string, unknown>
+  const typed = new Set(words(input.name))
   if (typed.size < 2) {
     throw createError({ statusCode: 400, statusMessage: 'Please enter your full name: first name and surname.' })
   }
@@ -131,7 +148,6 @@ export async function verifyPartyStaff(body: unknown): Promise<{ code: string; f
     return first.length > 0 && last.length > 0 && [...first, ...last].every((w) => typed.has(w))
   })
 
-  if (!matches.length) throw createError({ statusCode: 404, statusMessage: NOT_FOUND })
   if (matches.length > 1) {
     logger.warn('Party', 'Name matches more than one staff member', { codes: matches.map((m) => m.code) })
     throw createError({
@@ -139,18 +155,23 @@ export async function verifyPartyStaff(body: unknown): Promise<{ code: string; f
       statusMessage: 'More than one member of staff has that name. Please ask HR to register you.',
     })
   }
+  const [staff] = matches
+  if (staff) return { kind: 'staff', code: staff.code, firstName: staff.first_name }
 
-  const [staff] = matches as [{ code: string; first_name: string; last_name: string }]
-  return { code: staff.code, firstName: staff.first_name }
+  if (input.notOnBitrix !== true) {
+    throw createError({ statusCode: 404, statusMessage: NOT_FOUND, data: { code: 'NOT_ON_STAFF_LIST' } })
+  }
+
+  const fullName = String(input.name).replace(/\s+/g, ' ').trim()
+  if (fullName.length > 80) throw createError({ statusCode: 400, statusMessage: 'That name is too long.' })
+  const firstName = fullName.split(' ')[0] ?? fullName
+  return { kind: 'unlisted', fullName, nameKey: [...typed].sort().join(' '), firstName }
 }
 
-export async function readPartyRsvp(code: string): Promise<PartyRsvpRow | null> {
-  const { data, error } = (await getSupabaseAdminClient()
-    .from('party_rsvps')
-    .select(RSVP_COLUMNS)
-    .eq('event', PARTY_EVENT)
-    .eq('staff_code', code)
-    .maybeSingle()) as { data: PartyRsvpRow | null; error: { message: string } | null }
+export async function readPartyRsvp(guest: PartyGuest): Promise<PartyRsvpRow | null> {
+  const base = getSupabaseAdminClient().from('party_rsvps').select(RSVP_COLUMNS).eq('event', PARTY_EVENT)
+  const query = guest.kind === 'staff' ? base.eq('staff_code', guest.code) : base.eq('name_key', guest.nameKey)
+  const { data, error } = (await query.maybeSingle()) as { data: PartyRsvpRow | null; error: { message: string } | null }
 
   if (error) {
     logger.error('Party', 'RSVP read failed', { error: error.message })
@@ -158,3 +179,6 @@ export async function readPartyRsvp(code: string): Promise<PartyRsvpRow | null> 
   }
   return data
 }
+
+/** For logs: the staff code, or just the fact that it is a name-only entry (no names in logs). */
+export const guestLogId = (guest: PartyGuest) => (guest.kind === 'staff' ? guest.code : 'not-on-bitrix')

@@ -13,6 +13,9 @@
               {{ hourLabel(PARTY.startHour) }} to {{ hourLabel(PARTY.endHour) }}; match {{ PARTY.matchDate }},
               {{ PARTY.matchTime }}.
             </p>
+            <p class="text-xs font-bold text-red-700 mt-1">
+              Internal use only. Do not share this page or its data with anyone who is not an employee.
+            </p>
           </div>
         </div>
         <div class="flex gap-2">
@@ -95,22 +98,33 @@
         </div>
       </section>
 
-      <!-- Table -->
-      <section class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-        <div class="p-4 border-b border-slate-100">
-          <input
-            id="party-search"
-            v-model="search"
-            type="search"
-            placeholder="Search by name or staff code"
-            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-slate-400"
-          >
+      <!-- Search -->
+      <div class="flex flex-col gap-3">
+        <input
+          id="party-search"
+          v-model="search"
+          type="search"
+          placeholder="Search by name or staff code"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-slate-400"
+        >
+        <p v-if="deleteError" class="px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{{ deleteError }}</p>
+      </div>
+
+      <!-- One table for Bitrix staff, one for people not on Bitrix -->
+      <section
+        v-for="group in groups"
+        :key="group.id"
+        class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm"
+      >
+        <div class="px-5 py-4 border-b border-slate-100">
+          <h2 class="text-sm font-black text-slate-900">{{ group.title }} ({{ group.all.length }})</h2>
+          <p class="text-xs text-slate-500">{{ group.note }}</p>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-sm">
             <thead>
               <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <th class="px-5 py-3">Staff</th>
+                <th class="px-5 py-3">Name</th>
                 <th class="px-5 py-3">Coming</th>
                 <th class="px-5 py-3 text-right">Adults</th>
                 <th class="px-5 py-3">Children</th>
@@ -122,21 +136,20 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-if="deleteError">
-                <td :colspan="columns" class="px-5 py-3 bg-red-50 text-red-600 text-sm">{{ deleteError }}</td>
-              </tr>
               <tr v-if="pending && !rsvps.length">
                 <td :colspan="columns" class="px-5 py-10 text-center text-slate-400">Loading…</td>
               </tr>
-              <tr v-else-if="!filtered.length">
-                <td :colspan="columns" class="px-5 py-10 text-center text-slate-400">
-                  {{ rsvps.length ? 'No RSVPs match.' : 'No RSVPs yet. Share the link with staff.' }}
+              <tr v-else-if="!group.shown.length">
+                <td :colspan="columns" class="px-5 py-8 text-center text-slate-400">
+                  {{ group.all.length ? 'No RSVPs match.' : group.empty }}
                 </td>
               </tr>
-              <tr v-for="r in filtered" :key="r.staffCode" :class="r.attending ? '' : 'text-slate-400'">
+              <tr v-for="r in group.shown" :key="r.id" :class="r.attending ? '' : 'text-slate-400'">
                 <td class="px-5 py-3">
                   <p class="font-bold text-slate-900">{{ r.name }}</p>
-                  <p class="text-xs text-slate-500">{{ r.staffCode }}<span v-if="r.jobTitle"> · {{ r.jobTitle }}</span></p>
+                  <p class="text-xs text-slate-500">
+                    {{ r.staffCode ?? 'Not on Bitrix' }}<span v-if="r.jobTitle"> · {{ r.jobTitle }}</span>
+                  </p>
                 </td>
                 <td class="px-5 py-3">
                   <span
@@ -160,11 +173,11 @@
                 <td class="px-5 py-3 whitespace-nowrap">{{ r.lane4Stay ? LANE4_STAYS[r.lane4Stay] : '' }}</td>
                 <td class="px-5 py-3 whitespace-nowrap text-slate-500">{{ formatDate(r.updatedAt) }}</td>
                 <td v-if="deleteRsvp" class="px-5 py-3 whitespace-nowrap text-right">
-                  <template v-if="confirming === r.staffCode">
+                  <template v-if="confirming === r.id">
                     <button
                       class="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white disabled:opacity-50"
                       :disabled="deleting"
-                      @click="confirmDelete(r.staffCode)"
+                      @click="confirmDelete(r.id)"
                     >
                       {{ deleting ? 'Deleting…' : 'Delete for good' }}
                     </button>
@@ -180,7 +193,7 @@
                     v-else
                     class="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50"
                     :aria-label="`Delete ${r.name}'s RSVP`"
-                    @click="confirming = r.staffCode"
+                    @click="confirming = r.id"
                   >
                     Delete
                   </button>
@@ -206,7 +219,7 @@ const props = defineProps<{
   backTo?: string
   showCopyLink?: boolean
   /** Given only on the admin page; without it the report is view-only. */
-  deleteRsvp?: (staffCode: string) => Promise<void>
+  deleteRsvp?: (id: string) => Promise<void>
 }>()
 const emit = defineEmits<{ refresh: [] }>()
 
@@ -215,12 +228,12 @@ const confirming = ref<string | null>(null)
 const deleting = ref(false)
 const deleteError = ref<string | null>(null)
 
-async function confirmDelete(staffCode: string) {
+async function confirmDelete(id: string) {
   if (!props.deleteRsvp) return
   deleting.value = true
   deleteError.value = null
   try {
-    await props.deleteRsvp(staffCode)
+    await props.deleteRsvp(id)
     confirming.value = null
   } catch (err) {
     const e = err as { data?: { statusMessage?: string } }
@@ -236,8 +249,29 @@ const search = ref('')
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return rsvps.value
-  return rsvps.value.filter((r) => r.name.toLowerCase().includes(q) || r.staffCode.toLowerCase().includes(q))
+  return rsvps.value.filter(
+    (r) => r.name.toLowerCase().includes(q) || (r.staffCode ?? '').toLowerCase().includes(q),
+  )
 })
+
+const groups = computed(() => [
+  {
+    id: 'bitrix',
+    title: 'On Bitrix',
+    note: 'Matched to the Bitrix staff list.',
+    empty: 'No RSVPs from Bitrix staff yet.',
+    all: rsvps.value.filter((r) => r.onBitrix),
+    shown: filtered.value.filter((r) => r.onBitrix),
+  },
+  {
+    id: 'not-on-bitrix',
+    title: 'Not on Bitrix',
+    note: 'Registered by name only. Check these are real employees.',
+    empty: 'Nobody has registered without a Bitrix account.',
+    all: rsvps.value.filter((r) => !r.onBitrix),
+    shown: filtered.value.filter((r) => !r.onBitrix),
+  },
+])
 
 const sum = (rows: AdminRsvp[], pick: (r: AdminRsvp) => number) => rows.reduce((n, r) => n + pick(r), 0)
 
@@ -312,10 +346,11 @@ async function copyLink() {
 }
 
 function downloadCsv() {
-  const header = ['Name', 'Staff code', 'Job title', 'Coming', 'Adult guests', 'Children', 'Children ages', 'From', 'Until', 'Novelty match', PARTY.apartment, 'Updated']
+  const header = ['Name', 'On Bitrix', 'Staff code', 'Job title', 'Coming', 'Adult guests', 'Children', 'Children ages', 'From', 'Until', 'Novelty match', PARTY.apartment, 'Updated']
   const rows = rsvps.value.map((r) => [
     r.name,
-    r.staffCode,
+    r.onBitrix ? 'Yes' : 'No',
+    r.staffCode ?? '',
     r.jobTitle ?? '',
     comingLabel(r),
     r.attending ? r.adultGuests : '',

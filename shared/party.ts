@@ -49,7 +49,10 @@ export interface PartyRsvp {
 
 /** One RSVP as the admin and HR reports show it. */
 export interface PartyReportRow extends PartyRsvp {
-  staffCode: string
+  id: string
+  /** Null for someone not on Bitrix, who registered by name only. */
+  staffCode: string | null
+  onBitrix: boolean
   name: string
   jobTitle: string | null
   updatedAt: string

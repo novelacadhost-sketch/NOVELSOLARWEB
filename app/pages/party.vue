@@ -3,6 +3,12 @@
     <div class="max-w-xl mx-auto">
       <header class="text-center mb-8">
         <p class="text-xs font-bold uppercase tracking-[0.2em] text-[#E0533C] mb-3">Staff only</p>
+        <p
+          class="mb-5 text-sm font-semibold rounded-2xl px-4 py-3 border bg-red-50 border-red-200 text-red-800 text-left flex gap-2"
+        >
+          <span class="material-symbols-outlined text-lg leading-5 shrink-0" aria-hidden="true">lock</span>
+          <span>For internal use only. This page is for Novel Solar employees. Please do not share it with anyone who is not an employee.</span>
+        </p>
         <h1 class="text-3xl sm:text-4xl font-black text-[#0B1F6B] mb-3 text-balance">{{ PARTY.name }}</h1>
         <div class="flex flex-wrap justify-center gap-2 text-sm">
           <span class="px-3 py-1.5 rounded-full bg-white border border-slate-200 font-semibold text-slate-700">
@@ -49,9 +55,23 @@
             class="px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-[#0B1F6B]"
             required
           >
-          <span class="text-xs text-slate-400">As it appears in Bitrix.</span>
+          <span class="text-xs text-slate-400">As it appears in Bitrix. Not on Bitrix? Enter your full name anyway.</span>
         </label>
         <p v-if="error" class="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{{ error }}</p>
+        <div v-if="notFound" class="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+          <p class="text-sm text-amber-900">
+            We could not find <strong>{{ notFound }}</strong> on the Bitrix staff list. Check the spelling, or if you
+            are an employee who is not on Bitrix, register with this name.
+          </p>
+          <button
+            type="button"
+            :disabled="busy"
+            class="w-full py-3 rounded-xl border-2 border-amber-300 bg-white text-amber-900 font-bold hover:bg-amber-100 disabled:opacity-60 transition"
+            @click="identify(true)"
+          >
+            I'm not on Bitrix, continue as {{ notFound }}
+          </button>
+        </div>
         <button
           type="submit"
           :disabled="busy"
@@ -358,6 +378,14 @@ const busy = ref(false)
 const error = ref('')
 const form = reactive<FormState>(blankForm())
 const closed = ref(partyRsvpClosed())
+// Set when the name is not on the Bitrix staff list: the name to offer "continue as".
+const notFound = ref<string | null>(null)
+// The person said they are not on Bitrix; every request then says so too.
+const notOnBitrix = ref(false)
+watch(name, () => {
+  notFound.value = null
+  notOnBitrix.value = false
+})
 
 type Choice = 'party' | 'match' | 'no'
 
@@ -431,17 +459,22 @@ function messageOf(err: unknown, fallback: string): string {
 
 interface PartyResponse {
   firstName: string
+  onBitrix: boolean
   rsvp: (PartyRsvp & { updatedAt: string }) | null
 }
 
-async function identify() {
+// Called from the form's submit (with an Event) or the "not on Bitrix" button (with true).
+async function identify(asNotOnBitrix?: unknown) {
   busy.value = true
   error.value = ''
+  const unlisted = asNotOnBitrix === true
   try {
     const res = await $apiFetch<PartyResponse>('/api/party/lookup', {
       method: 'POST',
-      body: { name: name.value },
+      body: { name: name.value, notOnBitrix: unlisted },
     })
+    notFound.value = null
+    notOnBitrix.value = unlisted && !res.onBitrix
     closed.value = partyRsvpClosed()
     if (closed.value && !res.rsvp) {
       error.value = `Registration closed at ${PARTY.closesLabel}, and we have no RSVP from you.`
@@ -451,6 +484,11 @@ async function identify() {
     fill(res.rsvp)
     step.value = res.rsvp ? 'done' : 'form'
   } catch (err) {
+    const data = (err as { data?: { data?: { code?: string } } })?.data?.data
+    if (!unlisted && data?.code === 'NOT_ON_STAFF_LIST') {
+      notFound.value = name.value.replace(/\s+/g, ' ').trim()
+      return
+    }
     error.value = messageOf(err, 'Could not check your name. Please try again.')
   } finally {
     busy.value = false
@@ -467,7 +505,7 @@ async function save() {
   try {
     const res = await $apiFetch<PartyResponse>('/api/party/rsvp', {
       method: 'POST',
-      body: { name: name.value, ...form },
+      body: { name: name.value, notOnBitrix: notOnBitrix.value, ...form },
     })
     fill(res.rsvp)
     step.value = 'done'
@@ -481,6 +519,8 @@ async function save() {
 
 function reset() {
   name.value = ''
+  notFound.value = null
+  notOnBitrix.value = false
   firstName.value = ''
   error.value = ''
   fill(null)

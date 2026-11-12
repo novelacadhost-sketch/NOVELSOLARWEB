@@ -1,13 +1,14 @@
 import { getSupabaseAdminClient } from '../../utils/supabaseAdmin'
-import { RSVP_COLUMNS, rowToRsvp, verifyPartyStaff, type PartyRsvpRow } from '../../utils/partyRsvp'
+import { RSVP_COLUMNS, guestLogId, identifyPartyGuest, rowToRsvp, type PartyRsvpRow } from '../../utils/partyRsvp'
 import { logger } from '../../utils/logger'
 import { PARTY, PARTY_EVENT, parsePartyRsvp, partyRsvpClosed } from '#shared/party'
 
 /**
- * POST /api/party/rsvp { code, name, attending, adultGuests, children, arriveHour,
+ * POST /api/party/rsvp { name, notOnBitrix?, attending, matchOnly, adultGuests, children, arriveHour,
  * leaveHour, noveltyMatch, lane4Stay }
  *
- * Saves the staff member's RSVP. Sending it again replaces the earlier one.
+ * Saves the RSVP. Sending it again replaces the earlier one: by staff code for
+ * Bitrix staff, by name for someone not on Bitrix.
  */
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
     })
   }
   const body = await readBody(event)
-  const staff = await verifyPartyStaff(body)
+  const guest = await identifyPartyGuest(body)
 
   const parsed = parsePartyRsvp(body)
   if ('error' in parsed) throw createError({ statusCode: 400, statusMessage: parsed.error })
@@ -29,7 +30,9 @@ export default defineEventHandler(async (event) => {
     .upsert(
       {
         event: PARTY_EVENT,
-        staff_code: staff.code,
+        staff_code: guest.kind === 'staff' ? guest.code : null,
+        full_name: guest.kind === 'unlisted' ? guest.fullName : null,
+        name_key: guest.kind === 'unlisted' ? guest.nameKey : null,
         attending: rsvp.attending,
         match_only: rsvp.matchOnly,
         adult_guests: rsvp.adultGuests,
@@ -40,16 +43,16 @@ export default defineEventHandler(async (event) => {
         lane4_stay: rsvp.lane4Stay,
         updated_at: new Date().toISOString(),
       } as never,
-      { onConflict: 'event,staff_code' },
+      { onConflict: guest.kind === 'staff' ? 'event,staff_code' : 'event,name_key' },
     )
     .select(RSVP_COLUMNS)
     .single()) as { data: PartyRsvpRow | null; error: { message: string } | null }
 
   if (error || !data) {
-    logger.error('Party', 'RSVP save failed', { code: staff.code, error: error?.message })
+    logger.error('Party', 'RSVP save failed', { who: guestLogId(guest), error: error?.message })
     throw createError({ statusCode: 500, statusMessage: 'Could not save your RSVP just now. Please try again.' })
   }
 
-  logger.info('Party', 'RSVP saved', { code: staff.code, attending: rsvp.attending })
-  return { firstName: staff.firstName, rsvp: rowToRsvp(data) }
+  logger.info('Party', 'RSVP saved', { who: guestLogId(guest), attending: rsvp.attending })
+  return { firstName: guest.firstName, onBitrix: guest.kind === 'staff', rsvp: rowToRsvp(data) }
 })

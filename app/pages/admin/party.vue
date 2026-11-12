@@ -22,8 +22,8 @@ const { data, pending, error, refresh } = await useFetch<{ rsvps: PartyReportRow
   headers: useRequestHeaders(['cookie']),
 })
 
-async function deleteRsvp(staffCode: string) {
-  await $apiFetch('/api/admin/party-rsvps/delete', { method: 'POST', body: { staffCode } })
+async function deleteRsvp(id: string) {
+  await $apiFetch('/api/admin/party-rsvps/delete', { method: 'POST', body: { id } })
   await refresh()
 }
 </script>
