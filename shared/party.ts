@@ -10,8 +10,9 @@ export const PARTY = {
   partyDate: 'Saturday 19 December',
   startHour: 13,
   endHour: 22,
-  matchDate: 'Sunday 20 December',
-  matchTime: '2pm',
+  // Moved from Sunday 20 December, 2pm on 2026-11-13. Lane 4 stays are unchanged.
+  matchDate: 'Friday 18 December',
+  matchTime: '3pm',
   apartment: 'Lane 4',
   // After this nobody can register or change an RSVP. Lagos time (UTC+1).
   closesAt: '2026-11-19T12:00:00+01:00',
@@ -37,7 +38,7 @@ export interface PartyChild {
 
 export interface PartyRsvp {
   attending: boolean
-  /** Coming to the Sunday match only, not the Saturday party. */
+  /** Coming to the novelty match only, not the Saturday party. */
   matchOnly: boolean
   adultGuests: number
   children: PartyChild[]

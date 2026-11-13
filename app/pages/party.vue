@@ -12,10 +12,10 @@
         <h1 class="text-3xl sm:text-4xl font-black text-[#0B1F6B] mb-3 text-balance">{{ PARTY.name }}</h1>
         <div class="flex flex-wrap justify-center gap-2 text-sm">
           <span class="px-3 py-1.5 rounded-full bg-white border border-slate-200 font-semibold text-slate-700">
-            Party: {{ PARTY.partyDate }}, {{ hourLabel(PARTY.startHour) }} to {{ hourLabel(PARTY.endHour) }}
+            Novelty match: {{ PARTY.matchDate }}, {{ PARTY.matchTime }}
           </span>
           <span class="px-3 py-1.5 rounded-full bg-white border border-slate-200 font-semibold text-slate-700">
-            Novelty match: {{ PARTY.matchDate }}, {{ PARTY.matchTime }}
+            Party: {{ PARTY.partyDate }}, {{ hourLabel(PARTY.startHour) }} to {{ hourLabel(PARTY.endHour) }}
           </span>
         </div>
         <p
@@ -393,7 +393,7 @@ const attendanceOptions: { value: Choice; label: string; note: string }[] = [
   {
     value: 'party',
     label: "Yes, I'll be at the party",
-    note: `${PARTY.partyDate}, and the match on Sunday if you like`,
+    note: `${PARTY.partyDate}, and the match on ${PARTY.matchDate} if you like`,
   },
   { value: 'match', label: 'Sports only', note: `Just the novelty match: ${PARTY.matchDate}, ${PARTY.matchTime}` },
   { value: 'no', label: "No, I can't make it", note: 'Not coming to either' },
