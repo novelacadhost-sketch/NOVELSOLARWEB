@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from './supabaseAdmin'
 import { logger } from './logger'
 import { bitrixFetch } from './bitrixAuth'
+import { BITRIX_STAFF } from './bitrixProperties'
 
 /**
  * Durable "send it to Bitrix later" for when Bitrix is down.
@@ -44,7 +45,11 @@ export async function queueLead(lead: QueuedLead): Promise<boolean> {
 export async function deliverQueuedLead(lead: QueuedLead): Promise<string> {
   const response = await bitrixFetch<{ result?: string | number; error?: string; error_description?: string }>(
     'crm.lead.add',
-    { method: 'POST', body: { fields: lead.fields, params: { REGISTER_SONET_EVENT: 'Y' } } },
+    {
+      method: 'POST',
+      // Rows queued before owners were set carry none.
+      body: { fields: { ASSIGNED_BY_ID: BITRIX_STAFF.WEBSITE_OWNER, ...lead.fields }, params: { REGISTER_SONET_EVENT: 'Y' } },
+    },
   )
   if (response.error) throw new Error(response.error_description || String(response.error))
   if (!response.result) throw new Error('crm.lead.add returned no lead id')

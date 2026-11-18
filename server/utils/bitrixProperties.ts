@@ -129,11 +129,11 @@ export const BITRIX_STAFF = {
   /** #26 Yetunde Oni — Head of Pre-Sales (Audit & Sales Support). Calls the customer. */
   SALES_SUPPORT: 26,
   /**
-   * #10 "Stock Admin" — the user the app's Bitrix webhook acts as (verified with
-   * `profile`, 2026-10-16). Responsible for website deals no staff member is
-   * credited on; it was already that by default, as the deal's creator.
+   * #12 Davies Folorunso. Responsible person for every website lead, and for
+   * website deals no staff member is credited on (Davies, 2026-11-18; was #10
+   * Stock Admin). Set explicitly so it does not follow whoever owns the webhook.
    */
-  STOCK_ADMIN: 10,
+  WEBSITE_OWNER: 12,
 } as const
 
 /**

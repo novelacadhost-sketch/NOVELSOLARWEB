@@ -1,6 +1,7 @@
 import type { BitrixLeadResponse } from '../types/bitrix'
 import { logger } from '../utils/logger'
 import { queueLead } from '../utils/crmQueue'
+import { BITRIX_STAFF } from '../utils/bitrixProperties'
 export default defineEventHandler(async (event) => {
   interface ContactBody {
     name: string
@@ -45,6 +46,7 @@ export default defineEventHandler(async (event) => {
     PHONE: [{ VALUE: body.phone || '', VALUE_TYPE: 'WORK' }],
     COMMENTS: `Inquiry Type: General Contact Form\nSubject: ${body.subject || 'No Subject'}\n\nMessage:\n${body.message}`,
     SOURCE_ID: 'WEB',
+    ASSIGNED_BY_ID: BITRIX_STAFF.WEBSITE_OWNER,
     OPENED: 'Y',
   }
 

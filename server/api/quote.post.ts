@@ -1,6 +1,7 @@
 import type { BitrixLeadResponse } from '../types/bitrix'
 import { logger } from '../utils/logger'
 import { queueLead } from '../utils/crmQueue'
+import { BITRIX_STAFF } from '../utils/bitrixProperties'
 
 export default defineEventHandler(async (event) => {
   interface QuoteBody {
@@ -49,6 +50,7 @@ export default defineEventHandler(async (event) => {
     PHONE: [{ VALUE: body.phone, VALUE_TYPE: 'WORK' }],
     COMMENTS: `Project Type: ${body.projectType}\n\nDetails:\n${body.details || 'No additional details provided'}`,
     SOURCE_ID: 'WEB',
+    ASSIGNED_BY_ID: BITRIX_STAFF.WEBSITE_OWNER,
   }
 
   try {

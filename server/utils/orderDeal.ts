@@ -309,9 +309,9 @@ export async function createOrderDeal(order: OrderDealInput): Promise<OrderDealR
   if (contactId) fields.CONTACT_ID = contactId
   if (staffBitrixId) fields[BITRIX_DEAL.REFERRED_BY_FIELD] = staffBitrixId
   // The staff member whose code (typed, or from their link) is credited owns
-  // the deal; with no code it stays with Stock Admin. Set explicitly rather
+  // the deal; with no code it goes to the website owner. Set explicitly rather
   // than left to the default, so a change of webhook user cannot move it.
-  fields.ASSIGNED_BY_ID = staffBitrixId ?? BITRIX_STAFF.STOCK_ADMIN
+  fields.ASSIGNED_BY_ID = staffBitrixId ?? BITRIX_STAFF.WEBSITE_OWNER
 
   if (branchId) fields[BITRIX_DEAL.BRANCH_FIELD] = branchId
 

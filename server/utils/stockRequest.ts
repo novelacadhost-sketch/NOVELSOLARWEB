@@ -79,6 +79,7 @@ export async function deliverStockRequest(payload: StockRequestPayload): Promise
 
   const fields: Record<string, unknown> = {
     TITLE: `Stock request: ${first?.name ?? 'products'}${more}`,
+    ASSIGNED_BY_ID: BITRIX_STAFF.WEBSITE_OWNER,
     NAME: payload.customer.firstName,
     LAST_NAME: payload.customer.lastName,
     PHONE: [{ VALUE: payload.customer.phone, VALUE_TYPE: 'WORK' }],

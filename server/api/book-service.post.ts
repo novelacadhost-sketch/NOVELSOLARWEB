@@ -1,6 +1,7 @@
 import type { BitrixLeadResponse } from '../types/bitrix'
 import { logger } from '../utils/logger'
 import { queueLead } from '../utils/crmQueue'
+import { BITRIX_STAFF } from '../utils/bitrixProperties'
 export default defineEventHandler(async (event) => {
   interface BookServiceBody {
     firstName: string
@@ -40,6 +41,7 @@ export default defineEventHandler(async (event) => {
     // Put the crucial service details in the main comment block for the technician
     COMMENTS: `SERVICE REQUEST DETAILS\n------------------------\nService: ${body.serviceType}\nPreferred Date: ${body.preferredDate}\nService Address: ${body.address}\n\nCustomer Notes:\n${body.details || 'None provided'}`,
     SOURCE_ID: 'WEB',
+    ASSIGNED_BY_ID: BITRIX_STAFF.WEBSITE_OWNER,
   }
 
   try {
