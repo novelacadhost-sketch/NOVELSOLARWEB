@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BitrixProduct } from '~/types'
+import { groupIdForSection } from '#shared/productCategories'
 const site = useSite()
 const route = useRoute()
 const { addToCart } = useCart()
@@ -24,6 +25,10 @@ const {
 const quantity = ref(1)
 const activeTab = ref('description')
 const selectedImage = ref<string | null>(null)
+const compareOpen = ref(false)
+// Only a product in a shop category has anything to be compared with.
+const sectionName = computed(() => (product.value?.sectionName as string | null | undefined) ?? null)
+const canCompare = computed(() => Boolean(groupIdForSection(sectionName.value, site.id)))
 
 const parsedSpecs = computed(() => {
   try {
@@ -293,6 +298,15 @@ useHead({
               </button>
             </div>
 
+            <button
+              v-if="canCompare"
+              class="w-full h-14 rounded-2xl border-2 border-slate-200 text-slate-800 font-black flex items-center justify-center gap-2 hover:border-[#002888] hover:text-[#002888] transition-colors"
+              @click="compareOpen = true"
+            >
+              <span class="material-symbols-outlined">compare_arrows</span>
+              Compare with similar products
+            </button>
+
             <!-- WhatsApp Direct -->
             <a
               :href="whatsappUrl"
@@ -381,6 +395,18 @@ useHead({
           </div>
         </div>
       </div>
+
+      <!-- Client only: a Teleport to body rendered on the server breaks hydration. -->
+      <ClientOnly>
+        <ProductCompareModal
+          v-if="canCompare"
+          :open="compareOpen"
+          :product-id="String(product.ID)"
+          :product-name="product.NAME"
+          :section-name="sectionName"
+          @close="compareOpen = false"
+        />
+      </ClientOnly>
     </div>
   </div>
 </template>

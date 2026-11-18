@@ -88,10 +88,10 @@ export default defineEventHandler(async (event) => {
   // A solar product's URL on the Home Essentials domain is not a page there.
   // The mirror's section name covers the case where Bitrix sections are unreadable.
   const site = getSite(event)
-  if (site.sections) {
-    const sectionName = (await getSectionMap()).get(String(product.SECTION_ID ?? '')) ?? mirror?.section_name ?? undefined
-    if (!siteSellsSection(site, sectionName)) throw notFound()
-  }
+  const sectionName = (await getSectionMap()).get(String(product.SECTION_ID ?? '')) ?? mirror?.section_name ?? undefined
+  if (site.sections && !siteSellsSection(site, sectionName)) throw notFound()
+  // The page's Compare button offers products from the same shop category.
+  product.sectionName = sectionName ?? null
 
   product.PROPERTY_102 = normalizeProperty(product.PROPERTY_102)
   // Still JSON text, which is what the product page parses — but read and

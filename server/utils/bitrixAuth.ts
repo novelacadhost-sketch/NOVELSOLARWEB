@@ -23,7 +23,10 @@ export async function bitrixFetch<T>(endpoint: string, options: Record<string, u
     })
   }
 
-  // Cast: $fetch's TypedInternalResponse cannot be proven equal to a caller
-  // supplied generic, and every call site already asserts the Bitrix shape.
-  return $fetch(`${baseUrl.replace(/\/$/, '')}/${endpoint}`, options) as Promise<T>
+  // An external URL, so $fetch's internal-route typing does not apply. Casting
+  // its typed result instead made TS compare it against every API route, which
+  // hit "excessive stack depth" once one more route existed. Every call site
+  // already asserts the Bitrix shape.
+  const fetchExternal = $fetch as unknown as (url: string, opts: Record<string, unknown>) => Promise<T>
+  return fetchExternal(`${baseUrl.replace(/\/$/, '')}/${endpoint}`, options)
 }
