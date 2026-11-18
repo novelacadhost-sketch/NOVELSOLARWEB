@@ -1,6 +1,18 @@
 // Logger utility for centralized structured logging
 // Provides consistent logging across client and server with proper levels
 
+/**
+ * A failed Bitrix call's error message carries the full webhook URL, whose
+ * path segment after /rest/<user>/ is the credential, and the Bitrix callback
+ * URL carries its shared secret as ?t=. Masked here so no call site can leak
+ * either into retained function logs.
+ */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/\/rest\/(\d+)\/[\w-]+/g, '/rest/$1/<redacted>')
+    .replace(/([?&]t=)[^&\s"'\\]+/g, '$1<redacted>')
+}
+
 export class Logger {
   private static instance: Logger
   private readonly isServer: boolean
@@ -24,13 +36,13 @@ export class Logger {
     const timestamp = new Date().toISOString()
     const prefix = `[${timestamp}] ${context}`
 
-    if (!meta) return `${prefix} ${message}`
+    if (!meta) return redactSecrets(`${prefix} ${message}`)
 
     try {
       const metaStr = JSON.stringify(meta)
-      return `${prefix} ${message} ${metaStr}`
+      return redactSecrets(`${prefix} ${message} ${metaStr}`)
     } catch (e) {
-      return `${prefix} ${message} ${String(meta)}`
+      return redactSecrets(`${prefix} ${message} ${String(meta)}`)
     }
   }
 
