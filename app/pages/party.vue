@@ -124,15 +124,15 @@
         </fieldset>
 
         <template v-if="form.attending">
-          <!-- Adults -->
-          <section class="flex flex-col gap-3 border-t border-slate-100 pt-6">
+          <!-- Adults (party only: guests do not attend the match) -->
+          <section v-if="!form.matchOnly" class="flex flex-col gap-3 border-t border-slate-100 pt-6">
             <h3 class="text-sm font-bold text-slate-700">Adult guests</h3>
             <p class="text-xs text-slate-500 -mt-2">Adults coming with you, not counting yourself.</p>
             <Stepper id="party-adults" v-model="form.adultGuests" :max="MAX_ADULT_GUESTS" label="adult guests" />
           </section>
 
-          <!-- Children -->
-          <section class="flex flex-col gap-3 border-t border-slate-100 pt-6">
+          <!-- Children (party only) -->
+          <section v-if="!form.matchOnly" class="flex flex-col gap-3 border-t border-slate-100 pt-6">
             <h3 class="text-sm font-bold text-slate-700">Children</h3>
             <p class="text-xs text-slate-500 -mt-2">Register each child under 18 who is coming, with their age.</p>
             <div v-for="(child, i) in form.children" :key="i" class="flex items-center gap-3">

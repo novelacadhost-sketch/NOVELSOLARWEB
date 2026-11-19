@@ -124,12 +124,14 @@ export function parsePartyRsvp(input: unknown): { rsvp: PartyRsvp } | { error: s
     return { error: `Please choose how long you will stay at ${PARTY.apartment}.` }
   }
 
+  // Guests and children come to the party only; the match is for staff. So a
+  // sports-only RSVP carries none, whatever the form sent.
   return {
     rsvp: {
       attending: true,
       matchOnly,
-      adultGuests,
-      children,
+      adultGuests: matchOnly ? 0 : adultGuests,
+      children: matchOnly ? [] : children,
       arriveHour,
       leaveHour,
       noveltyMatch: matchOnly || body.noveltyMatch === true,

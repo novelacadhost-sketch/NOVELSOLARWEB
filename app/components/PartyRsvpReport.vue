@@ -98,15 +98,62 @@
         </div>
       </section>
 
-      <!-- Search -->
-      <div class="flex flex-col gap-3">
+      <!-- Search and filters -->
+      <div class="flex flex-col gap-3 bg-white rounded-2xl border border-slate-200 p-4">
         <input
           id="party-search"
           v-model="search"
           type="search"
-          placeholder="Search by name or staff code"
+          placeholder="Search by name, staff code or job title"
           class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-slate-400"
         >
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <label class="flex flex-col gap-1 min-w-0" for="party-filter-coming">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Coming</span>
+            <select id="party-filter-coming" v-model="comingFilter" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm">
+              <option value="all">Everyone</option>
+              <option value="party">Party</option>
+              <option value="sports">Sports only</option>
+              <option value="no">Can't make it</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1 min-w-0" for="party-filter-match">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Novelty match</span>
+            <select id="party-filter-match" v-model="matchFilter" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm">
+              <option value="all">Any</option>
+              <option value="yes">At the match</option>
+              <option value="no">Not at the match</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1 min-w-0" for="party-filter-lane4">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ PARTY.apartment }}</span>
+            <select id="party-filter-lane4" v-model="lane4Filter" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm">
+              <option value="all">Any</option>
+              <option value="staying">Staying</option>
+              <option v-for="(label, key) in LANE4_STAYS" :key="key" :value="key">{{ label }}</option>
+              <option value="none">Not staying</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1 min-w-0" for="party-filter-guests">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Guests and children</span>
+            <select id="party-filter-guests" v-model="guestsFilter" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm">
+              <option value="all">Any</option>
+              <option value="with">Bringing someone</option>
+              <option value="without">Coming alone</option>
+            </select>
+          </label>
+        </div>
+        <div class="flex items-center justify-between gap-3 text-sm">
+          <span class="text-slate-500 tabular-nums">Showing {{ filtered.length }} of {{ rsvps.length }} RSVPs</span>
+          <button
+            v-if="filtersActive"
+            type="button"
+            class="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-100"
+            @click="clearFilters"
+          >
+            Clear filters
+          </button>
+        </div>
         <p v-if="deleteError" class="px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{{ deleteError }}</p>
       </div>
 
@@ -246,12 +293,48 @@ async function confirmDelete(id: string) {
 const rsvps = computed(() => props.rsvps)
 const coming = computed(() => rsvps.value.filter((r) => r.attending))
 const search = ref('')
+const comingFilter = ref<'all' | 'party' | 'sports' | 'no'>('all')
+const matchFilter = ref<'all' | 'yes' | 'no'>('all')
+const lane4Filter = ref<'all' | 'staying' | 'none' | Lane4Stay>('all')
+const guestsFilter = ref<'all' | 'with' | 'without'>('all')
+
+const filtersActive = computed(
+  () =>
+    Boolean(search.value.trim()) ||
+    comingFilter.value !== 'all' ||
+    matchFilter.value !== 'all' ||
+    lane4Filter.value !== 'all' ||
+    guestsFilter.value !== 'all',
+)
+
+function clearFilters() {
+  search.value = ''
+  comingFilter.value = 'all'
+  matchFilter.value = 'all'
+  lane4Filter.value = 'all'
+  guestsFilter.value = 'all'
+}
+
 const filtered = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  if (!q) return rsvps.value
-  return rsvps.value.filter(
-    (r) => r.name.toLowerCase().includes(q) || (r.staffCode ?? '').toLowerCase().includes(q),
-  )
+  const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  return rsvps.value.filter((r) => {
+    // Every word typed must appear somewhere in the name, staff code or job title.
+    const haystack = `${r.name} ${r.staffCode ?? ''} ${r.jobTitle ?? ''}`.toLowerCase()
+    if (!words.every((w) => haystack.includes(w))) return false
+
+    const kind = !r.attending ? 'no' : r.matchOnly ? 'sports' : 'party'
+    if (comingFilter.value !== 'all' && comingFilter.value !== kind) return false
+    if (matchFilter.value !== 'all' && (r.attending && r.noveltyMatch) !== (matchFilter.value === 'yes')) return false
+
+    if (lane4Filter.value === 'staying' && !r.lane4Stay) return false
+    if (lane4Filter.value === 'none' && r.lane4Stay) return false
+    if ((lane4Filter.value === 'fri_sat' || lane4Filter.value === 'fri_sun') && r.lane4Stay !== lane4Filter.value) return false
+
+    const bringsSomeone = r.adultGuests > 0 || r.children.length > 0
+    if (guestsFilter.value === 'with' && !bringsSomeone) return false
+    if (guestsFilter.value === 'without' && bringsSomeone) return false
+    return true
+  })
 })
 
 const groups = computed(() => [
@@ -291,17 +374,18 @@ const tiles = computed(() => {
       value: staff,
       note: `${atParty.value.length} party, ${sportsOnly} sports only, ${declined} can't make it`,
     },
-    { label: 'Adult guests', value: sum(coming.value, (r) => r.adultGuests), note: 'Not counting staff' },
-    { label: 'Children', value: sum(coming.value, (r) => r.children.length), note: 'Registered separately' },
+    // Guests and children come to the party only; the match is staff only.
+    { label: 'Adult guests', value: sum(atParty.value, (r) => r.adultGuests), note: 'Visitors, party only' },
+    { label: 'Children', value: sum(atParty.value, (r) => r.children.length), note: 'Party only' },
     {
       label: 'At the party',
       value: sum(atParty.value, groupSize),
-      note: `People on ${PARTY.partyDate}`,
+      note: `Staff, guests and children, ${PARTY.partyDate}`,
     },
     {
       label: 'At the match',
-      value: sum(atMatch.value, groupSize),
-      note: `People on ${PARTY.matchDate}`,
+      value: atMatch.value.length,
+      note: `Staff only, ${PARTY.matchDate}`,
     },
   ]
 })
@@ -320,7 +404,7 @@ const maxHourly = computed(() => Math.max(0, ...hourly.value.map((s) => s.count)
 const lane4Count = (key: Lane4Stay) => coming.value.filter((r) => r.lane4Stay === key).length
 
 const childBands = computed(() => {
-  const ages = coming.value.flatMap((r) => r.children.map((c) => c.age))
+  const ages = atParty.value.flatMap((r) => r.children.map((c) => c.age))
   return [
     { label: 'Under 5', count: ages.filter((a) => a < 5).length },
     { label: '5 to 12', count: ages.filter((a) => a >= 5 && a <= 12).length },
