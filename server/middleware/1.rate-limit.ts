@@ -28,6 +28,8 @@ function getRateLimitConfig(path: string, isAnonymous: boolean) {
     return { maxRequests: 15, windowSizeInSeconds: 60, bucket: 'promo-code' }
   }
   // Staff sign in by name. Offices share one IP, so this has to allow a room of people registering at once.
+  // Dealers and partners: a public form with no read-back, so a tighter budget than staff.
+  if (path.startsWith('/api/partner/')) return { maxRequests: 20, windowSizeInSeconds: 60, bucket: 'partner' }
   if (path.startsWith('/api/party/')) return { maxRequests: 60, windowSizeInSeconds: 60, bucket: 'party' }
   if (path.startsWith('/api/admin/')) return { maxRequests: 60, windowSizeInSeconds: 60, bucket: 'admin' }
   return { maxRequests: 100, windowSizeInSeconds: 60, bucket: 'api' }
