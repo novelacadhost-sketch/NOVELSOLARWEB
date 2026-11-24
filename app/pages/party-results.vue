@@ -5,11 +5,12 @@
       <p class="text-sm text-slate-500">Open the full results link exactly as you were sent it.</p>
     </div>
   </div>
-  <PartyRsvpReport v-else :rsvps="rsvps" :pending="state === 'loading'" :error="loadError" @refresh="load" />
+  <PartyRsvpReport v-else :rsvps="rsvps" :partners="partners" :pending="state === 'loading'" :error="loadError" @refresh="load" />
 </template>
 
 <script setup lang="ts">
 import type { PartyReportRow } from '#shared/party'
+import type { PartnerReportRow } from '#shared/partnerParty'
 
 /**
  * HR's view of the party RSVPs. No login: the link carries a secret after the
@@ -20,6 +21,7 @@ definePageMeta({ layout: false })
 useHead({ title: 'Party RSVP results', meta: [{ name: 'robots', content: 'noindex, nofollow' }] })
 
 const rsvps = ref<PartyReportRow[]>([])
+const partners = ref<PartnerReportRow[]>([])
 const state = ref<'loading' | 'ready' | 'denied'>('loading')
 const loadError = ref<string | null>(null)
 
@@ -32,15 +34,17 @@ async function load() {
   }
   loadError.value = null
   try {
-    const res = await $fetch<{ rsvps: PartyReportRow[] }>('/api/party/results', {
+    const res = await $fetch<{ rsvps: PartyReportRow[]; partners: PartnerReportRow[] }>('/api/party/results', {
       headers: { 'x-results-key': key },
     })
     rsvps.value = res.rsvps
+    partners.value = res.partners ?? []
     state.value = 'ready'
   } catch (err) {
     const status = (err as { statusCode?: number })?.statusCode
     if (status === 404) {
       rsvps.value = []
+      partners.value = []
       state.value = 'denied'
     } else {
       state.value = 'ready'

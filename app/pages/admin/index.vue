@@ -212,6 +212,17 @@ const cards = computed(() => [
     disabled: false,
   },
   {
+    to: '/admin/partners-party',
+    title: 'Partner RSVPs',
+    subtitle: 'Dealers and partners coming to the end-of-year party, and their plus ones.',
+    icon: 'handshake',
+    iconBg: 'bg-amber-100',
+    iconColor: 'text-amber-600',
+    decorClass: 'text-amber-500',
+    linkColor: 'text-amber-600',
+    disabled: false,
+  },
+  {
     to: '/admin/manage-dealers',
     title: 'Dealer Applications',
     subtitle: 'Review incoming dealer applications, manage wholesale pricing access, and track setup invitations.',

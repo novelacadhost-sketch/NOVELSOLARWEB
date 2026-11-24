@@ -9,7 +9,7 @@
           <div>
             <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ PARTY.name }}</h1>
             <p class="text-sm text-slate-500 font-medium">
-              Staff RSVPs. Party {{ PARTY.partyDate }},
+              {{ partners ? 'Staff, dealer and partner RSVPs' : 'Staff RSVPs' }}. Party {{ PARTY.partyDate }},
               {{ hourLabel(PARTY.startHour) }} to {{ hourLabel(PARTY.endHour) }}; match {{ PARTY.matchDate }},
               {{ PARTY.matchTime }}.
             </p>
@@ -18,7 +18,7 @@
             </p>
           </div>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <button
             class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
             @click="emit('refresh')"
@@ -39,6 +39,14 @@
           >
             Download CSV
           </button>
+          <button
+            v-if="partners"
+            class="px-4 py-2 rounded-xl text-sm font-bold bg-slate-900 text-white disabled:opacity-50"
+            :disabled="!partners.length"
+            @click="downloadPartnersCsv"
+          >
+            Partners CSV
+          </button>
         </div>
       </div>
     </header>
@@ -49,7 +57,7 @@
       </div>
 
       <!-- Totals -->
-      <section class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <section class="grid grid-cols-2 gap-4" :class="partners ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-5'">
         <div v-for="tile in tiles" :key="tile.label" class="bg-white rounded-2xl border border-slate-200 p-5">
           <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ tile.label }}</p>
           <p class="text-3xl font-black text-slate-900 tabular-nums mt-1">{{ tile.value }}</p>
@@ -61,7 +69,9 @@
         <!-- People present each hour -->
         <div class="bg-white rounded-2xl border border-slate-200 p-5 min-w-0">
           <h2 class="text-sm font-black text-slate-900">People at the party, hour by hour</h2>
-          <p class="text-xs text-slate-500 mb-4">Staff, adult guests and children together.</p>
+          <p class="text-xs text-slate-500 mb-4">
+            {{ partners ? 'Staff, guests, children, partners and their plus ones together.' : 'Staff, adult guests and children together.' }}
+          </p>
           <div class="flex items-end gap-2 h-40">
             <div v-for="slot in hourly" :key="slot.hour" class="flex-1 flex flex-col items-center gap-1 h-full justify-end">
               <span class="text-xs font-bold text-slate-700 tabular-nums">{{ slot.count }}</span>
@@ -250,12 +260,63 @@
           </table>
         </div>
       </section>
+
+      <!-- Dealers and partners: their own sign-up form and table -->
+      <section v-if="partners" class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-black text-slate-900">Dealers and partners ({{ partners.length }})</h2>
+            <p class="text-xs text-slate-500">
+              From the partner sign-up form. {{ partnerPlusOnes }} plus one{{ partnerPlusOnes === 1 ? '' : 's' }},
+              {{ partners.length + partnerPlusOnes }} people in all.
+            </p>
+          </div>
+          <input
+            id="partner-search"
+            v-model="partnerSearch"
+            type="search"
+            placeholder="Search by name or company"
+            class="w-full sm:w-72 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-slate-400"
+          >
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <th class="px-5 py-3">Name</th>
+                <th class="px-5 py-3">Company</th>
+                <th class="px-5 py-3">Plus one</th>
+                <th class="px-5 py-3">Time</th>
+                <th class="px-5 py-3">Updated</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr v-if="pending && !partners.length">
+                <td colspan="5" class="px-5 py-10 text-center text-slate-400">Loading…</td>
+              </tr>
+              <tr v-else-if="!partnersShown.length">
+                <td colspan="5" class="px-5 py-8 text-center text-slate-400">
+                  {{ partners.length ? 'No partners match.' : 'No dealers or partners have registered yet.' }}
+                </td>
+              </tr>
+              <tr v-for="p in partnersShown" :key="p.id">
+                <td class="px-5 py-3 font-bold text-slate-900">{{ p.fullName }}</td>
+                <td class="px-5 py-3">{{ p.company }}</td>
+                <td class="px-5 py-3">{{ p.plusOne ? 'Yes' : 'No' }}</td>
+                <td class="px-5 py-3 whitespace-nowrap">{{ hourLabel(p.arriveHour) }}–{{ hourLabel(p.leaveHour) }}</td>
+                <td class="px-5 py-3 whitespace-nowrap text-slate-500">{{ formatDate(p.updatedAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
 import { LANE4_STAYS, PARTY, hourLabel, type Lane4Stay, type PartyReportRow } from '#shared/party'
+import type { PartnerReportRow } from '#shared/partnerParty'
 
 type AdminRsvp = PartyReportRow
 
@@ -267,6 +328,8 @@ const props = defineProps<{
   showCopyLink?: boolean
   /** Given only on the admin page; without it the report is view-only. */
   deleteRsvp?: (id: string) => Promise<void>
+  /** Dealer and partner RSVPs. Left out, the report has no partner section. */
+  partners?: PartnerReportRow[]
 }>()
 const emit = defineEmits<{ refresh: [] }>()
 
@@ -387,16 +450,39 @@ const tiles = computed(() => {
       value: atMatch.value.length,
       note: `Staff only, ${PARTY.matchDate}`,
     },
+    ...(props.partners
+      ? [
+          {
+            label: 'Dealers and partners coming',
+            value: props.partners.length,
+            note: `${partnerPlusOnes.value} plus ones, ${props.partners.length + partnerPlusOnes.value} people in all`,
+          },
+        ]
+      : []),
   ]
+})
+
+const partnerPlusOnes = computed(() => (props.partners ?? []).filter((p) => p.plusOne).length)
+const partnerSearch = ref('')
+const partnersShown = computed(() => {
+  const words = partnerSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  return (props.partners ?? []).filter((p) => {
+    const haystack = `${p.fullName} ${p.company}`.toLowerCase()
+    return words.every((w) => haystack.includes(w))
+  })
 })
 
 const hourly = computed(() =>
   Array.from({ length: PARTY.endHour - PARTY.startHour }, (_, i) => {
     const hour = PARTY.startHour + i
-    const count = sum(coming.value, (r) =>
+    const staff = sum(coming.value, (r) =>
       r.arriveHour !== null && r.leaveHour !== null && r.arriveHour <= hour && r.leaveHour > hour ? groupSize(r) : 0,
     )
-    return { hour, count }
+    const partners = (props.partners ?? []).reduce(
+      (n, p) => n + (p.arriveHour <= hour && p.leaveHour > hour ? (p.plusOne ? 2 : 1) : 0),
+      0,
+    )
+    return { hour, count: staff + partners }
   }),
 )
 const maxHourly = computed(() => Math.max(0, ...hourly.value.map((s) => s.count)))
@@ -446,13 +532,35 @@ function downloadCsv() {
     r.lane4Stay ? LANE4_STAYS[r.lane4Stay] : '',
     r.updatedAt,
   ])
-  const csv = [header, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\r\n')
+  saveCsv('party-rsvps.csv', [header, ...rows])
+}
+
+function downloadPartnersCsv() {
+  const header = ['Name', 'Company', 'Plus one', 'Arriving', 'Leaving', 'Updated']
+  const rows = (props.partners ?? []).map((p) => [
+    p.fullName,
+    p.company,
+    p.plusOne ? 'Yes' : 'No',
+    hourLabel(p.arriveHour),
+    hourLabel(p.leaveHour),
+    p.updatedAt,
+  ])
+  saveCsv('partner-rsvps.csv', [header, ...rows])
+}
+
+// Some names are typed by the public: a cell starting = + - @ would run as a
+// formula when the file is opened in Excel, so it gets a leading quote.
+const csvCell = (value: unknown) => {
+  const text = String(value)
+  return `"${(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`
+}
+
+function saveCsv(filename: string, rows: unknown[][]) {
+  const csv = rows.map((row) => row.map(csvCell).join(',')).join('\r\n')
   const url = URL.createObjectURL(new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv' }))
   const a = document.createElement('a')
   a.href = url
-  a.download = 'party-rsvps.csv'
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
 }
