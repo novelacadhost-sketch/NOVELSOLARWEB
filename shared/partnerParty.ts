@@ -8,8 +8,8 @@ export const PARTNER_EVENT = 'eoy-2026'
 
 // After this nobody can register or change an RSVP. Lagos time (UTC+1).
 // Starts the same as the staff form; move it if partners need longer.
-export const PARTNER_CLOSES_AT = '2026-11-26T12:00:00+01:00'
-export const PARTNER_CLOSES_LABEL = '12 noon on Thursday 26 November'
+export const PARTNER_CLOSES_AT = '2026-11-27T12:00:00+01:00'
+export const PARTNER_CLOSES_LABEL = '12 noon on Friday 27 November'
 
 export function partnerRsvpClosed(now: Date = new Date()): boolean {
   return now.getTime() >= new Date(PARTNER_CLOSES_AT).getTime()

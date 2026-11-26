@@ -15,8 +15,8 @@ export const PARTY = {
   matchTime: '3pm',
   apartment: 'Lane 4',
   // After this nobody can register or change an RSVP. Lagos time (UTC+1).
-  closesAt: '2026-11-26T12:00:00+01:00',
-  closesLabel: '12 noon on Thursday 26 November',
+  closesAt: '2026-11-27T12:00:00+01:00',
+  closesLabel: '12 noon on Friday 27 November',
 } as const
 
 export function partyRsvpClosed(now: Date = new Date()): boolean {
